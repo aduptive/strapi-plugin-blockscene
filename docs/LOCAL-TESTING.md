@@ -1,6 +1,6 @@
 # Local integration laboratory
 
-The two repositories are siblings: `strapi-plugin-block-picker` and
+The two repositories are siblings: `strapi-plugin-blockscene` and
 `strapi-plugin-image-optimization`. The original `strapi-block-picker`
 experiment is untouched. No client database or frontend is used here.
 
@@ -90,11 +90,11 @@ node scripts/http-smoke.mjs 5
 Browser checks create synthetic drafts; they verify gallery search, schema
 defaults, nested components, zone allowlists/max, save/reload, thumbnail
 priority (configured image, wireframe fallback, Media Library override, deleted
-media, local capture output), the Block Picker settings page (palette, unsaved
+media, local capture output), the Blockscene settings page (palette, unsaved
 indicator, persistence, permissions and validation over HTTP), the accordion
 controls (default closed, open/close all, remember mode with a per-user key,
 hidden buttons) and the panel bypass. They reuse the API login in the browser
-to avoid the login rate limiter, reset Block Picker settings to defaults and
+to avoid the login rate limiter, reset Blockscene settings to defaults and
 remove the uploaded fixture and the captured `blocks.text.webp` at the end.
 HTTP checks verify protected settings, real raster upload/resize/WebP bytes,
 SVG sanitization, file limits and replacement behavior. They restore settings

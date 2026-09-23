@@ -1,6 +1,6 @@
 'use strict'
 
-const PLUGIN = 'block-picker'
+const PLUGIN = 'blockscene'
 // 'none' shows a plain "no preview" placeholder instead of a wireframe (blocks that have no faithful image).
 const TEMPLATES = ['generic', 'banner', 'cards', 'imageText', 'faq', 'none']
 const INITIAL_STATES = ['closed', 'open', 'remember']

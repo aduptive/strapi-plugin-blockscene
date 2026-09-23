@@ -1,4 +1,4 @@
-# Strapi Block Picker
+# Blockscene for Strapi
 
 A visual gallery for the components already allowed in a native Dynamic Zone,
 with configurable thumbnails, SVG wireframes, editor preferences and, on
@@ -14,9 +14,9 @@ One npm package, two distributions selected by dist-tag:
 
 ```sh
 # Strapi 5 (plugin major 2)
-npm install @aduptive/strapi-block-picker@next
+npm install @aduptive/strapi-blockscene@next
 # Strapi 4 (plugin major 1)
-npm install @aduptive/strapi-block-picker@strapi4
+npm install @aduptive/strapi-blockscene@strapi4
 ```
 
 Install only the matching distribution, then enable it in `config/plugins.js` (or
@@ -24,7 +24,7 @@ export the equivalent object in TypeScript):
 
 ```js
 module.exports = {
-  'block-picker': {
+  'blockscene': {
     enabled: true,
     config: {
       previewBaseUrl: '/block-previews',
@@ -71,7 +71,7 @@ is the documented limit.
 Each card tries these sources in order and moves on when one fails to load.
 A failure never blocks selecting the block.
 
-1. **Custom image** chosen in Settings, Block Picker (Media Library file).
+1. **Custom image** chosen in Settings, Blockscene (Media Library file).
 2. **Automatic image**: `components[uid].image` from the config, then
    `<previewBaseUrl>/<uid>.webp` (with `?v=<previewVersion>` when set).
 3. **Wireframe**: an inline SVG drawn with the configurable palette and the
@@ -89,11 +89,11 @@ file is deleted, the settings page warns and the next source is used.
 The page keeps its title, change state ("Unsaved changes", "Saved", "No
 unsaved changes") and Save button in a bar that floats over the content area
 once the header scrolls out. Components are a responsive card grid. `PUT
-/block-picker/settings` replaces the whole document; send the full object.
+/blockscene/settings` replaces the whole document; send the full object.
 
-Settings, Block Picker. Stored in the plugin store; no rebuild or restart is
+Settings, Blockscene. Stored in the plugin store; no rebuild or restart is
 needed for the gallery to pick them up. Reading requires the
-`Block Picker: Read gallery settings` permission and saving requires
+`Blockscene: Read gallery settings` permission and saving requires
 `Change gallery settings`; anonymous or unauthorized requests are rejected.
 
 - Wireframe palette (background, surfaces, text, accent) with a live preview
@@ -145,7 +145,7 @@ Minimal configuration:
    Keep the origin check (`admin` query parameter or your own constant).
 2. Allow the admin origin to embed it (`Content-Security-Policy: frame-ancestors`)
    and allow the page origin in the Strapi admin CSP (`frame-src`).
-3. Set the full route URL in Settings, Block Picker ("Preview route base URL"),
+3. Set the full route URL in Settings, Blockscene ("Preview route base URL"),
    or leave it empty to reuse the origin of Strapi's native Preview (when
    configured for the content type) with `/block-preview/page` appended.
    Use the same host name the frontend dev server was started for
@@ -181,7 +181,7 @@ in the plugin config (code config, validated at boot; there is no UI for it):
 
 ```js
 // config/plugins.js
-'block-picker': { config: { groups: { 'wrappers.join': 'wrappers.close', 'wrappers.background': 'wrappers.close' } } }
+'blockscene': { config: { groups: { 'wrappers.join': 'wrappers.close', 'wrappers.background': 'wrappers.close' } } }
 ```
 
 Rules: keys and values must be existing component uids, an OPEN cannot be its
@@ -232,7 +232,7 @@ the zone. Removing the config only removes the group tools and the guard.
 
 All plugin chrome (gallery, settings, page preview, editor dialogs, diagnostics)
 follows the admin user's UI locale through Strapi's `registerTrads`, with stable
-message ids (`block-picker.<key>`) and English as the fallback for any missing
+message ids (`blockscene.<key>`) and English as the fallback for any missing
 key or locale. Shipped catalogues: en, pt-BR, pt, fr, es, de, it, nl (same
 files for Strapi 4 and 5). Every other locale the admin offers shows English
 for the plugin's texts. The reference preview page receives the same locale in
@@ -246,12 +246,12 @@ component display names are never translated by the plugin.
   accordions remain. Content, config, media and unsaved edits are preserved; the
   form is not reloaded. The settings page stays available to turn it back on.
 - **Emergency, outside the panel**: start the server with
-  `BLOCK_PICKER_DISABLED=true` (or set `config.disabled: true`). It is read at
+  `BLOCKSCENE_DISABLED=true` (or set `config.disabled: true`). It is read at
   boot and reported by the catalog, wins over the saved settings and cannot be
   undone from the client. Changing it requires a restart.
 - **If the catalog request fails**, the panel renders nothing and the native
   editor is used, so a plugin outage does not block editing.
-- **Completely**: set `'block-picker': { enabled: false }` in `config/plugins.js`
+- **Completely**: set `'blockscene': { enabled: false }` in `config/plugins.js`
   and rebuild/restart. This is the only way out of an import/build failure; a
   runtime toggle cannot recover an admin that fails to load. Native content is
   intact after uninstalling.
@@ -306,6 +306,11 @@ overrides, not a promise for every minor in between.
 - Authenticated admin catalog endpoint exposes only supported metadata, resolved
   override URLs, palette and editor preferences; never the whole config.
 - Top-level Dynamic Zones only. Conditional fields are omitted conservatively.
+- "Open all" / "Close all" drive the native accordions: opening is batched into
+  one render; closing yields a frame per block so the admin stays responsive.
+  On a page with about 34 blocks whose fields include CKEditor, closing still
+  takes a few seconds with pauses up to about 1.7 s: that is the editors being
+  torn down by the host, not the plugin's loop.
 - No screenshot server, no hourly job, no in-editor rendered preview.
 - Removing the plugin leaves native content intact; remove its config entry and
   rebuild. No plugin data migration is needed.

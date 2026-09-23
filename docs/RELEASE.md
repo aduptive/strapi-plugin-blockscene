@@ -1,7 +1,7 @@
 # Release checklist
 
-Repository: https://github.com/aduptive/strapi-plugin-block-picker
-Package: `@aduptive/strapi-block-picker` (one name, two distributions).
+Repository: https://github.com/aduptive/strapi-plugin-blockscene
+Package: `@aduptive/strapi-blockscene` (one name, two distributions).
 
 1. `npm ci && npm run check` (unit tests, build, both tarballs, allowlist).
 2. Run the browser smoke against both local labs
@@ -20,7 +20,7 @@ Package: `@aduptive/strapi-block-picker` (one name, two distributions).
 
    `latest` is set to the Strapi 5 distribution once a stable 2.x exists;
    while only alphas are published, `latest` points at the newest 2.x alpha so
-   `npm install @aduptive/strapi-block-picker` installs the Strapi 5 build.
+   `npm install @aduptive/strapi-blockscene` installs the Strapi 5 build.
 6. Tag the commit (`v1.0.0-alpha.1`, `v2.0.0-alpha.1`) and push.
 7. Marketplace / Community Hub submission is a separate, later step:
    https://docs.strapi.io/cms/plugins/installing-plugins-via-marketplace

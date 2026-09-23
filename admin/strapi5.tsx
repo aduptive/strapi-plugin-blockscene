@@ -17,12 +17,12 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
 }
 function Panel() {
   const c: any = useContext()
-  const rbac: any = useDocumentRBAC('BlockPicker', (state: any) => state)
+  const rbac: any = useDocumentRBAC('Blockscene', (state: any) => state)
   const { get } = useFetchClient()
   const t = useMessages()
-  const user: any = useAuth('BlockPicker', (state: any) => state.user)
+  const user: any = useAuth('Blockscene', (state: any) => state.user)
   // Live form values: the context's `form.values` snapshot can lag behind edits made through the preview, which misplaces insertions.
-  const formValues: any = useForm('BlockPicker', (state: any) => state.values)
+  const formValues: any = useForm('Blockscene', (state: any) => state.values)
   const catalog = useCatalog(get)
   const creating = !c.id && !c.form?.initialValues?.id && !c.form?.initialValues?.documentId
   const allowed = (creating ? rbac.canCreateFields : rbac.canUpdateFields) || []
@@ -60,7 +60,7 @@ const SelectField = ({ name, label, value, onChange, disabled, options }: any) =
       {options.map((o: any) => <SingleSelectOption key={o.value} value={o.value}>{o.label}</SingleSelectOption>)}
     </SingleSelect></Field.Root>
 function MediaPicker({ onClose, onSelect }: any) {
-  const components: any = useStrapiApp('BlockPicker', (state: any) => state.components)
+  const components: any = useStrapiApp('Blockscene', (state: any) => state.components)
   const Dialog = components?.['media-library']
   React.useEffect(() => { if (!Dialog) onClose() }, [Dialog, onClose])
   if (!Dialog) return null
@@ -72,7 +72,7 @@ function usePermissions() {
 }
 const SettingsPage = () => <Settings useClient={useFetchClient} usePermissions={usePermissions} MediaPicker={MediaPicker} ToggleField={ToggleField} SelectField={SelectField} TextField={TextField} previewSupported />
 export default {
-  register(app: any) { register(app, SettingsPage); app.registerPlugin({ id: 'block-picker', name: 'Block Picker' }) },
+  register(app: any) { register(app, SettingsPage); app.registerPlugin({ id: 'blockscene', name: 'Blockscene' }) },
   registerTrads,
   bootstrap(app: any) { app.getPlugin('content-manager').apis.addEditViewSidePanel([Panel]) },
 }

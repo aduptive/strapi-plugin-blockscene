@@ -1,5 +1,5 @@
 {
-  "name": "@aduptive/strapi-block-picker",
+  "name": "@aduptive/strapi-blockscene",
   "version": "2.0.0-alpha.1",
   "description": "Visual component gallery for native Strapi dynamic zones.",
   "license": "MIT",
@@ -7,7 +7,7 @@
   "keywords": [
     "strapi",
     "strapi-plugin",
-    "block-picker"
+    "blockscene"
   ],
   "main": "strapi-server.js",
   "files": [
@@ -30,8 +30,8 @@
     "./package.json": "./package.json"
   },
   "strapi": {
-    "name": "block-picker",
-    "displayName": "Block Picker",
+    "name": "blockscene",
+    "displayName": "Blockscene",
     "kind": "plugin",
     "description": "Independent of the frontend framework."
   },
@@ -53,12 +53,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aduptive/strapi-plugin-block-picker.git",
+    "url": "git+https://github.com/aduptive/strapi-plugin-blockscene.git",
     "directory": "packages/strapi5"
   },
-  "homepage": "https://github.com/aduptive/strapi-plugin-block-picker#readme",
+  "homepage": "https://github.com/aduptive/strapi-plugin-blockscene#readme",
   "bugs": {
-    "url": "https://github.com/aduptive/strapi-plugin-block-picker/issues"
+    "url": "https://github.com/aduptive/strapi-plugin-blockscene/issues"
   },
   "publishConfig": {
     "access": "public",

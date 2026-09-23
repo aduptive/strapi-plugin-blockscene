@@ -10,10 +10,10 @@ import nl from './translations/nl.json'
 
 // One flat catalogue per admin UI locale (keys as in en.json, "group.item" for
 // grouped options). English is the source of truth and the fallback: the admin
-// merges plugin messages under `block-picker.<key>` and react-intl falls back to
+// merges plugin messages under `blockscene.<key>` and react-intl falls back to
 // the English defaultMessage for any key or locale that is missing. Locales the
 // admin offers but that have no catalogue here therefore show English.
-export const PLUGIN_ID = 'block-picker'
+export const PLUGIN_ID = 'blockscene'
 export const TRANSLATIONS: Record<string, Record<string, string>> = { en, 'pt-BR': ptBR, pt, fr, es, de, it, nl }
 const prefix = (data: Record<string, string>) => Object.fromEntries(Object.entries(data).map(([key, value]) => [`${PLUGIN_ID}.${key}`, value]))
 // Strapi (4 and 5) calls this with the locales enabled in the host's admin config; only those are returned.

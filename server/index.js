@@ -4,6 +4,15 @@ const { PLUGIN, TEMPLATES, DEFAULTS, catalog, validateSettings, mergeSaved, safe
 const { safeGroups, validateGroups } = require('./groups')
 
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
+// Settings saved by the plugin under its previous id ("block-picker", alphas before the rename) are copied once.
+const LEGACY_PLUGIN = 'block-picker'
+async function readSettings(strapi) {
+  const current = await store(strapi).get({ key: 'settings' })
+  if (current) return current
+  const legacy = await strapi.store({ type: 'plugin', name: LEGACY_PLUGIN }).get({ key: 'settings' })
+  if (legacy) { await store(strapi).set({ key: 'settings', value: legacy }); strapi.log.info(`[${PLUGIN}] settings migrated from "${LEGACY_PLUGIN}"`) }
+  return legacy
+}
 const componentUids = (strapi) => Object.keys(strapi.components || {})
 const findMedia = (strapi, id) => strapi.db.query('plugin::upload.file').findOne({ where: { id }, select: ['id', 'url', 'mime', 'name'] })
 
@@ -94,8 +103,8 @@ function registerPublishGuard(strapi) {
 module.exports = {
   config: {
     default: { components: {}, previewBaseUrl: '/block-previews', previewVersion: undefined,
-      // Emergency bypass read once at boot: BLOCK_PICKER_DISABLED=true forces the native editor. Restart to change.
-      disabled: process.env.BLOCK_PICKER_DISABLED === 'true',
+      // Emergency bypass read once at boot: BLOCKSCENE_DISABLED=true forces the native editor. Restart to change.
+      disabled: process.env.BLOCKSCENE_DISABLED === 'true',
       // true only where the Content Manager ships the per-block preview slot (see docs).
       blockPreview: false,
       // Optional layout groups: OPEN component uid -> its CLOSE uid, e.g. { 'wrappers.join': 'wrappers.close' }.
@@ -111,7 +120,7 @@ module.exports = {
     registerPublishGuard(strapi)
   },
   services: { settings: ({ strapi }) => ({
-    async get() { return mergeSaved(await store(strapi).get({ key: 'settings' }), componentUids(strapi)) },
+    async get() { return mergeSaved(await readSettings(strapi), componentUids(strapi)) },
     async set(value) {
       const next = validateSettings(value, componentUids(strapi))
       for (const [uid, entry] of Object.entries(next.components)) {

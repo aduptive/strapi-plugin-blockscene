@@ -17,7 +17,7 @@ import { useMessages } from './messages'
 // public Strapi 5 APIs only: no patch of the Content Manager. The frontend
 // owns the page it renders; the admin validates every request from it.
 type Mode = 'form' | 'split' | 'preview'
-const MODE_KEY = 'block-picker:page-mode', RATIO_KEY = 'block-picker:page-split-ratio'
+const MODE_KEY = 'blockscene:page-mode', RATIO_KEY = 'blockscene:page-split-ratio'
 const MIN_PANE = 360, MIN_FORM = 520, NARROW = 960, KEY_STEP = 32
 const MODAL_TYPES = ['customField', 'string', 'text']
 const read = (key: string) => { try { return localStorage.getItem(key) } catch { return null } }
@@ -95,7 +95,7 @@ function PickerDialog({ open, onOpenChange, trigger, title, children }: any) {
 const ACTION_TYPES = ['update', 'publish']
 const nativeButtons = () => document.querySelectorAll<HTMLButtonElement>('#main-content button:not([data-testid="page-preview-pane"] button)')
 function ToolbarActions({ model, collectionType, documentId, locale }: any) {
-  const plugins: any = useStrapiApp('BlockPickerToolbar', (state: any) => state.plugins)
+  const plugins: any = useStrapiApp('BlocksceneToolbar', (state: any) => state.plugins)
   const [{ query }] = useQueryParams<{ status?: string }>()
   const { document: doc, meta } = useDocument({ model, collectionType, documentId, params: { locale } } as any, { skip: !documentId })
   const { toggleNotification } = useNotification()
@@ -125,12 +125,12 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
 export function PagePreview({ editor, groups = null, Toggle }: { editor: any; groups?: Record<string, string> | null; Toggle?: React.ComponentType<any> }) {
   const t = useMessages()
   const c: any = useContext()
-  const rbac: any = useDocumentRBAC('BlockPickerPagePreview', (state: any) => state)
-  const values = useForm('BlockPickerPagePreview', (state: any) => state.values)
-  const onChange = useForm('BlockPickerPagePreview', (state: any) => state.onChange)
-  const components: any = useStrapiApp('BlockPickerPagePreview', (state: any) => state.components)
+  const rbac: any = useDocumentRBAC('BlockscenePagePreview', (state: any) => state)
+  const values = useForm('BlockscenePagePreview', (state: any) => state.values)
+  const onChange = useForm('BlockscenePagePreview', (state: any) => state.onChange)
+  const components: any = useStrapiApp('BlockscenePagePreview', (state: any) => state.components)
   const MediaLibraryDialog = components?.['media-library']
-  const addFieldRow = useForm('BlockPickerPagePreview', (state: any) => state.addFieldRow)
+  const addFieldRow = useForm('BlockscenePagePreview', (state: any) => state.addFieldRow)
   const fields = c.layout?.edit?.layout?.flat(3) || []
   // Same zone rules as the gallery panel: the first Dynamic Zone the user may read (create: any), never a conditional one;
   // editing additionally needs the update/create permission on the field and an enabled, non-disabled form.

@@ -50,7 +50,7 @@ test('thumbnail candidates follow manual > configured > automatic, then wirefram
 test('accordion memory is scoped per user and zone, tolerates blocked or invalid storage', async () => {
   const { memoryKey, readMemory, writeMemory, initialState } = await import('../admin/model.mjs')
   const key = memoryKey({ base: 'http://cms/admin', userId: 7, contentType: 'api::page.page', zone: 'blocks' })
-  assert.equal(key, 'block-picker:v1:http://cms/admin:7:api::page.page:blocks')
+  assert.equal(key, 'blockscene:v1:http://cms/admin:7:api::page.page:blocks')
   assert.equal(memoryKey({ base: 'x', contentType: 'a', zone: 'b' }), null, 'no user id means no memory')
   const store = new Map(); const storage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }
   writeMemory(storage, key, 'open'); assert.equal(readMemory(storage, key), 'open')
@@ -117,7 +117,7 @@ test('admin catalog only exposes declared safe metadata plus resolved overrides'
   assert.equal(ctx.body.components['blocks.hero'].manualImage, undefined)
   assert.equal(ctx.body.components['blocks.hero'].manualMissing, true)
   const routes = plugin.routes.admin.routes
-  assert.ok(routes.find(r => r.method === 'PUT' && r.path === '/settings').config.policies.some(p => p.config?.actions?.includes('plugin::block-picker.settings.update')))
+  assert.ok(routes.find(r => r.method === 'PUT' && r.path === '/settings').config.policies.some(p => p.config?.actions?.includes('plugin::blockscene.settings.update')))
 })
 
 test('layout groups: OPEN/CLOSE map, tree, whole-group moves/removal, gap resolution, validation policy', async () => {

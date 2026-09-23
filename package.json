@@ -1,5 +1,5 @@
 {
-  "name": "block-picker-development",
+  "name": "blockscene-development",
   "private": true,
   "version": "0.1.0",
   "license": "MIT",
@@ -20,10 +20,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aduptive/strapi-plugin-block-picker.git"
+    "url": "git+https://github.com/aduptive/strapi-plugin-blockscene.git"
   },
-  "homepage": "https://github.com/aduptive/strapi-plugin-block-picker#readme",
+  "homepage": "https://github.com/aduptive/strapi-plugin-blockscene#readme",
   "bugs": {
-    "url": "https://github.com/aduptive/strapi-plugin-block-picker/issues"
+    "url": "https://github.com/aduptive/strapi-plugin-blockscene/issues"
   }
 }

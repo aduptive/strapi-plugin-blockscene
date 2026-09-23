@@ -9,7 +9,7 @@ if (existsSync(root)) throw new Error('Lab already exists; refusing to overwrite
 const write = (path, content) => { if (path.endsWith('.js')) new Function(content); const full = join(root, path); mkdirSync(resolve(full, '..'), { recursive: true }); writeFileSync(full, content) }
 const json = (path, value) => write(path, JSON.stringify(value, null, 2) + '\n')
 const dependencies = { '@strapi/strapi': version, '@strapi/admin': version, 'better-sqlite3': major === 4 ? '9.6.0' : '12.8.0', react: '18.3.1', 'react-dom': '18.3.1', 'react-router-dom': major === 4 ? '5.3.4' : '6.30.3', 'styled-components': major === 4 ? '5.3.11' : '6.1.19' }
-for (const [dir, slug] of [['block-picker', 'block-picker'], ['image-optimization', 'image-pipeline']]) {
+for (const [dir, slug] of [['block-picker', 'blockscene'], ['image-optimization', 'image-pipeline']]) {
  const directory = resolve(`../strapi-plugin-${dir}/artifacts`)
  const name = readdirSync(directory).find(file => file.endsWith('.tgz') && file.includes(major === 4 ? '-1.0.0-' : '-2.0.0-'))
  if (!name) throw new Error(`Build and pack ${slug} first`)
@@ -20,7 +20,7 @@ write('config/server.js', `module.exports = { host: '127.0.0.1', port: ${major =
 write('config/admin.js', `module.exports = { auth: { secret: '${randomBytes(32).toString('hex')}' }, apiToken: { salt: '${randomBytes(32).toString('hex')}' }, transfer: { token: { salt: '${randomBytes(32).toString('hex')}' } }, secrets: { encryptionKey: '${randomBytes(32).toString('hex')}' } }\n`)
 write('config/database.js', `const path = require('node:path'); module.exports = { connection: { client: 'sqlite', connection: { filename: path.join(__dirname, '../.tmp/data.db') }, useNullAsDefault: true } }\n`)
 write('config/middlewares.js', `module.exports = ['strapi::logger', 'strapi::errors', 'strapi::security', 'strapi::cors', 'strapi::poweredBy', 'strapi::query', 'strapi::body', 'strapi::session', 'strapi::favicon', 'strapi::public']\n`)
-write('config/plugins.js', `module.exports = { 'block-picker': { enabled: true, config: { components: { 'blocks.hero': { label: 'Hero example', description: 'A heading with nested defaults.', category: 'Editorial', keywords: 'banner', image: '/block-previews/hero.svg' } } } }, 'image-pipeline': { enabled: true } }\n`)
+write('config/plugins.js', `module.exports = { 'blockscene': { enabled: true, config: { components: { 'blocks.hero': { label: 'Hero example', description: 'A heading with nested defaults.', category: 'Editorial', keywords: 'banner', image: '/block-previews/hero.svg' } } } }, 'image-pipeline': { enabled: true } }\n`)
 json('src/components/shared/item.json', { collectionName: 'components_shared_items', info: { displayName: 'Item' }, attributes: { label: { type: 'string', default: 'Nested default' } } })
 json('src/components/blocks/hero.json', { collectionName: 'components_blocks_heroes', info: { displayName: 'Hero' }, attributes: { title: { type: 'string', default: 'Hello from Strapi', required: true }, visible: { type: 'boolean', default: false }, items: { type: 'component', component: 'shared.item', repeatable: true, required: true, min: 2 }, image: { type: 'media', multiple: false, allowedTypes: ['images'] } } })
 json('src/components/blocks/text.json', { collectionName: 'components_blocks_texts', info: { displayName: 'Text' }, attributes: { body: { type: 'text' } } })

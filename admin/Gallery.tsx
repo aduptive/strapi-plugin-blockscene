@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { unstable_batchedUpdates } from 'react-dom'
 import { Box, Button, Flex, Searchbar, SingleSelect, SingleSelectOption, Typography } from '@strapi/design-system'
 import styled from 'styled-components'
 import { entriesFor, categoriesFor, groupEntries, memoryKey, readMemory, writeMemory, initialState } from './model.mjs'
@@ -28,8 +29,8 @@ const Slider = styled.input<{ $percent: number }>`
   &::-moz-range-thumb { width: 1.6rem; height: 1.6rem; border-radius: 50%; background: ${({ theme }) => theme.colors.neutral0}; border: 0.2rem solid ${({ theme }) => theme.colors.primary600}; cursor: pointer; }
   &:focus-visible { outline: 0.2rem solid ${({ theme }) => theme.colors.primary600}; outline-offset: 0.2rem; }
 `
-const COLUMNS = { key: 'block-picker:columns', min: 1, max: 5, initial: 3 }
-const SHOW_FIELDS_KEY = 'block-picker:show-fields'
+const COLUMNS = { key: 'blockscene:columns', min: 1, max: 5, initial: 3 }
+const SHOW_FIELDS_KEY = 'blockscene:show-fields'
 const readColumns = () => { try { const n = Number(window.localStorage.getItem(COLUMNS.key)); return n >= COLUMNS.min && n <= COLUMNS.max ? n : COLUMNS.initial } catch { return COLUMNS.initial } }
 const readShowFields = () => { try { return window.localStorage.getItem(SHOW_FIELDS_KEY) !== 'false' } catch { return true } }
 const remember = (key: string, value: string) => { try { window.localStorage.setItem(key, value) } catch { /* blocked storage keeps the session value */ } }
@@ -55,7 +56,7 @@ export function Thumb({ candidates, template, palette, onResolved, noPreview, ea
 
 function Card({ entry, palette, showFields, onSelect }: any) {
   const t = useMessages()
-  return <Tile type="button" onClick={onSelect} title={entry.uid} data-testid={`block-picker-${entry.uid}`}>
+  return <Tile type="button" onClick={onSelect} title={entry.uid} data-testid={`blockscene-${entry.uid}`}>
     <Thumb candidates={entry.candidates} template={entry.template} palette={palette} noPreview={t.noPreview} />
     <Typography variant="pi" fontWeight="bold" textColor="neutral800" ellipsis>{entry.label}</Typography>
     {entry.description && <Clamp variant="pi" textColor="neutral600">{entry.description}</Clamp>}
@@ -97,7 +98,7 @@ function ZoneGallery({ zone, components, add, Modal, Toggle, get, controlled }: 
     if (!open) return
     let active = true
     setError(''); setConfig(null)
-    get('/block-picker/catalog').then(({ data }: any) => { if (active) setConfig(data) })
+    get('/blockscene/catalog').then(({ data }: any) => { if (active) setConfig(data) })
       .catch(() => { if (active) setError(t.failed) })
     return () => { active = false }
   }, [open, get, t.failed])
@@ -186,7 +187,7 @@ function useInitialAccordions({ zones, editor, docKey, contentType, userId }: an
         const list = findZoneList(zone.label)
         if (!list) continue
         const key = memoryKey({ base: memoryBase(), userId: user.current, contentType, zone: zone.name })
-        setAll(list, initialState(editor, readMemory(storage(), key)) === 'open')
+        setAll(list, initialState(editor, readMemory(storage(), key)) === 'open', unstable_batchedUpdates)
       }
     }, 200)
     return stop
@@ -198,7 +199,7 @@ function ZoneControls({ zone, editor, contentType, userId }: any) {
   if (!zone.count || !(editor.showOpenAll || editor.showCloseAll)) return null
   const apply = (open: boolean) => {
     const list = findZoneList(zone.label)
-    if (list) setAll(list, open)
+    if (list) setAll(list, open, unstable_batchedUpdates)
     writeMemory(storage(), memoryKey({ base: memoryBase(), userId, contentType, zone: zone.name }), open ? 'open' : 'closed')
   }
   return <Flex gap={2} wrap="wrap" data-testid={`block-accordion-controls-${zone.name}`}>

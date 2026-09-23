@@ -1,6 +1,6 @@
-// Block Picker page preview bridge: reference implementation (framework-free).
+// Blockscene page preview bridge: reference implementation (framework-free).
 (() => {
-  const PROTOCOL = 'block-picker:page-preview:v1'
+  const PROTOCOL = 'blockscene:page-preview:v1'
   const params = new URLSearchParams(location.search)
   const channel = params.get('channel') || ''
   // Only the admin origin may talk to this page. Configure it per environment.

@@ -49,7 +49,7 @@ function ColorField({ name, label, value, onChange, disabled }: any) {
   </Label>
 }
 
-export const permissions = { read: [{ action: 'plugin::block-picker.settings.read', subject: null }], update: [{ action: 'plugin::block-picker.settings.update', subject: null }] }
+export const permissions = { read: [{ action: 'plugin::blockscene.settings.read', subject: null }], update: [{ action: 'plugin::blockscene.settings.update', subject: null }] }
 
 export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, previewSupported = false }: any) {
   const t = useMessages()
@@ -69,7 +69,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   React.useEffect(() => {
     if (!canRead || isLoading) return
     let active = true
-    Promise.all([get('/block-picker/settings'), get('/block-picker/catalog')]).then(([s, c]: any) => {
+    Promise.all([get('/blockscene/settings'), get('/blockscene/catalog')]).then(([s, c]: any) => {
       if (!active) return
       setData(s.data); setSettings(s.data.settings); setMedia(s.data.media || {}); setCatalog(c.data)
     }).catch(() => { if (active) setFailed(true) })
@@ -82,9 +82,9 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
     if (!settings || invalid || !canUpdate) return
     setSaving(true); setStatus('')
     try {
-      const { data: saved } = await put('/block-picker/settings', settings)
+      const { data: saved } = await put('/blockscene/settings', settings)
       setSettings(saved); setDirty(false); setStatus(t.saved)
-      const refreshed = await get('/block-picker/settings'); setMedia(refreshed.data.media || {})
+      const refreshed = await get('/blockscene/settings'); setMedia(refreshed.data.media || {})
     } catch { setStatus(t.saveFailed) }
     finally { setSaving(false) }
   }
@@ -108,7 +108,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   const controls = (suffix: string) => ready && <Flex gap={3} alignItems="center" wrap="wrap">
     <Typography role="status" aria-live="polite" textColor={dirty ? 'warning700' : 'neutral600'} data-testid={`${dirty ? 'unsaved-indicator' : 'save-status'}${suffix}`}>
       {dirty ? t.unsaved : status || t.noChanges}</Typography>
-    <Button onClick={save} disabled={!canUpdate || invalid || !dirty} loading={saving} data-testid={`save-block-picker-settings${suffix}`}>{t.save}</Button>
+    <Button onClick={save} disabled={!canUpdate || invalid || !dirty} loading={saving} data-testid={`save-blockscene-settings${suffix}`}>{t.save}</Button>
   </Flex>
   return <Box padding={8} background="neutral100"><Flex direction="column" alignItems="stretch" gap={5}>
     <div ref={header}>
@@ -206,7 +206,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
 }
 
 export function register(app: any, Component: any) {
-  app.createSettingSection({ id: 'block-picker', intlLabel: { id: 'block-picker.title', defaultMessage: 'Block Picker' } },
-    [{ id: 'block-picker-settings', to: '/settings/block-picker', intlLabel: { id: 'block-picker.settings', defaultMessage: 'Gallery' },
+  app.createSettingSection({ id: 'blockscene', intlLabel: { id: 'blockscene.title', defaultMessage: 'Blockscene' } },
+    [{ id: 'blockscene-settings', to: '/settings/blockscene', intlLabel: { id: 'blockscene.settings', defaultMessage: 'Gallery' },
       Component: async () => Component, permissions: permissions.read }])
 }

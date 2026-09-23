@@ -26,7 +26,7 @@ const api = async (method, path, body, auth = true) => {
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined })
   return { status: res.status, data: await res.json().catch(() => null) }
 }
-const putSettings = async patch => { const { status, data } = await api('PUT', '/block-picker/settings', patch); assert.equal(status, 200, JSON.stringify(data)); return data }
+const putSettings = async patch => { const { status, data } = await api('PUT', '/blockscene/settings', patch); assert.equal(status, 200, JSON.stringify(data)); return data }
 const previewFile = `.local/strapi${major}/public/block-previews/blocks.text.webp`
 // First aria-expanded button per <li> is the block header; nested repeatables have their own.
 // Functions (not strings) so Strapi 4's CSP without unsafe-eval accepts them.
@@ -44,13 +44,13 @@ try {
   const login = await api('POST', '/admin/login', { email: access.email, password: access.password }, false)
   token = login.data?.data?.token; assert.ok(token, 'API login')
   await step('settings endpoints reject anonymous requests', async () => {
-    assert.equal((await api('GET', '/block-picker/settings', null, false)).status, 401)
-    assert.equal((await api('PUT', '/block-picker/settings', { palette: { accent: '#000000' } }, false)).status, 401)
-    assert.equal((await api('GET', '/block-picker/catalog', null, false)).status, 401)
+    assert.equal((await api('GET', '/blockscene/settings', null, false)).status, 401)
+    assert.equal((await api('PUT', '/blockscene/settings', { palette: { accent: '#000000' } }, false)).status, 401)
+    assert.equal((await api('GET', '/blockscene/catalog', null, false)).status, 401)
   })
   await step('settings validation rejects bad payloads over HTTP', async () => {
     for (const bad of [{ palette: { accent: 'red' } }, { components: { 'blocks.nope': { template: 'generic' } } }, { components: { 'blocks.text': { mediaId: 999999 } } }, { components: { 'blocks.text': { template: 'fancy' } } }])
-      assert.equal((await api('PUT', '/block-picker/settings', bad)).status, 400, JSON.stringify(bad))
+      assert.equal((await api('PUT', '/blockscene/settings', bad)).status, 400, JSON.stringify(bad))
   })
   await putSettings({}) // reset to defaults
   rmSync(previewFile, { force: true })
@@ -63,26 +63,26 @@ try {
   await page.getByRole('textbox', { name: /^title/i }).first().fill(`Plugin smoke ${Date.now()}`)
   await step('the native "Add a component to blocks" button opens the gallery', async () => {
     await page.getByRole('button', { name: /Add a component to blocks/ }).click()
-    await page.getByTestId('block-picker-blocks.hero').waitFor()
+    await page.getByTestId('blockscene-blocks.hero').waitFor()
     assert.equal(await page.getByText(/Pick one component/i).count(), 0, 'native category picker stays closed')
-    await page.keyboard.press('Escape'); await page.getByTestId('block-picker-blocks.hero').waitFor({ state: 'detached' })
+    await page.keyboard.press('Escape'); await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' })
   })
   await page.getByTestId('open-gallery-blocks').click()
-  await page.getByTestId('block-picker-blocks.hero').waitFor()
+  await page.getByTestId('blockscene-blocks.hero').waitFor()
   await step('configured image is used and the missing automatic image falls back to a wireframe', async () => {
-    await page.getByTestId('block-picker-blocks.hero').locator('[data-thumb="0"] img').waitFor()
-    await page.getByTestId('block-picker-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="generic"]').waitFor()
+    await page.getByTestId('blockscene-blocks.hero').locator('[data-thumb="0"] img').waitFor()
+    await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="generic"]').waitFor()
   })
   await shot('gallery')
   await step('gallery header: count, category sections, field list toggle, columns slider, search combined with the category filter', async () => {
     const count = page.getByTestId('block-count-blocks'); await count.waitFor()
     assert.match(await count.textContent(), /^\d+ blocks$/, 'total count before filtering')
     await page.locator('[data-testid^="block-group-"]').first().waitFor()
-    await page.getByTestId('block-picker-blocks.hero').getByTestId('block-fields').waitFor()
+    await page.getByTestId('blockscene-blocks.hero').getByTestId('block-fields').waitFor()
     const fieldsToggle = page.getByRole('dialog').getByRole('switch', { name: 'Fields' })
     await fieldsToggle.click()
-    assert.equal(await page.getByTestId('block-picker-blocks.hero').getByTestId('block-fields').count(), 0, 'field list hidden by the toggle')
-    await fieldsToggle.click(); await page.getByTestId('block-picker-blocks.hero').getByTestId('block-fields').waitFor()
+    assert.equal(await page.getByTestId('blockscene-blocks.hero').getByTestId('block-fields').count(), 0, 'field list hidden by the toggle')
+    await fieldsToggle.click(); await page.getByTestId('blockscene-blocks.hero').getByTestId('block-fields').waitFor()
     const slider = page.locator('input[type="range"][aria-labelledby="block-columns-blocks"]')
     await slider.fill('1'); assert.equal(await page.locator('[data-testid^="block-group-"] + div').first().evaluate(el => getComputedStyle(el).columnCount), '1')
     await slider.fill('3')
@@ -100,10 +100,10 @@ try {
   await page.locator('input[name="block-search-blocks"]').fill('not-a-real-block')
   await page.getByText('No blocks found.', { exact: true }).waitFor()
   await page.locator('input[name="block-search-blocks"]').fill('banner')
-  await page.getByTestId('block-picker-blocks.hero').click()
+  await page.getByTestId('blockscene-blocks.hero').click()
   await page.getByTestId('open-gallery-sidebar').click()
-  assert.equal(await page.getByTestId('block-picker-blocks.hero').count(), 0, 'Sidebar only allows text')
-  await page.getByTestId('block-picker-blocks.text').click()
+  assert.equal(await page.getByTestId('blockscene-blocks.hero').count(), 0, 'Sidebar only allows text')
+  await page.getByTestId('blockscene-blocks.text').click()
   await page.getByTestId('open-gallery-sidebar').waitFor({ state: 'detached' })
   await step('accordion controls appear for a full zone too', async () => { await page.getByTestId('block-accordion-controls-sidebar').waitFor() })
   const save = page.getByRole('button', { name: 'Save', exact: true })
@@ -125,7 +125,7 @@ try {
   const docUrl = page.url()
   // Add a second block so "open/close all" has more than one accordion in the zone.
   await page.getByTestId('open-gallery-blocks').click()
-  await page.getByTestId('block-picker-blocks.text').click()
+  await page.getByTestId('blockscene-blocks.text').click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
   const second = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && ['PUT', 'POST'].includes(res.request().method()) && res.ok())
   await save.click()
@@ -156,8 +156,8 @@ try {
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor()
     await waitOpenCount(2)
     assert.equal((await expanded()).filter(v => v === 'false').length, 1, 'remembered per zone: sidebar still closed')
-    const key = await page.evaluate(() => Object.keys(localStorage).find(k => k.startsWith('block-picker:v1:')))
-    assert.match(key, /block-picker:v1:http:\/\/127\.0\.0\.1:\d+\/admin:\d+:api::page\.page:blocks/)
+    const key = await page.evaluate(() => Object.keys(localStorage).find(k => k.startsWith('blockscene:v1:')))
+    assert.match(key, /blockscene:v1:http:\/\/127\.0\.0\.1:\d+\/admin:\d+:api::page\.page:blocks/)
     assert.ok(!key.includes(access.email), 'no e-mail in the key')
     await page.evaluate(k => localStorage.setItem(k, 'garbage'), key)
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await waitState('false')
@@ -188,8 +188,8 @@ try {
   })
   await putSettings({})
   await step('settings page: palette preview, unsaved indicator, save and persistence', async () => {
-    await page.goto('/admin/settings/block-picker')
-    await page.getByTestId('save-block-picker-settings').waitFor()
+    await page.goto('/admin/settings/blockscene')
+    await page.getByTestId('save-blockscene-settings').waitFor()
     assert.equal(await page.getByTestId('unsaved-indicator').count(), 0)
     await page.locator('input[name="palette-accent"]').fill('#FF0000')
     await page.getByTestId('unsaved-indicator').waitFor()
@@ -198,10 +198,10 @@ try {
     await page.getByText('Colors must use #RRGGBB.').waitFor()
     await page.locator('input[name="palette-accent"]').fill('#FF0000')
     await page.locator('input[name="palette-surface"]').fill('#00FF00')
-    await page.getByTestId('save-block-picker-settings').click()
+    await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
     await page.reload()
-    await page.getByTestId('save-block-picker-settings').waitFor()
+    await page.getByTestId('save-blockscene-settings').waitFor()
     assert.equal(await page.locator('input[name="palette-accent"]').inputValue(), '#FF0000')
     await page.getByTestId('source-blocks.text').getByText(/Wireframe/).waitFor()
     await page.getByTestId('source-blocks.hero').getByText(/Automatic image/).waitFor()
@@ -211,12 +211,12 @@ try {
   await step('palette change reaches the gallery wireframe without rebuild', async () => {
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
     // The generic template has no accent shape; surfaces are present in every template.
-    await page.getByTestId('block-picker-blocks.text').locator('svg[data-wireframe] rect[fill="#00FF00"]').first().waitFor()
+    await page.getByTestId('blockscene-blocks.text').locator('svg[data-wireframe] rect[fill="#00FF00"]').first().waitFor()
     await page.keyboard.press('Escape')
   })
   await step('manual image from the Media Library wins, then "use automatic" restores the fallback', async () => {
     // A real capture from the static example is uploaded as the custom image.
-    const tmp = mkdtempSync(join(tmpdir(), 'block-picker-'))
+    const tmp = mkdtempSync(join(tmpdir(), 'blockscene-'))
     execFileSync(process.execPath, ['scripts/capture-previews.mjs', '--manifest', 'examples/static-preview/manifest.json', '--out', tmp, '--only', 'blocks.hero'], { stdio: 'inherit' })
     const form = new FormData()
     form.append('files', new Blob([readFileSync(join(tmp, 'blocks.hero.webp'))], { type: 'image/webp' }), 'smoke-thumb.webp')
@@ -224,7 +224,7 @@ try {
     const upload = await api('POST', '/upload', form)
     assert.ok([200, 201].includes(upload.status), JSON.stringify(upload.data))
     uploadId = upload.data[0].id
-    await page.goto('/admin/settings/block-picker')
+    await page.goto('/admin/settings/blockscene')
     await page.getByTestId('settings-blocks.text').getByRole('button', { name: 'Choose image' }).click()
     const dialog = page.getByRole('dialog')
     await dialog.waitFor()
@@ -234,31 +234,31 @@ try {
     await dialog.getByRole('button', { name: /^(Finish|Select)/ }).click()
     await dialog.waitFor({ state: 'hidden' })
     await page.getByTestId('source-blocks.text').getByText(/Custom image/).waitFor()
-    await page.getByTestId('save-block-picker-settings').click()
+    await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
-    const settings = (await api('GET', '/block-picker/settings')).data
+    const settings = (await api('GET', '/blockscene/settings')).data
     assert.equal(settings.settings.components['blocks.text'].mediaId, uploadId)
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
-    const img = page.getByTestId('block-picker-blocks.text').locator('[data-thumb="0"] img')
+    const img = page.getByTestId('blockscene-blocks.text').locator('[data-thumb="0"] img')
     await img.waitFor(); assert.match(await img.getAttribute('src'), /\/uploads\//)
     await shot('manual-thumb')
     await page.keyboard.press('Escape')
-    await page.goto('/admin/settings/block-picker')
+    await page.goto('/admin/settings/blockscene')
     await page.getByTestId('settings-blocks.text').getByRole('button', { name: 'Use automatic image' }).click()
-    await page.getByTestId('save-block-picker-settings').click()
+    await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
-    assert.equal((await api('GET', '/block-picker/settings')).data.settings.components['blocks.text'], undefined)
+    assert.equal((await api('GET', '/blockscene/settings')).data.settings.components['blocks.text'], undefined)
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
-    await page.getByTestId('block-picker-blocks.text').locator('[data-thumb="wireframe"]').waitFor()
+    await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"]').waitFor()
     await page.keyboard.press('Escape')
   })
   await step('deleted media is reported and the card advances to the next source', async () => {
     await putSettings({ components: { 'blocks.text': { mediaId: uploadId, template: 'faq' } } })
     assert.equal((await api('DELETE', `/upload/files/${uploadId}`)).status, 200); uploadId = null
-    await page.goto('/admin/settings/block-picker')
+    await page.goto('/admin/settings/blockscene')
     await page.getByTestId('settings-blocks.text').getByText('The selected media no longer exists; the next source is used.').waitFor()
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
-    await page.getByTestId('block-picker-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="faq"]').waitFor()
+    await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="faq"]').waitFor()
     await page.keyboard.press('Escape')
   })
   await step('local capture output is consumed as the automatic image and a broken image recovers', async () => {
@@ -266,7 +266,7 @@ try {
     assert.ok(existsSync(previewFile))
     await putSettings({})
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
-    const img = page.getByTestId('block-picker-blocks.text').locator('[data-thumb="0"] img')
+    const img = page.getByTestId('blockscene-blocks.text').locator('[data-thumb="0"] img')
     await img.waitFor(); assert.match(await img.getAttribute('src'), /blocks\.text\.webp/)
     await shot('captured-thumb')
     await page.keyboard.press('Escape')
@@ -331,18 +331,18 @@ try {
     const gap = frame.locator('[data-testid^="bp-gap-"]').nth(1)
     await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
     const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
-    await picker.getByTestId('block-picker-blocks.text').waitFor()
+    await picker.getByTestId('blockscene-blocks.text').waitFor()
     await page.keyboard.press('Escape'); await picker.waitFor({ state: 'hidden' })
     const zoneRows = () => page.locator('ol[aria-describedby]').first().locator(':scope > li')
     assert.equal(await zoneRows().count(), 2, 'cancel keeps the zone unchanged')
     await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
-    await picker.getByTestId('block-picker-blocks.text').click(); await picker.waitFor({ state: 'hidden' })
+    await picker.getByTestId('blockscene-blocks.text').click(); await picker.waitFor({ state: 'hidden' })
     await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
     assert.match(await zoneRows().nth(1).innerText(), /Text/, 'inserted after the first block')
     // The compact per-block preview setting persists but is hidden here: this lab has no accordion integration.
     const persisted = await putSettings({ editor: { blockPreviewInForm: true } })
     assert.equal(persisted.editor.blockPreviewInForm, true)
-    assert.equal((await api('GET', '/block-picker/settings')).data.blockPreviewAvailable, false)
+    assert.equal((await api('GET', '/blockscene/settings')).data.blockPreviewAvailable, false)
     await putSettings({ editor: { blockPreviewInForm: false } })
     await frame.locator('main > section').nth(2).waitFor()
     assert.deepEqual(cmWrites, [], 'no content-manager writes')
@@ -364,14 +364,14 @@ try {
   })
   const GROUPS_MODE = process.env.BLOCK_PICKER_GROUPS || '1'
   await step(`layout groups, ${GROUPS_MODE === '1' ? 'configured pair' : 'no config'}: gallery insertion, server publish guard (single, bulk), balanced documents publish${major === 5 ? ', preview group tools and diagnostics' : ''}`, async () => {
-    const catalogData = (await api('GET', '/block-picker/catalog')).data
+    const catalogData = (await api('GET', '/blockscene/catalog')).data
     if (GROUPS_MODE === '1') assert.deepEqual(catalogData.groups, { 'group.section': 'group.end' }, 'catalog exposes the validated map')
     else assert.equal(catalogData.groups, null, 'no config (or malformed config) means no groups')
     // Gallery, form mode: a configured OPEN brings its CLOSE in the same unsaved change; without config it is an ordinary block.
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor(); await rows().first().waitFor()
     const before = await page.locator('ol[aria-describedby]').first().locator(':scope > li').count()
     await page.getByTestId('open-gallery-blocks').click()
-    await page.getByTestId('block-picker-group.section').click()
+    await page.getByTestId('blockscene-group.section').click()
     await page.waitForFunction(n => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === n, before + (GROUPS_MODE === '1' ? 2 : 1))
     // Only the `blocks` zone (the first list): the sidebar zone renders its own list on the same page.
     const rowNames = () => page.locator('ol[aria-describedby]').first().locator(':scope > li').evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
@@ -434,7 +434,7 @@ try {
         // A child through the group's inner gap lands between the pair; the whole group then moves down and is removed as one range.
         const inner = created.locator(`[data-testid="bp-gap-${createdKey}"]`); await inner.hover(); await inner.locator('.bp-insert').first().click()
         const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
-        await picker.getByTestId('block-picker-blocks.text').click(); await picker.waitFor({ state: 'hidden' })
+        await picker.getByTestId('blockscene-blocks.text').click(); await picker.waitFor({ state: 'hidden' })
         await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li').length === 8)
         const afterChild = await names(); const gapAfter = await inner.locator('.bp-insert').first().getAttribute('data-after')
         assert.match(afterChild[1], /Text/, `child between OPEN and CLOSE (created ${createdKey}, gap after ${gapAfter}); rows: ${afterChild.join(' | ')}`); assert.match(afterChild[2], /Section end/)
@@ -442,7 +442,7 @@ try {
         const childBlock = created.locator('[data-block-uid="blocks.text"]').first()
         const childKey = await childBlock.getAttribute('data-block-key')
         const childGap = created.locator(`[data-testid="bp-gap-${childKey}"]`); await childGap.hover(); await childGap.locator('.bp-insert').first().click()
-        await picker.getByTestId('block-picker-group.section').click(); await picker.waitFor({ state: 'hidden' })
+        await picker.getByTestId('blockscene-group.section').click(); await picker.waitFor({ state: 'hidden' })
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 10)
         assert.deepEqual((await names()).slice(0, 5).map(n => n.replace(/ - .*$/, '')), ['Section (group open)', 'Text', 'Section (group open)', 'Section end (group close)', 'Section end (group close)'], 'nested pair from the seam picker: OPEN, CLOSE adjacent')
         assert.equal(await page.getByTestId('page-preview-diagnostics').count(), 0, 'still balanced')
@@ -492,10 +492,10 @@ try {
       assert.match(await page.getByTestId('open-gallery-blocks').innerText(), new RegExp(expect.add), `${locale}: gallery button`)
       await page.getByRole('button', { name: expect.openAll, exact: true }).first().waitFor()
       if (major === 5) await page.getByTestId('page-preview-modes').first().getByRole('button', { name: expect.split, exact: true }).waitFor()
-      await page.goto('/admin/settings/block-picker'); await page.getByTestId('save-block-picker-settings').waitFor()
+      await page.goto('/admin/settings/blockscene'); await page.getByTestId('save-blockscene-settings').waitFor()
       await page.getByText(expect.palette, { exact: true }).first().waitFor()
       const text = await page.locator('body').innerText()
-      assert.ok(!/block-picker\.[a-zA-Z]/.test(text), `${locale}: no raw message ids on the settings page`)
+      assert.ok(!/blockscene\.[a-zA-Z]/.test(text), `${locale}: no raw message ids on the settings page`)
     }
   })
   await page.goto('/admin/settings/image-pipeline')
@@ -513,7 +513,7 @@ try {
   writeFileSync(`artifacts/strapi${major}-failure.txt`, `${error.stack}\n${errors.join('\n')}\n${(await page.locator('body').innerText()).slice(0,7000)}`)
   throw error
 } finally {
-  if (token) { await api('PUT', '/block-picker/settings', {}).catch(() => {}); if (uploadId) await api('DELETE', `/upload/files/${uploadId}`).catch(() => {}) }
+  if (token) { await api('PUT', '/blockscene/settings', {}).catch(() => {}); if (uploadId) await api('DELETE', `/upload/files/${uploadId}`).catch(() => {}) }
   rmSync(previewFile, { force: true })
   await browser.close()
 }

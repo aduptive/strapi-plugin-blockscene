@@ -9,7 +9,7 @@ import { useMessages } from './messages'
 // Cancel discards only what was typed here. Strapi 5 only.
 const Actions = ({ onApply, onCancel }: any) => {
   const t = useMessages()
-  const value = useForm('BlockPickerFieldEditor', (state: any) => state.values.value)
+  const value = useForm('BlocksceneFieldEditor', (state: any) => state.values.value)
   return <Flex gap={2} justifyContent="flex-end">
     <Button variant="tertiary" onClick={onCancel}>{t.cancel}</Button>
     <Button onClick={() => onApply(value ?? null)} data-testid="field-editor-apply">{t.apply}</Button>
@@ -18,7 +18,7 @@ const Actions = ({ onApply, onCancel }: any) => {
 
 export function FieldEditorModal({ label, attribute, value, onApply, onCancel }: any) {
   const t = useMessages()
-  const customFields: any = useStrapiApp('BlockPickerFieldEditor', (state: any) => state.customFields)
+  const customFields: any = useStrapiApp('BlocksceneFieldEditor', (state: any) => state.customFields)
   const [Input, setInput] = React.useState<React.ComponentType<any> | null | undefined>(undefined)
   // In the admin schema a custom field keeps its base type (e.g. richtext) plus `customField`.
   const isCustom = Boolean(attribute?.customField)

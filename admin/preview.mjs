@@ -3,7 +3,7 @@
 // schema and posts them to the frontend's preview route; the frontend renders
 // with its own components and styles and asks the admin for edits. Nothing
 // here is specific to a site.
-export const PROTOCOL = 'block-picker:page-preview:v1'
+export const PROTOCOL = 'blockscene:page-preview:v1'
 export const TEXT_TYPES = ['string', 'text']
 export const RICH_TYPES = ['richtext', 'blocks', 'customField']
 export const EDITABLE_TYPES = [...TEXT_TYPES, ...RICH_TYPES]

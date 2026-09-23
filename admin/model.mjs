@@ -86,7 +86,7 @@ export function groupEntries(entries) {
 // "Remember last choice" only stores open/closed per install, user, content type and zone.
 export function memoryKey({ base = '', userId, contentType, zone }) {
   if (!userId || !contentType || !zone) return null
-  return `block-picker:v1:${base}:${userId}:${contentType}:${zone}`
+  return `blockscene:v1:${base}:${userId}:${contentType}:${zone}`
 }
 export function readMemory(storage, key) {
   try { const value = key && storage?.getItem(key); return value === 'open' || value === 'closed' ? value : null } catch { return null }
