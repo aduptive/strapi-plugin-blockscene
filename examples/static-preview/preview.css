@@ -1,0 +1,10 @@
+/* Any CSS works: the capture only needs a root element and the ready flag. */
+body { margin: 0; font-family: Georgia, serif; background: #fff; color: #1d1d2e; }
+[data-block-preview] { width: 960px; padding: 48px; box-sizing: border-box; }
+.hero { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; background: #f1f0ff; }
+.hero h1 { font-size: 40px; margin: 0 0 12px; }
+.hero .cta { display: inline-block; margin-top: 16px; padding: 12px 20px; background: #4945ff; color: #fff; border-radius: 6px; }
+.hero img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; }
+.text p { font-size: 18px; line-height: 1.6; max-width: 60ch; }
+.pulse { animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: 0.2; } }

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>blocks.hero preview</title><link rel="stylesheet" href="preview.css"></head>
+<body>
+<section class="hero" data-block-preview>
+  <div>
+    <h1>Hello from Strapi</h1>
+    <p>Synthetic demo copy. Nothing here is inserted into content; it only illustrates the layout.</p>
+    <span class="cta">Learn more</span>
+  </div>
+  <img alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23c9c7ff'/%3E%3Ccircle cx='200' cy='150' r='90' fill='%23a5a1ff'/%3E%3C/svg%3E">
+</section>
+<script>
+  // Signal readiness only after fonts and images are settled.
+  Promise.all([document.fonts.ready, ...[...document.images].map(img => img.decode().catch(() => {}))])
+    .then(() => document.querySelector('[data-block-preview]').setAttribute('data-preview-ready', 'true'))
+</script>
+</body>
+</html>

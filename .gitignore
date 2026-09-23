@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.local/
+artifacts/
+*.tgz
+.env*
+!.env.example
+.DS_Store
+
+# Private working notes and client lab material (kept locally, never published)
+docs/HANDOFF.md
+docs/*-IMPLEMENTATION.md
+docs/LAB-*.md
+docs/FAQ-*.md
+docs/BACKLOG.md
+docs/PLAN-*.md
+docs/PRODUCTIZATION.md
+docs/reference/

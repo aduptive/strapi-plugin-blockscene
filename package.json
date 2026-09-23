@@ -1,0 +1,29 @@
+{
+  "name": "block-picker-development",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "Andrea Scarpello <aduptive@gmail.com>",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.cjs",
+    "pack:local": "node scripts/pack.mjs",
+    "check": "npm test && npm run pack:local && node scripts/check-pack.mjs",
+    "lab:setup": "node scripts/setup-lab.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "lab:refresh": "node scripts/refresh-lab.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "fractional-indexing": "3.2.0",
+    "playwright": "^1.55.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aduptive/strapi-plugin-block-picker.git"
+  },
+  "homepage": "https://github.com/aduptive/strapi-plugin-block-picker#readme",
+  "bugs": {
+    "url": "https://github.com/aduptive/strapi-plugin-block-picker/issues"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "name": "@aduptive/strapi-block-picker",
+  "version": "1.0.0-alpha.1",
+  "description": "Visual component gallery for native Strapi dynamic zones.",
+  "license": "MIT",
+  "author": "Andrea Scarpello <aduptive@gmail.com>",
+  "keywords": [
+    "strapi",
+    "strapi-plugin",
+    "block-picker"
+  ],
+  "main": "strapi-server.js",
+  "files": [
+    "dist",
+    "strapi-admin.js",
+    "strapi-server.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    "./strapi-admin": {
+      "import": "./dist/admin.mjs",
+      "require": "./dist/admin.cjs",
+      "default": "./dist/admin.mjs"
+    },
+    "./strapi-server": {
+      "require": "./strapi-server.js",
+      "default": "./strapi-server.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "strapi": {
+    "name": "block-picker",
+    "displayName": "Block Picker",
+    "kind": "plugin",
+    "description": "Independent of the frontend framework."
+  },
+  "engines": {
+    "node": ">=18.17 <21"
+  },
+  "peerDependencies": {
+    "@strapi/strapi": ">=4.20.0 <5",
+    "@strapi/design-system": "^1.19.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "styled-components": "^5.3.0",
+    "react-intl": "^6.0.0",
+    "@strapi/helper-plugin": ">=4.20.0 <5",
+    "@strapi/admin": ">=4.20.0 <5"
+  },
+  "dependencies": {
+    "fractional-indexing": "3.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aduptive/strapi-plugin-block-picker.git",
+    "directory": "packages/strapi4"
+  },
+  "homepage": "https://github.com/aduptive/strapi-plugin-block-picker#readme",
+  "bugs": {
+    "url": "https://github.com/aduptive/strapi-plugin-block-picker/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "strapi4"
+  }
+}

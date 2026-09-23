@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Block Picker page preview (generic example)</title>
+<!-- The frontend owns this page: its markup, styles and renderers. The plugin
+     only speaks the postMessage contract below. Replace the render() function
+     with your own components; keep the handshake, origin checks and data-* hooks. -->
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; color: #1d1d2e; background: #fff; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px; }
+  .bp-block { position: relative; padding: 24px; margin: 0 0 16px; border: 2px solid transparent; border-radius: 8px; background: #f6f6f9; }
+  .bp-block:hover { border-color: rgba(73, 69, 255, 0.35); }
+  .bp-block[data-selected] { border-color: #4945ff; }
+  .bp-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; align-items: center; opacity: 0; }
+  .bp-block:hover .bp-tools, .bp-block[data-selected] .bp-tools, .bp-tools:focus-within { opacity: 1; }
+  .bp-tools button, .bp-tools select { font: 600 12px/1 system-ui; padding: 6px 8px; border-radius: 4px; border: 1px solid #d9d8ff; background: #fff; cursor: pointer; }
+  .bp-label { font: 600 12px/1 system-ui; color: #32324d; }
+  h2 { margin: 0 0 8px; } p { margin: 0 0 8px; line-height: 1.5; }
+  [data-block-field][contenteditable]:focus { outline: 2px solid #4945ff; outline-offset: 2px; }
+  img { max-width: 100%; border-radius: 6px; }
+  .status { color: #666; font-style: italic; }
+  .bp-group { margin: 8px 0; padding: 8px; border: 2px dashed #8e8ea9; border-radius: 10px; }
+  .bp-gap { position: relative; height: 12px; margin: 2px 0; display: flex; align-items: center; justify-content: center; }
+  .bp-gap::before { content: ''; position: absolute; left: 16px; right: 16px; top: 50%; border-top: 2px dashed transparent; }
+  .bp-gap:hover::before, .bp-gap:focus-within::before { border-color: #4945ff; }
+  .bp-insert { position: relative; z-index: 6; font: 600 12px/1 system-ui; color: #fff; background: #4945ff; border: 0; border-radius: 12px; padding: 6px 12px; cursor: pointer; opacity: 0; }
+  .bp-gap:hover .bp-insert, .bp-insert:focus-visible { opacity: 1; outline: 2px solid #1c1c3c; outline-offset: 2px; }
+  .bp-insert--group { background: #32324d; margin-left: 6px; }
+  @media (pointer: coarse) { .bp-gap { height: 32px; } .bp-insert { opacity: 1; } }
+</style>
+</head>
+<body>
+<main id="page"><p class="status">Waiting for the blocks from the admin.</p></main>
+<!-- Kept in a separate file so strict CSPs (script-src 'self') can serve it. -->
+<script src="preview.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "selector": "[data-block-preview]",
+  "blocks": {
+    "blocks.hero": { "url": "hero.html" },
+    "blocks.text": { "url": "text.html" },
+    "blocks.slow": { "url": "slow.html" },
+    "blocks.missing": { "url": "missing.html" }
+  }
+}

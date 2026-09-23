@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>blocks.slow preview</title><link rel="stylesheet" href="preview.css"></head>
+<body>
+<section class="text" data-block-preview><p>Loading asynchronous content…</p></section>
+<script>
+  // Simulates data that arrives later; the ready flag is only set afterwards.
+  setTimeout(() => {
+    const root = document.querySelector('[data-block-preview]')
+    root.innerHTML = '<p>Asynchronous content rendered after 800 ms. The capture waited for it.</p>'
+    root.setAttribute('data-preview-ready', 'true')
+  }, 800)
+</script>
+</body>
+</html>
