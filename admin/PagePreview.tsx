@@ -131,6 +131,7 @@ export function PagePreview({ editor, groups = null, Toggle }: { editor: any; gr
   const components: any = useStrapiApp('BlockscenePagePreview', (state: any) => state.components)
   const MediaLibraryDialog = components?.['media-library']
   const addFieldRow = useForm('BlockscenePagePreview', (state: any) => state.addFieldRow)
+  const moveFieldRow = useForm('BlockscenePagePreview', (state: any) => state.moveFieldRow)
   const fields = c.layout?.edit?.layout?.flat(3) || []
   // Same zone rules as the gallery panel: the first Dynamic Zone the user may read (create: any), never a conditional one;
   // editing additionally needs the update/create permission on the field and an enabled, non-disabled form.
@@ -171,6 +172,12 @@ export function PagePreview({ editor, groups = null, Toggle }: { editor: any; gr
   const active = mode !== 'form' && Boolean(url) && Boolean(zone)
   const rows: any[] = zone && Array.isArray(values?.[zone]) ? values[zone] : []
   const latest = React.useRef(rows); latest.current = rows
+  // Append then move: Strapi < 5.8.1 addFieldRow(field, value, index) overwrites the row at index instead of inserting.
+  const insertRows = (at: number, ...items: any[]) => items.forEach((item, i) => {
+    const from = latest.current.length + i
+    addFieldRow(zone, item)
+    if (at + i < from) moveFieldRow(zone, from, at + i)
+  })
   // Refs keep the message listener tied to one iframe instance: mode changes and late loads never reset readiness.
   const live = React.useRef({ mode, canEdit, zoneLabel, components: c.components, setMode, onChange })
   live.current = { mode, canEdit, zoneLabel, components: c.components, setMode, onChange }
@@ -259,8 +266,7 @@ export function PagePreview({ editor, groups = null, Toggle }: { editor: any; gr
         const allowed = zoneAttr?.components || []
         if (index < 0 || !close || !allowed.includes(uid) || !allowed.includes(close)) return
         if (latest.current.length + 2 > (zoneAttr?.max ?? Infinity)) { toggleNotification({ type: 'info', message: t.zoneFull }); return }
-        addFieldRow(zone, { ...componentDefaults(components[uid], components), __component: uid }, index)
-        addFieldRow(zone, { __component: close }, index + 1)
+        insertRows(index, { ...componentDefaults(components[uid], components), __component: uid }, { __component: close })
         return
       }
       const key = typeof event.data?.key === 'string' ? event.data.key : ''
@@ -313,7 +319,7 @@ export function PagePreview({ editor, groups = null, Toggle }: { editor: any; gr
   const problems = groups ? validateGroups(rows, groups) : []
   const insertClose = (error: any) => {
     const end = groupRange(latest.current, error.index, groups!)[1]
-    addFieldRow(zone!, { __component: error.expected }, end + 1)
+    insertRows(end + 1, { __component: error.expected })
   }
   const diagnostics = problems.length > 0 && <Box role="alert" data-testid="page-preview-diagnostics" padding={2} background="danger100" hasRadius>
     <details>
@@ -363,9 +369,8 @@ export function PagePreview({ editor, groups = null, Toggle }: { editor: any; gr
         const close = groups?.[uid]
         // Zero mutation unless the whole operation fits: position still valid, uid (and its CLOSE) allowed, room for both rows.
         if (index < 0 || !(zoneAttr.components || []).includes(uid) || (close && !(zoneAttr.components || []).includes(close)) || latest.current.length + (close ? 2 : 1) > (zoneAttr.max ?? Infinity)) { toggleNotification({ type: 'warning', message: close ? t.zoneFull : t.insertMoved }); return }
-        addFieldRow(zone, { ...componentDefaults(c.components[uid], c.components), __component: uid }, index)
         // A configured OPEN chosen from the seam picker brings its CLOSE too (same rule as the gallery and "+ Group").
-        if (close) addFieldRow(zone, { __component: close }, index + 1)
+        insertRows(index, { ...componentDefaults(c.components[uid], c.components), __component: uid }, ...(close ? [{ __component: close }] : []))
       }} />}
     {editing && <FieldEditorModal label={editing.label} attribute={editing.attr} value={editing.value} onCancel={() => setEditing(null)}
       onApply={(value: unknown) => { const index = indexOf(editing.key); setEditing(null); if (index >= 0) onChange(`${zone}.${index}.${editing.field}`, value) }} />}

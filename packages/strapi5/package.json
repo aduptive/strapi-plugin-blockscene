@@ -1,6 +1,6 @@
 {
   "name": "@aduptive/strapi-blockscene",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.2",
   "description": "Visual component gallery for native Strapi dynamic zones.",
   "license": "MIT",
   "author": "Andrea Scarpello <aduptive@gmail.com>",
@@ -39,14 +39,12 @@
     "node": ">=20 <27"
   },
   "peerDependencies": {
-    "@strapi/strapi": ">=5.23.0 <6",
+    "@strapi/strapi": ">=5.0.0 <6",
     "@strapi/design-system": "^2.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "styled-components": "^6.0.0",
-    "react-intl": "^6.0.0",
-    "@strapi/content-manager": ">=5.23.0 <6",
-    "@strapi/admin": ">=5.23.0 <6"
+    "react-intl": "^6.0.0"
   },
   "dependencies": {
     "fractional-indexing": "3.2.0"

@@ -133,7 +133,7 @@ tokens, browser storage or passwords in public artifacts.
 Strapi 5's loose transitive ranges initially installed admin 5.54.0 beside
 5.52.1, leaving Content Manager loading indefinitely. The fixture pins
 matching Strapi modules; consumers should keep core/admin/plugin versions
-aligned. Plugin peers pin admin explicitly. This finding is based on this
+aligned. Plugin peers deliberately leave admin out (see COMPATIBILITY.md). This finding is based on this
 installation, not a claim about every combination of Strapi versions.
 
 Not yet certified: 4.17.1/4.19.1/4.25.x, 5.23.5, limited-role UI, i18n content,

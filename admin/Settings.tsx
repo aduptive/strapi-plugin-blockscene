@@ -208,5 +208,6 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
 export function register(app: any, Component: any) {
   app.createSettingSection({ id: 'blockscene', intlLabel: { id: 'blockscene.title', defaultMessage: 'Blockscene' } },
     [{ id: 'blockscene-settings', to: '/settings/blockscene', intlLabel: { id: 'blockscene.settings', defaultMessage: 'Gallery' },
-      Component: async () => Component, permissions: permissions.read }])
+      // Module shape: older Strapi 4 (e.g. 4.11) only reads `.default` from the loader result.
+      Component: async () => ({ default: Component }), permissions: permissions.read }])
 }

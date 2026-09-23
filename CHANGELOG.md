@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0-alpha.2 (Strapi 5) and 1.0.0-alpha.2 (Strapi 4) — 2026-09-23
+
+- Wider Strapi support: peers are now `>=5.0.0 <6` and `>=4.11.0 <5`, verified
+  with the browser smoke on 5.0.0 and 4.11.0 besides 5.52.1 and 4.26.1.
+- Dropped the `@strapi/admin` and `@strapi/content-manager` peers: npm
+  installed a second, newer copy beside the host's own and broke its admin build.
+- Page preview: inserting between blocks no longer overwrites the next block on
+  Strapi < 5.8.1 (append, then move).
+- Settings page loads on older Strapi 4 such as 4.11 (loader returns a module).
+
 ## 2.0.0-alpha.1 (Strapi 5) and 1.0.0-alpha.1 (Strapi 4) — 2026-09-23
 
 Renamed to Blockscene for Strapi before the first npm release: package

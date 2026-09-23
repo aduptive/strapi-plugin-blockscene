@@ -292,10 +292,11 @@ the configured static base.
 
 ## Guarantees and limits
 
-Tested versions: Strapi 4.26.1 (Node 20) and 5.52.1 (Node 22) in the local
-labs of this repository, and 5.23.5 and 5.31.0 in two real site projects. The
-peer ranges (`>=5.23.0 <6`, `>=4.20.0 <5`) express what installs without
-overrides, not a promise for every minor in between.
+Tested versions: Strapi 4.11.0 and 4.26.1 (Node 20), 5.0.0 and 5.52.1
+(Node 22) in the local labs of this repository, and 5.23.5 and 5.31.0 in two
+real site projects. The peer ranges (`>=5.0.0 <6`, `>=4.11.0 <5`) express what
+installs without overrides, not a promise for every minor in between. Strapi
+4.0–4.10 is out of reach: those admins run React 17 and lack `useFetchClient`.
 
 
 - Native component payloads and ordinary Strapi save/publish flow.
