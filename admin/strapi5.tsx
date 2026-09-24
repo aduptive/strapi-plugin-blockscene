@@ -67,12 +67,13 @@ function MediaPicker({ onClose, onSelect }: any) {
   return <Dialog onClose={onClose} allowedTypes={['images']} multiple={false} onSelectAssets={(assets: any[]) => onSelect(assets?.[0])} />
 }
 function usePermissions() {
-  const { allowedActions, isLoading }: any = useRBAC(permissions)
+  // Strapi 5 wants a flat array; the object form logs a deprecation warning.
+  const { allowedActions, isLoading }: any = useRBAC(Object.values(permissions).flat())
   return { canRead: allowedActions.canRead, canUpdate: allowedActions.canUpdate, isLoading }
 }
 const SettingsPage = () => <Settings useClient={useFetchClient} usePermissions={usePermissions} MediaPicker={MediaPicker} ToggleField={ToggleField} SelectField={SelectField} TextField={TextField} previewSupported />
 export default {
-  register(app: any) { register(app, SettingsPage); app.registerPlugin({ id: 'blockscene', name: 'Blockscene' }) },
+  register(app: any) { register(app, SettingsPage, 'blockscene'); app.registerPlugin({ id: 'blockscene', name: 'Blockscene' }) },
   registerTrads,
   bootstrap(app: any) { app.getPlugin('content-manager').apis.addEditViewSidePanel([Panel]) },
 }

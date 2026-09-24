@@ -205,9 +205,11 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   </Flex></Box>
 }
 
-export function register(app: any, Component: any) {
+// `to`: Strapi 4 wants the absolute path, Strapi 5 one relative to /settings (it warns otherwise).
+export function register(app: any, Component: any, to: string) {
   app.createSettingSection({ id: 'blockscene', intlLabel: { id: 'blockscene.title', defaultMessage: 'Blockscene' } },
-    [{ id: 'blockscene-settings', to: '/settings/blockscene', intlLabel: { id: 'blockscene.settings', defaultMessage: 'Gallery' },
+    [{ id: 'blockscene-settings', to, intlLabel: { id: 'blockscene.settings', defaultMessage: 'Gallery' },
       // Module shape: older Strapi 4 (e.g. 4.11) only reads `.default` from the loader result.
-      Component: async () => ({ default: Component }), permissions: permissions.read }])
+      // Not an `async` function: Strapi 5 warns on AsyncFunction loaders.
+      Component: () => Promise.resolve({ default: Component }), permissions: permissions.read }])
 }

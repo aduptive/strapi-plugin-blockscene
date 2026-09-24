@@ -55,7 +55,7 @@ function usePermissions() {
 }
 const SettingsPage = () => <Settings useClient={useFetchClient} usePermissions={usePermissions} MediaPicker={MediaPicker} ToggleField={ToggleField} SelectField={SelectField} previewSupported={false} />
 export default {
-  register(app: any) { register(app, SettingsPage); app.registerPlugin({ id: 'blockscene', name: 'Blockscene' }) },
+  register(app: any) { register(app, SettingsPage, '/settings/blockscene'); app.registerPlugin({ id: 'blockscene', name: 'Blockscene' }) },
   registerTrads,
   bootstrap(app: any) { app.injectContentManagerComponent('editView', 'right-links', { name: 'blockscene', Component: Picker }) },
 }

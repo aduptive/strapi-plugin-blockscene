@@ -16,6 +16,9 @@ page.on('dialog', dialog => dialog.accept())
 const errors = []
 const checks = []
 page.on('pageerror', error => errors.push((error.stack || error.message).split('\n').slice(0, 4).join(' | ')))
+// Console errors and warnings are recorded, not asserted: Strapi itself logs some. Read the report for ours.
+const consoleMessages = new Set()
+page.on('console', message => { if (['error', 'warning'].includes(message.type())) consoleMessages.add(`${message.type()}: ${message.text().split('\n')[0].slice(0, 300)}`) })
 mkdirSync('artifacts', { recursive: true })
 const shot = name => page.screenshot({ path: `artifacts/strapi${major}-${name}.png`, fullPage: true, animations: 'disabled' })
 const step = async (name, fn) => { await fn(); checks.push(name); console.log(`  ok ${name}`) }
@@ -506,11 +509,11 @@ try {
   await shot('image-settings')
   checks.push('image settings')
   assert.deepEqual(errors, [], 'Browser runtime errors')
-  writeFileSync(`artifacts/strapi${major}-browser.json`, JSON.stringify({ date: new Date().toISOString(), strapi: major, passed: true, checks, runtimeErrors: errors }, null, 2))
+  writeFileSync(`artifacts/strapi${major}-browser.json`, JSON.stringify({ date: new Date().toISOString(), strapi: major, passed: true, checks, runtimeErrors: errors, consoleMessages: [...consoleMessages] }, null, 2))
   console.log(`Strapi ${major}${GROUPS_MODE === '1' ? '' : ` (BLOCK_PICKER_GROUPS=${GROUPS_MODE})`}: ${checks.length} checks passed`)
 } catch(error) {
   await page.screenshot({ path: `artifacts/strapi${major}-failure.png`, fullPage: true, animations: 'disabled' })
-  writeFileSync(`artifacts/strapi${major}-failure.txt`, `${error.stack}\n${errors.join('\n')}\n${(await page.locator('body').innerText()).slice(0,7000)}`)
+  writeFileSync(`artifacts/strapi${major}-failure.txt`, `${error.stack}\n${errors.join('\n')}\n${[...consoleMessages].join('\n')}\n${(await page.locator('body').innerText()).slice(0,7000)}`)
   throw error
 } finally {
   if (token) { await api('PUT', '/blockscene/settings', {}).catch(() => {}); if (uploadId) await api('DELETE', `/upload/files/${uploadId}`).catch(() => {}) }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-alpha.3 (Strapi 5) and 1.0.0-alpha.3 (Strapi 4) — 2026-09-24
+
+- Strapi 5 admin console is quiet: the settings link uses a relative `to` and a
+  non-async loader, and `useRBAC` gets a flat permission array (no deprecation
+  warnings from the plugin).
+- The browser smoke now records console errors and warnings in its report.
+- 2.0.0-alpha.2 / 1.0.0-alpha.2 were tagged but never published to npm.
+
 ## 2.0.0-alpha.2 (Strapi 5) and 1.0.0-alpha.2 (Strapi 4) — 2026-09-23
 
 - Wider Strapi support: peers are now `>=5.0.0 <6` and `>=4.11.0 <5`, verified

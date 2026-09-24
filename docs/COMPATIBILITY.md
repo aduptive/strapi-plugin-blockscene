@@ -2,8 +2,8 @@
 
 | Distribution | Plugin version | dist-tag | Strapi peer range | Verified on | Admin runtime |
 | --- | --- | --- | --- | --- | --- |
-| `packages/strapi4` | `1.0.0-alpha.2` | `strapi4` | `>=4.11.0 <5` | 4.11.0 and 4.26.1 / Node 20 (local labs) | Design System 1, React 18, styled-components 5 |
-| `packages/strapi5` | `2.0.0-alpha.2` | `next` | `>=5.0.0 <6` | 5.0.0 and 5.52.1 / Node 22 (local labs), 5.23.5 and 5.31.0 (real site projects) | Design System 2, React 18, styled-components 6 |
+| `packages/strapi4` | `1.0.0-alpha.3` | `strapi4` | `>=4.11.0 <5` | 4.11.0 and 4.26.1 / Node 20 (local labs) | Design System 1, React 18, styled-components 5 |
+| `packages/strapi5` | `2.0.0-alpha.3` | `next` | `>=5.0.0 <6` | 5.0.0 and 5.52.1 / Node 22 (local labs), 5.23.5 and 5.31.0 (real site projects) | Design System 2, React 18, styled-components 6 |
 
 The peer ranges say what installs without overrides; only the listed versions
 have runtime evidence (browser smoke: gallery, thumbnails, settings, accordion
