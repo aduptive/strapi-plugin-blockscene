@@ -202,7 +202,8 @@ pairs naming unknown components are dropped. Several OPENs may share one CLOSE.
 With a valid map:
 
 - The gallery (form mode) and the page preview insert OPEN and its CLOSE in the
-  same unsaved change: an empty group, never a lone marker. When the CLOSE is
+  same unsaved change: an empty group, never a lone marker. A CLOSE is not
+  offered on its own in the gallery or the preview picker. When the CLOSE is
   not allowed in that zone, or the zone has no room for two rows, nothing is
   inserted and a notice explains why (two form dispatches in one React batch;
   no partial state is rendered or saved). Children are added

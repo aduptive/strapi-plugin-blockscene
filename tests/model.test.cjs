@@ -47,6 +47,16 @@ test('thumbnail candidates follow manual > configured > automatic, then wirefram
   assert.equal(entriesFor(zone, schema, { components: {} }, '')[0].template, 'generic')
 })
 
+test('gallery never offers a configured CLOSE on its own; the OPEN stays', async () => {
+  const { entriesFor, categoriesFor } = await import('../admin/model.mjs')
+  const zone = { components: ['blocks.text', 'wrappers.mutate', 'wrappers.close'] }
+  const schema = Object.fromEntries(zone.components.map(uid => [uid, { info: { displayName: uid } }]))
+  const uids = config => entriesFor(zone, schema, config, '').map(e => e.uid)
+  assert.deepEqual(uids({ components: {}, groups: { 'wrappers.mutate': 'wrappers.close' } }), ['blocks.text', 'wrappers.mutate'])
+  assert.equal(categoriesFor(zone, schema, { components: {}, groups: { 'wrappers.mutate': 'wrappers.close' } }).reduce((n, [, c]) => n + c, 0), 2)
+  assert.deepEqual(uids({ components: {}, groups: null }).sort(), [...zone.components].sort(), 'no groups config: every allowed component')
+})
+
 test('accordion memory is scoped per user and zone, tolerates blocked or invalid storage', async () => {
   const { memoryKey, readMemory, writeMemory, initialState } = await import('../admin/model.mjs')
   const key = memoryKey({ base: 'http://cms/admin', userId: 7, contentType: 'api::page.page', zone: 'blocks' })

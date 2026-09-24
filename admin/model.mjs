@@ -105,9 +105,15 @@ export const categoryOf = (uid, schema, meta = {}) =>
 export const byCategory = (a, b) =>
   (a === "admin" ? 1 : 0) - (b === "admin" ? 1 : 0) || a.localeCompare(b);
 
+// A configured CLOSE is never offered on its own: it comes with its OPEN, and alone it would leave an unbalanced group.
+const pickable = (zone, config) => {
+  const closers = Object.values(config.groups || {});
+  return zone.components.filter((uid) => !closers.includes(uid));
+};
+
 export function entriesFor(zone, components, config, query, category = "all") {
   const needle = query.trim().toLocaleLowerCase();
-  return zone.components
+  return pickable(zone, config)
     .flatMap((uid) => {
       const schema = components[uid];
       if (!schema) return [];
@@ -136,7 +142,7 @@ export function entriesFor(zone, components, config, query, category = "all") {
 // Category -> count over the whole allowed list (the filter options never shrink while searching).
 export function categoriesFor(zone, components, config) {
   const counts = new Map();
-  for (const uid of zone.components) {
+  for (const uid of pickable(zone, config)) {
     const schema = components[uid];
     if (!schema) continue;
     const c = categoryOf(uid, schema, config.components?.[uid] || {});

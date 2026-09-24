@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0-alpha.4 (Strapi 5) and 1.0.0-alpha.4 (Strapi 4) — 2026-09-24
+
+- Row thumbnails: each added block shows its image in the native accordion
+  header; a click opens it full size without toggling the row (#1).
+- With layout groups configured, the gallery and the preview picker no longer
+  offer a CLOSE component on its own (it is inserted with its OPEN; alone it
+  left an unbalanced group that the publish guard then refused).
+- Verified on Strapi 5.54.0 with MySQL 8.4 and i18n (en, pt-BR) in a lab of
+  the futurebrand-site-global backend, besides 5.52.1 and 4.26.1.
+
 ## 2.0.0-alpha.3 (Strapi 5) and 1.0.0-alpha.3 (Strapi 4) — 2026-09-24
 
 - Strapi 5 admin console is quiet: the settings link uses a relative `to` and a
