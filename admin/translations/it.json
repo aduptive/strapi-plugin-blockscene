@@ -108,5 +108,6 @@
  "columns": "Colonne",
  "noPreview": "nessuna anteprima",
  "templates.none": "Nessuna anteprima",
- "noChanges": "Nessuna modifica in sospeso"
+ "noChanges": "Nessuna modifica in sospeso",
+ "rowPreview": "Apri l’anteprima di {label}"
 }

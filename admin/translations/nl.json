@@ -108,5 +108,6 @@
  "columns": "Kolommen",
  "noPreview": "geen voorbeeld",
  "templates.none": "Geen voorbeeld",
- "noChanges": "Geen niet-opgeslagen wijzigingen"
+ "noChanges": "Geen niet-opgeslagen wijzigingen",
+ "rowPreview": "Voorbeeld van {label} openen"
 }

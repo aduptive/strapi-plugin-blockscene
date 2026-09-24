@@ -108,5 +108,6 @@
  "columns": "Columnas",
  "noPreview": "sin vista previa",
  "templates.none": "Sin vista previa",
- "noChanges": "Sin cambios pendientes"
+ "noChanges": "Sin cambios pendientes",
+ "rowPreview": "Abrir la vista previa de {label}"
 }

@@ -66,6 +66,16 @@ label ending with the raw zone name, which Strapi's message carries in every
 locale; a zone whose name ends another zone's name (`blocks` and `sub blocks`)
 is the documented limit.
 
+## Row thumbnails
+
+Each added block shows its thumbnail at the left of the native accordion
+header, and clicking it opens the image full size in a modal instead of
+opening or closing the row. The sources are the same as the gallery cards,
+minus the wireframe: a block with no image shows nothing, so nothing new is
+invented for blocks that were never captured. The thumbnail is inserted into
+Strapi's own header through the DOM (no Content Manager patch) and is
+restored when Strapi re-renders the list.
+
 ## Thumbnail priority
 
 Each card tries these sources in order and moves on when one fails to load.
