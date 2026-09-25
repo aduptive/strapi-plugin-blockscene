@@ -118,5 +118,6 @@
  "contentTypes": "Contenttypes",
  "contentTypesHelp": "De galerij, accordeons en paginavoorbeeld werken op deze contenttypes (die met een Dynamic Zone). Zet er een uit om de bewerking native te laten. \"Opent in\" bepaalt hoe elke bewerkweergave van dat type start; tijdens het bewerken kan je nog wisselen.",
  "typeMode": "Opent in",
- "modeDefault": "Standaard ({mode})"
+ "modeDefault": "Standaard ({mode})",
+ "blockModalDone": "Klaar"
 }

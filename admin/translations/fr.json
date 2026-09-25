@@ -118,5 +118,6 @@
  "contentTypes": "Types de contenu",
  "contentTypesHelp": "La galerie, les accordéons et l'aperçu de page fonctionnent sur ces types de contenu (ceux qui ont une Dynamic Zone). Désactivez-en un pour garder son édition native. « S'ouvre en » définit le mode de départ de chaque vue d'édition de ce type ; l'éditeur peut toujours changer pendant l'édition.",
  "typeMode": "S'ouvre en",
- "modeDefault": "Par défaut ({mode})"
+ "modeDefault": "Par défaut ({mode})",
+ "blockModalDone": "Terminé"
 }

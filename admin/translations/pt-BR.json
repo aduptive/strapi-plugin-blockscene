@@ -118,5 +118,6 @@
  "contentTypes": "Tipos de conteúdo",
  "contentTypesHelp": "A galeria, os accordions e o preview da página funcionam nestes tipos de conteúdo (os que têm uma zona dinâmica). Desligue um para deixar a edição dele nativa. \"Abre em\" é como toda tela de edição desse tipo começa; quem edita ainda pode trocar durante a edição.",
  "typeMode": "Abre em",
- "modeDefault": "Padrão ({mode})"
+ "modeDefault": "Padrão ({mode})",
+ "blockModalDone": "Concluir"
 }

@@ -118,5 +118,6 @@
  "contentTypes": "Tipi di contenuto",
  "contentTypesHelp": "La galleria, le fisarmoniche e l'anteprima di pagina funzionano su questi tipi di contenuto (quelli con una Dynamic Zone). Disattivane uno per lasciarne la modifica nativa. «Si apre in» è il modo in cui parte ogni vista di modifica di quel tipo; durante la modifica si può sempre cambiare.",
  "typeMode": "Si apre in",
- "modeDefault": "Predefinito ({mode})"
+ "modeDefault": "Predefinito ({mode})",
+ "blockModalDone": "Fatto"
 }

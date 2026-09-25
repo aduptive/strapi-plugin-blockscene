@@ -118,5 +118,6 @@
  "contentTypes": "Tipos de conteúdo",
  "contentTypesHelp": "A galeria, os acordeões e a pré-visualização da página funcionam nestes tipos de conteúdo (os que têm uma zona dinâmica). Desligue um para manter a edição nativa. \"Abre em\" é como começa cada ecrã de edição desse tipo; quem edita pode sempre mudar durante a edição.",
  "typeMode": "Abre em",
- "modeDefault": "Predefinição ({mode})"
+ "modeDefault": "Predefinição ({mode})",
+ "blockModalDone": "Concluir"
 }

@@ -118,5 +118,6 @@
  "contentTypes": "Content types",
  "contentTypesHelp": "The gallery, accordions and page preview work on these content types (the ones with a Dynamic Zone). Turn one off to leave its edit view native. \"Opens in\" is how every edit view of that type starts; editors can still switch while they edit.",
  "typeMode": "Opens in",
- "modeDefault": "Default ({mode})"
+ "modeDefault": "Default ({mode})",
+ "blockModalDone": "Done"
 }

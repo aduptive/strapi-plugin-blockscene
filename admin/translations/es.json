@@ -118,5 +118,6 @@
  "contentTypes": "Tipos de contenido",
  "contentTypesHelp": "La galería, los acordeones y la vista previa de página funcionan en estos tipos de contenido (los que tienen una Dynamic Zone). Desactiva uno para dejar su edición nativa. \"Se abre en\" define cómo empieza cada vista de edición de ese tipo; quien edita puede cambiarlo mientras edita.",
  "typeMode": "Se abre en",
- "modeDefault": "Predeterminado ({mode})"
+ "modeDefault": "Predeterminado ({mode})",
+ "blockModalDone": "Listo"
 }

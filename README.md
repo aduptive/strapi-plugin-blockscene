@@ -182,10 +182,12 @@ update permission on it. Pending dialogs are dropped when the document or
 locale changes.
 
 Editing from the page: plain-text areas the page explicitly maps
-(`data-block-field` + `contenteditable="plaintext-only"`) send `edit`; any other
-editable field opens an admin modal with the field's own native input (custom
-fields such as CKEditor keep their options; string/text use the admin input).
-Apply updates the form and the preview; Cancel discards only the modal. Media
+(`data-block-field` + `contenteditable="plaintext-only"`) send `edit`. In the
+visual editor, a click on any other field or on the block opens the whole block
+over the page: its own native form (every field type, CKEditor, media, nested
+and repeatable components), with the clicked field focused and outlined. The
+page updates while you type; Done, Esc or the backdrop put the block back. Side
+by side focuses the field in the form on the left instead. Media
 fields open the native Media Library. Everything is validated against the schema
 and the zone's edit permission; a published page never receives unsaved values
 by itself. Strapi 4 does not have this panel yet (see `docs/BACKLOG.md`).
