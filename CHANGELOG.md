@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Page preview widths: Fit, Mobile (390), Tablet (834), Desktop (1440). The
+  page renders at the device width and scales down to fit the pane.
+- Settings, Content types: turn the plugin off per content type (its edit view
+  stays native) and choose the mode each type opens in (Strapi 5).
+- The configured opening mode now applies every time; switching modes while
+  editing is no longer remembered by the browser.
+
 ## 2.0.0-alpha.4 (Strapi 5) and 1.0.0-alpha.4 (Strapi 4) — 2026-09-24
 
 - Row thumbnails: each added block shows its image in the native accordion

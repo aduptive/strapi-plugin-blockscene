@@ -194,3 +194,16 @@ test('native "Add a component" button is matched by its zone name only, never an
   assert.equal(isNativeAddButton(button('Add a component to blocks', { inside: '[role="dialog"]' }), { name: 'blocks' }), false)
   assert.equal(isNativeAddButton(button('Open all blocks', { inside: '[data-testid^="block-"]' }), { name: 'blocks' }), false, 'the plugin\'s own accordion controls are not the native button')
 })
+
+test('per content type settings: only types with a zone, only known keys; stale types dropped on read', () => {
+  const { validateSettings, mergeSaved } = require('../server/settings')
+  const types = ['api::page.page', 'api::post.post']
+  const ok = validateSettings({ contentTypes: { 'api::page.page': { enabled: false }, 'api::post.post': { previewMode: 'split' } } }, [], types)
+  assert.deepEqual(ok.contentTypes, { 'api::page.page': { enabled: false }, 'api::post.post': { previewMode: 'split' } })
+  assert.deepEqual(validateSettings({}, [], types).contentTypes, {}, 'nothing stored means global behaviour')
+  for (const bad of [{ contentTypes: { 'api::form.form': { enabled: false } } }, { contentTypes: { 'api::page.page': { enabled: 'no' } } },
+    { contentTypes: { 'api::page.page': { previewMode: 'sideways' } } }, { contentTypes: { 'api::page.page': { hidden: true } } }, { contentTypes: [] }])
+    assert.throws(() => validateSettings(bad, [], types), { name: 'ValidationError' }, `rejects ${JSON.stringify(bad)}`)
+  const merged = mergeSaved({ contentTypes: { 'api::gone.gone': { enabled: false }, 'api::page.page': { enabled: false, previewMode: 'weird' } } }, [], types)
+  assert.deepEqual(merged.contentTypes, { 'api::page.page': { enabled: false } })
+})

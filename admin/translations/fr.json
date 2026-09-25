@@ -54,7 +54,7 @@
  "modes.form": "Champs",
  "modes.split": "Champs + page",
  "modes.preview": "Éditeur visuel",
- "previewModeHelp": "S'applique à l'ouverture d'un document ; chaque éditeur peut changer de mode et le navigateur retient le dernier choix.",
+ "previewModeHelp": "Chaque vue d'édition s'ouvre dans ce mode, sauf si son type de contenu définit le sien ci-dessous. L'éditeur peut changer pendant l'édition ; ce choix n'est pas mémorisé.",
  "previewV4": "L'aperçu de page entière n'existe que dans la distribution Strapi 5 ; ces options n'ont aucun effet sur Strapi 4.",
  "modeForm": "Champs",
  "modeSplit": "Champs + page",
@@ -114,5 +114,9 @@
  "device.fit": "Ajuster",
  "device.mobile": "Mobile",
  "device.tablet": "Tablette",
- "device.desktop": "Ordinateur"
+ "device.desktop": "Ordinateur",
+ "contentTypes": "Types de contenu",
+ "contentTypesHelp": "La galerie, les accordéons et l'aperçu de page fonctionnent sur ces types de contenu (ceux qui ont une Dynamic Zone). Désactivez-en un pour garder son édition native. « S'ouvre en » définit le mode de départ de chaque vue d'édition de ce type ; l'éditeur peut toujours changer pendant l'édition.",
+ "typeMode": "S'ouvre en",
+ "modeDefault": "Par défaut ({mode})"
 }

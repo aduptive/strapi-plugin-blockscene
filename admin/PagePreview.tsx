@@ -41,8 +41,7 @@ import { useMessages } from "./messages";
 // public Strapi 5 APIs only: no patch of the Content Manager. The frontend
 // owns the page it renders; the admin validates every request from it.
 type Mode = "form" | "split" | "preview";
-const MODE_KEY = "blockscene:page-mode",
-  RATIO_KEY = "blockscene:page-split-ratio",
+const RATIO_KEY = "blockscene:page-split-ratio",
   DEVICE_KEY = "blockscene:page-device";
 // Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
 const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
@@ -370,14 +369,8 @@ export function PagePreview({
     !c.form?.disabled &&
     typeof addFieldRow === "function",
   );
-  const [mode, setModeState] = React.useState<Mode>(() => {
-    const v = read(MODE_KEY);
-    return v === "split" || v === "preview" ? v : editor?.previewMode || "form";
-  });
-  const setMode = (next: Mode) => {
-    setModeState(next);
-    write(MODE_KEY, next);
-  };
+  // Every edit view opens in the configured mode (per content type, else global); a switch lasts for this view only.
+  const [mode, setMode] = React.useState<Mode>(() => editor?.previewMode || "form");
   const [device, setDeviceState] = React.useState<Device>(() => {
     const v = read(DEVICE_KEY);
     return v && v in DEVICES ? (v as Device) : "fit";

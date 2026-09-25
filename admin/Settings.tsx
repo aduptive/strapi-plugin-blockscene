@@ -165,6 +165,28 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           </>}
         </> : <Typography variant="pi" textColor="neutral600">{t.previewV4}</Typography>}
       </Flex></Box>
+      {(data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
+        <Typography variant="beta" tag="h2">{t.contentTypes}</Typography>
+        <Typography variant="pi" textColor="neutral600">{t.contentTypesHelp}</Typography>
+        {data.contentTypes.map((type: any) => {
+          const entry = settings.contentTypes?.[type.uid] || {}
+          // Only overrides are stored: back to the default removes the key.
+          const set = (key: string, value: unknown, fallback: unknown) => update(s => {
+            const next = { ...(s.contentTypes?.[type.uid] || {}) }
+            if (value === fallback) delete next[key]; else next[key] = value
+            s.contentTypes = { ...(s.contentTypes || {}) }
+            if (Object.keys(next).length) s.contentTypes[type.uid] = next; else delete s.contentTypes[type.uid]
+            return s
+          })
+          return <Flex key={type.uid} gap={6} alignItems="flex-end" wrap="wrap" data-testid={`content-type-${type.uid}`}>
+            <Box style={{ minWidth: 220 }}><ToggleField name={`type-enabled-${type.uid}`} label={type.displayName} value={entry.enabled !== false} disabled={!canUpdate || saving}
+              onChange={(v: boolean) => set('enabled', v, true)} /></Box>
+            {previewSupported && <Box style={{ minWidth: 240 }}><SelectField name={`type-mode-${type.uid}`} label={t.typeMode} value={entry.previewMode || 'default'} disabled={!canUpdate || saving || entry.enabled === false}
+              options={[{ value: 'default', label: t.f('modeDefault', { mode: t.modes[editor.previewMode || 'form'] }) }, ...['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))]}
+              onChange={(v: string) => set('previewMode', v, 'default')} /></Box>}
+          </Flex>
+        })}
+      </Flex></Box>}
       <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <Typography variant="beta" tag="h2">{t.components}</Typography>
         <Searchbar name="component-filter" value={filter} placeholder={t.filter} clearLabel={t.clear} onClear={() => setFilter('')} onChange={(e: any) => setFilter(e.target.value)}>{t.filter}</Searchbar>

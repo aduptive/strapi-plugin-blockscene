@@ -54,7 +54,7 @@
  "modes.form": "Campi",
  "modes.split": "Campi + pagina",
  "modes.preview": "Editor visivo",
- "previewModeHelp": "Vale all'apertura di un documento; ogni redattore può cambiare modalità e il browser ricorda l'ultima scelta.",
+ "previewModeHelp": "Ogni vista di modifica si apre in questo modo, a meno che il suo tipo di contenuto ne imposti uno proprio qui sotto. Durante la modifica si può cambiare; la scelta non viene ricordata.",
  "previewV4": "L'anteprima dell'intera pagina esiste solo nella distribuzione Strapi 5; queste opzioni non hanno effetto su Strapi 4.",
  "modeForm": "Campi",
  "modeSplit": "Campi + pagina",
@@ -114,5 +114,9 @@
  "device.fit": "Adatta",
  "device.mobile": "Mobile",
  "device.tablet": "Tablet",
- "device.desktop": "Desktop"
+ "device.desktop": "Desktop",
+ "contentTypes": "Tipi di contenuto",
+ "contentTypesHelp": "La galleria, le fisarmoniche e l'anteprima di pagina funzionano su questi tipi di contenuto (quelli con una Dynamic Zone). Disattivane uno per lasciarne la modifica nativa. «Si apre in» è il modo in cui parte ogni vista di modifica di quel tipo; durante la modifica si può sempre cambiare.",
+ "typeMode": "Si apre in",
+ "modeDefault": "Predefinito ({mode})"
 }

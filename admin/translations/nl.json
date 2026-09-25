@@ -54,7 +54,7 @@
  "modes.form": "Velden",
  "modes.split": "Velden + pagina",
  "modes.preview": "Visuele editor",
- "previewModeHelp": "Geldt bij het openen van een document; elke redacteur kan van modus wisselen en de browser onthoudt de laatste keuze.",
+ "previewModeHelp": "Elke bewerkweergave opent in deze modus, tenzij het contenttype hieronder een eigen modus instelt. Tijdens het bewerken kan je wisselen; die keuze wordt niet onthouden.",
  "previewV4": "Het paginavoorbeeld bestaat alleen in de Strapi 5-distributie; deze opties hebben geen effect op Strapi 4.",
  "modeForm": "Velden",
  "modeSplit": "Velden + pagina",
@@ -114,5 +114,9 @@
  "device.fit": "Passend",
  "device.mobile": "Mobiel",
  "device.tablet": "Tablet",
- "device.desktop": "Desktop"
+ "device.desktop": "Desktop",
+ "contentTypes": "Contenttypes",
+ "contentTypesHelp": "De galerij, accordeons en paginavoorbeeld werken op deze contenttypes (die met een Dynamic Zone). Zet er een uit om de bewerking native te laten. \"Opent in\" bepaalt hoe elke bewerkweergave van dat type start; tijdens het bewerken kan je nog wisselen.",
+ "typeMode": "Opent in",
+ "modeDefault": "Standaard ({mode})"
 }

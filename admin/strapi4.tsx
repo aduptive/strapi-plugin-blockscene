@@ -85,7 +85,7 @@ function Picker() {
     return true;
   };
   // Bypass: no catalog (server flag, error) or enhancements off renders nothing, leaving the native editor.
-  if (!catalog?.editor?.enabled) return null;
+  if (!catalog?.editor?.enabled || catalog.contentTypes?.[c.slug]?.enabled === false) return null;
   const docKey = `${c.slug}:${c.isCreatingEntry ? "new" : c.initialData?.id}:${c.initialData?.locale || ""}`;
   return (
     <Gallery

@@ -112,6 +112,9 @@ needed for the gallery to pick them up. Reading requires the
   Media Library, "Use automatic image" and the wireframe template.
 - Editor preferences: enhancements on/off, visibility of each collective
   button, initial accordion state and the initial block mode.
+- Content types: every project type with a Dynamic Zone, each with on/off
+  (off leaves its edit view fully native) and, on Strapi 5, the mode its edit
+  views open in ("Default" follows the global preview mode).
 
 ### Editor preferences
 
@@ -123,6 +126,9 @@ needed for the gallery to pick them up. Reading requires the
 | Initial accordion state | all closed / all open / remember | all closed |
 | Preview route base URL (Strapi 5) | full URL or empty | empty: native Preview origin |
 | Initial preview mode (Strapi 5) | form / side by side / preview | form |
+
+Every edit view opens in its content type's mode, else the initial preview
+mode. Editors can switch while they edit; the switch is not remembered.
 
 The initial state is applied once per document/locale after the blocks
 render; edits, reorders and newly inserted blocks are not re-applied. Hiding a
@@ -146,6 +152,11 @@ preview. The panel posts the live values of the first Dynamic Zone to a page
 your frontend serves; the page renders them with its own components and styles
 and can ask the admin to open a block, edit a field or pick media. Nothing is
 saved or published by the preview.
+
+The pane toolbar sets the page width: Fit (the pane), Mobile (390 px), Tablet
+(834 px) or Desktop (1440 px). A device renders at its own width and scales down
+when the pane is narrower, so the desktop layout fits side by side; switching
+never reloads the page. The choice is remembered per browser.
 
 Minimal configuration:
 
