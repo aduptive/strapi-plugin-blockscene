@@ -109,5 +109,10 @@
  "noPreview": "pas d’aperçu",
  "templates.none": "Pas d’aperçu",
  "noChanges": "Aucune modification en attente",
- "rowPreview": "Ouvrir l’aperçu de {label}"
+ "rowPreview": "Ouvrir l’aperçu de {label}",
+ "deviceGroup": "Largeur de l'aperçu",
+ "device.fit": "Ajuster",
+ "device.mobile": "Mobile",
+ "device.tablet": "Tablette",
+ "device.desktop": "Ordinateur"
 }

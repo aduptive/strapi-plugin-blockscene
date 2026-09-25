@@ -42,7 +42,11 @@ import { useMessages } from "./messages";
 // owns the page it renders; the admin validates every request from it.
 type Mode = "form" | "split" | "preview";
 const MODE_KEY = "blockscene:page-mode",
-  RATIO_KEY = "blockscene:page-split-ratio";
+  RATIO_KEY = "blockscene:page-split-ratio",
+  DEVICE_KEY = "blockscene:page-device";
+// Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
+const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
+type Device = keyof typeof DEVICES;
 const MIN_PANE = 360,
   MIN_FORM = 520,
   NARROW = 960,
@@ -135,11 +139,31 @@ const Handle = styled.div`
   }
 `;
 const Frame = styled.iframe`
-  flex: 1;
-  width: 100%;
+  position: absolute;
+  top: 0;
   border: 0;
   background: white;
+  transform-origin: top left;
 `;
+// The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
+function useStageSize(el: HTMLDivElement | null) {
+  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  React.useEffect(() => {
+    if (!el) return;
+    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    const observer = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
+    observer?.observe(el);
+    return () => observer?.disconnect();
+  }, [el]);
+  return size;
+}
+const frameStyle = (device: Device, stage: { width: number; height: number }) => {
+  const width = DEVICES[device];
+  if (!width || !stage.width) return { left: 0, width: "100%", height: "100%" };
+  const scale = Math.min(1, stage.width / width);
+  return { left: Math.max(0, (stage.width - width * scale) / 2), width, height: stage.height / scale, transform: `scale(${scale})` };
+};
 const SPLIT_STYLE = `
 body.bp-split #main-content { padding-right: calc(var(--bp-pane, 50vw) + 1.6rem) !important; }
 body.bp-split [data-bp-grid] { display: flex !important; flex-direction: column-reverse; gap: 1.6rem; }
@@ -354,6 +378,17 @@ export function PagePreview({
     setModeState(next);
     write(MODE_KEY, next);
   };
+  const [device, setDeviceState] = React.useState<Device>(() => {
+    const v = read(DEVICE_KEY);
+    return v && v in DEVICES ? (v as Device) : "fit";
+  });
+  const setDevice = (next: Device) => {
+    setDeviceState(next);
+    write(DEVICE_KEY, next);
+  };
+  // Callback ref: the pane mounts only while the preview is active.
+  const [stage, setStage] = React.useState<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stage);
   const [ratio, setRatio] = React.useState<number>(() => {
     const v = Number(read(RATIO_KEY));
     return v > 0 && v < 1 ? v : 0.5;
@@ -709,6 +744,23 @@ export function PagePreview({
       ))}
     </Flex>
   );
+  const devices = (
+    <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
+      {(Object.keys(DEVICES) as Device[]).map((value) => (
+        <Button
+          key={value}
+          type="button"
+          size="S"
+          variant={device === value ? "secondary" : "tertiary"}
+          aria-pressed={device === value}
+          onClick={() => setDevice(value)}
+          title={DEVICES[value] ? `${DEVICES[value]} px` : undefined}
+        >
+          {t.device[value]}
+        </Button>
+      ))}
+    </Flex>
+  );
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const map: Record<string, number> = {
       ArrowLeft: paneWidth + KEY_STEP,
@@ -852,6 +904,7 @@ export function PagePreview({
               style={{ position: "sticky", top: 0, zIndex: 2 }}
             >
               {switcher}
+              {devices}
               <Flex
                 gap={2}
                 alignItems="center"
@@ -878,18 +931,21 @@ export function PagePreview({
                 />
               </Flex>
             </Flex>
-            <Frame
-              key={attempt}
-              ref={iframe}
-              title={t.previewPane}
-              src={url!.href}
-              sandbox="allow-scripts allow-same-origin"
-              referrerPolicy="no-referrer"
-              onLoad={() => {
-                loaded.current = true;
-              }}
-              style={dragging ? { pointerEvents: "none" } : undefined}
-            />
+            <div ref={setStage} data-testid="page-preview-stage" data-device={device}
+              style={{ position: "relative", flex: 1, overflow: "hidden", background: device === "fit" ? undefined : "#eaeaef" }}>
+              <Frame
+                key={attempt}
+                ref={iframe}
+                title={t.previewPane}
+                src={url!.href}
+                sandbox="allow-scripts allow-same-origin"
+                referrerPolicy="no-referrer"
+                onLoad={() => {
+                  loaded.current = true;
+                }}
+                style={{ ...frameStyle(device, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
+              />
+            </div>
           </Pane>,
           document.body,
         )}

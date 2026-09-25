@@ -109,5 +109,10 @@
  "noPreview": "no preview",
  "templates.none": "No preview",
  "noChanges": "No unsaved changes",
- "rowPreview": "Open the {label} preview"
+ "rowPreview": "Open the {label} preview",
+ "deviceGroup": "Preview width",
+ "device.fit": "Fit",
+ "device.mobile": "Mobile",
+ "device.tablet": "Tablet",
+ "device.desktop": "Desktop"
 }

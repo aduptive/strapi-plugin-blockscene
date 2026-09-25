@@ -109,5 +109,10 @@
  "noPreview": "geen voorbeeld",
  "templates.none": "Geen voorbeeld",
  "noChanges": "Geen niet-opgeslagen wijzigingen",
- "rowPreview": "Voorbeeld van {label} openen"
+ "rowPreview": "Voorbeeld van {label} openen",
+ "deviceGroup": "Voorbeeldbreedte",
+ "device.fit": "Passend",
+ "device.mobile": "Mobiel",
+ "device.tablet": "Tablet",
+ "device.desktop": "Desktop"
 }

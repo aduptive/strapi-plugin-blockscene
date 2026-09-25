@@ -109,5 +109,10 @@
  "noPreview": "sem pré-visualização",
  "templates.none": "Sem pré-visualização",
  "noChanges": "Sem alterações pendentes",
- "rowPreview": "Abrir a pré-visualização de {label}"
+ "rowPreview": "Abrir a pré-visualização de {label}",
+ "deviceGroup": "Largura da pré-visualização",
+ "device.fit": "Ajustar",
+ "device.mobile": "Telemóvel",
+ "device.tablet": "Tablet",
+ "device.desktop": "Computador"
 }

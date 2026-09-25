@@ -109,5 +109,10 @@
  "noPreview": "sin vista previa",
  "templates.none": "Sin vista previa",
  "noChanges": "Sin cambios pendientes",
- "rowPreview": "Abrir la vista previa de {label}"
+ "rowPreview": "Abrir la vista previa de {label}",
+ "deviceGroup": "Ancho de la vista previa",
+ "device.fit": "Ajustar",
+ "device.mobile": "Móvil",
+ "device.tablet": "Tableta",
+ "device.desktop": "Escritorio"
 }

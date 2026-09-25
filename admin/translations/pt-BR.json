@@ -109,5 +109,10 @@
  "noPreview": "sem preview",
  "templates.none": "Sem preview",
  "noChanges": "Sem alterações pendentes",
- "rowPreview": "Abrir a prévia de {label}"
+ "rowPreview": "Abrir a prévia de {label}",
+ "deviceGroup": "Largura do preview",
+ "device.fit": "Ajustar",
+ "device.mobile": "Celular",
+ "device.tablet": "Tablet",
+ "device.desktop": "Desktop"
 }
