@@ -108,5 +108,6 @@
  "columns": "Colonnes",
  "noPreview": "pas d’aperçu",
  "templates.none": "Pas d’aperçu",
- "noChanges": "Aucune modification en attente"
+ "noChanges": "Aucune modification en attente",
+ "rowPreview": "Ouvrir l’aperçu de {label}"
 }

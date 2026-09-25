@@ -108,5 +108,6 @@
  "columns": "Columns",
  "noPreview": "no preview",
  "templates.none": "No preview",
- "noChanges": "No unsaved changes"
+ "noChanges": "No unsaved changes",
+ "rowPreview": "Open the {label} preview"
 }

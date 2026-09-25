@@ -108,5 +108,6 @@
  "columns": "Spalten",
  "noPreview": "keine Vorschau",
  "templates.none": "Keine Vorschau",
- "noChanges": "Keine ungespeicherten Änderungen"
+ "noChanges": "Keine ungespeicherten Änderungen",
+ "rowPreview": "Vorschau von {label} öffnen"
 }

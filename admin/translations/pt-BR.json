@@ -108,5 +108,6 @@
  "columns": "Colunas",
  "noPreview": "sem preview",
  "templates.none": "Sem preview",
- "noChanges": "Sem alterações pendentes"
+ "noChanges": "Sem alterações pendentes",
+ "rowPreview": "Abrir a prévia de {label}"
 }
