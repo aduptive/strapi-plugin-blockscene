@@ -316,6 +316,8 @@ try {
     await page.getByTestId('block-modal-done').click(); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
     assert.equal(await page.locator('[data-bp-block-modal]').count(), 0, 'block returned to the form')
     await frame.locator('[data-block-uid="blocks.hero"] .bp-label').click(); await page.getByTestId('block-modal-bar').waitFor()
+    // Without a field, Done takes focus (out of the iframe), so Escape reaches the admin.
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'block-modal-done')
     await page.keyboard.press('Escape'); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
     await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields + page', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'split')
