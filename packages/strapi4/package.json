@@ -1,6 +1,6 @@
 {
   "name": "@aduptive/strapi-blockscene",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-alpha.4",
   "description": "Visual component gallery for native Strapi dynamic zones.",
   "license": "MIT",
   "author": "Andrea Scarpello <aduptive@gmail.com>",
