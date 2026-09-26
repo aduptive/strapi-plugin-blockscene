@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Page preview widths: Fit, Mobile (390), Tablet (834), Desktop (1440). The
+  page renders at the device width and scales down to fit the pane.
+- Settings, Content types: turn the plugin off per content type (its edit view
+  stays native) and choose the mode each type opens in (Strapi 5).
+- The configured opening mode now applies every time; switching modes while
+  editing is no longer remembered by the browser.
+- Visual editor: a click on a field or block opens the whole block (its native
+  form) over the page, the clicked field focused and outlined, instead of a
+  one-field dialog. Done, Esc or the backdrop close it.
+- Fix: focusing a CKEditor field from the page picked CKEditor's hidden helper
+  input and never focused (side by side and visual editor).
+
 ## 2.0.0-alpha.4 (Strapi 5) and 1.0.0-alpha.4 (Strapi 4) — 2026-09-24
 
 - Row thumbnails: each added block shows its image in the native accordion

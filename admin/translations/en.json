@@ -54,7 +54,7 @@
  "modes.form": "Fields",
  "modes.split": "Fields + page",
  "modes.preview": "Visual editor",
- "previewModeHelp": "Applies when opening a document; each editor can switch modes and the browser remembers the last choice.",
+ "previewModeHelp": "Every edit view opens in this mode, unless its content type sets its own below. Editors can switch while they edit; the switch is not remembered.",
  "previewV4": "The whole-page preview is available in the Strapi 5 distribution only; these options have no effect on Strapi 4.",
  "modeForm": "Fields",
  "modeSplit": "Fields + page",
@@ -109,5 +109,15 @@
  "noPreview": "no preview",
  "templates.none": "No preview",
  "noChanges": "No unsaved changes",
- "rowPreview": "Open the {label} preview"
+ "rowPreview": "Open the {label} preview",
+ "deviceGroup": "Preview width",
+ "device.fit": "Fit",
+ "device.mobile": "Mobile",
+ "device.tablet": "Tablet",
+ "device.desktop": "Desktop",
+ "contentTypes": "Content types",
+ "contentTypesHelp": "The gallery, accordions and page preview work on these content types (the ones with a Dynamic Zone). Turn one off to leave its edit view native. \"Opens in\" is how every edit view of that type starts; editors can still switch while they edit.",
+ "typeMode": "Opens in",
+ "modeDefault": "Default ({mode})",
+ "blockModalDone": "Done"
 }

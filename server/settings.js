@@ -13,7 +13,11 @@ const DEFAULTS = {
   // mode. Only installations that ship the accordion integration (server config
   // `blockPreview: true`) show and honour it; the page preview is the editor.
   editor: { enabled: true, showOpenAll: true, showCloseAll: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewInForm: false },
+  // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
+  // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
+  contentTypes: {},
 }
+const TYPE_KEYS = { enabled: value => typeof value === 'boolean', previewMode: value => PREVIEW_MODES.includes(value) }
 const PREVIEW_URL = /^https?:\/\/[^\s"'<>]{1,500}$/
 const COLOR = /^#[0-9A-Fa-f]{6}$/
 const UID = /^[a-z0-9-]+\.[a-z0-9-]+$/
@@ -46,7 +50,7 @@ function catalog(config = {}) {
 }
 
 // Strict validation for PUT: reject instead of silently coercing.
-function validateSettings(input, componentUids) {
+function validateSettings(input, componentUids, contentTypeUids = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Settings must be an object')
   if (JSON.stringify(input).length > 64 * 1024) fail('Settings payload too large')
   const out = structuredClone(DEFAULTS)
@@ -76,11 +80,22 @@ function validateSettings(input, componentUids) {
     }
     if (Object.keys(clean).length) out.components[uid] = clean
   }
+  const types = input.contentTypes || {}
+  if (typeof types !== 'object' || Array.isArray(types)) fail('contentTypes must be an object')
+  for (const [uid, entry] of Object.entries(types)) {
+    if (!contentTypeUids.includes(uid)) fail(`Unknown content type "${uid}"`)
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) fail(`Invalid entry for "${uid}"`)
+    for (const [key, value] of Object.entries(entry)) {
+      if (!(key in TYPE_KEYS)) fail(`Unknown content type setting "${key}"`)
+      if (!TYPE_KEYS[key](value)) fail(`Invalid value for "${key}" of "${uid}"`)
+    }
+    if (Object.keys(entry).length) out.contentTypes[uid] = { ...entry }
+  }
   return out
 }
 
 // Lenient read: saved values that no longer apply (deleted component) are dropped.
-function mergeSaved(saved, componentUids) {
+function mergeSaved(saved, componentUids, contentTypeUids = []) {
   const out = structuredClone(DEFAULTS)
   if (!saved || typeof saved !== 'object') return out
   for (const key of Object.keys(DEFAULTS.palette)) if (COLOR.test(String(saved.palette?.[key]))) out.palette[key] = saved.palette[key]
@@ -93,6 +108,11 @@ function mergeSaved(saved, componentUids) {
     out.editor[key] = value
   }
   for (const [uid, entry] of Object.entries(saved.components || {})) if (componentUids.includes(uid) && entry && typeof entry === 'object') out.components[uid] = { ...entry }
+  for (const [uid, entry] of Object.entries(saved.contentTypes || {})) {
+    if (!contentTypeUids.includes(uid) || !entry || typeof entry !== 'object') continue
+    const clean = Object.fromEntries(Object.entries(entry).filter(([key, value]) => TYPE_KEYS[key]?.(value)))
+    if (Object.keys(clean).length) out.contentTypes[uid] = clean
+  }
   return out
 }
 

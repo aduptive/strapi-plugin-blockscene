@@ -26,6 +26,8 @@ async function resolveMedia(strapi, settings) {
   return resolved
 }
 
+// Content types the plugin can act on: the project's own types that have a Dynamic Zone.
+const contentTypeUids = (strapi) => Object.entries(strapi.contentTypes || {}).filter(([uid, schema]) => uid.startsWith('api::') && zonesOf(schema).length).map(([uid]) => uid)
 const zonesOf = (schema) => Object.entries(schema?.attributes || {}).filter(([, attr]) => attr?.type === 'dynamiczone').map(([name]) => name)
 const label = (error) => `row ${error.index + 1}: ${error.code === 'closeBeforeOpen' ? `close marker ${error.uid} has no open marker before it` :
   error.code === 'mismatch' ? `close marker ${error.uid} does not match the open group ${error.open} (expected ${error.expected})` : `group ${error.uid} is not closed (expected ${error.expected})`}`
@@ -120,9 +122,9 @@ module.exports = {
     registerPublishGuard(strapi)
   },
   services: { settings: ({ strapi }) => ({
-    async get() { return mergeSaved(await readSettings(strapi), componentUids(strapi)) },
+    async get() { return mergeSaved(await readSettings(strapi), componentUids(strapi), contentTypeUids(strapi)) },
     async set(value) {
-      const next = validateSettings(value, componentUids(strapi))
+      const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
       for (const [uid, entry] of Object.entries(next.components)) {
         if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
       }
@@ -142,7 +144,7 @@ module.exports = {
         for (const [uid, entry] of Object.entries(settings.components)) {
           base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template }
         }
-        ctx.body = { ...base, palette: settings.palette,
+        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled } }
       },
     }),
@@ -151,7 +153,8 @@ module.exports = {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
         const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
           displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0] }))
-        ctx.body = { settings, components, media: await resolveMedia(strapi, settings), templates: TEMPLATES,
+        const contentTypes = contentTypeUids(strapi).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind }))
+        ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES,
           disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS }
       },
       async update(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').set(ctx.request?.body) },

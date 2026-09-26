@@ -54,7 +54,7 @@
  "modes.form": "Campos",
  "modes.split": "Campos + página",
  "modes.preview": "Editor visual",
- "previewModeHelp": "Vale ao abrir um documento; cada editor pode trocar de modo e o navegador lembra a última escolha.",
+ "previewModeHelp": "Cada ecrã de edição abre neste modo, salvo se o tipo de conteúdo definir o seu abaixo. Quem edita pode mudar durante a edição; a mudança não fica guardada.",
  "previewV4": "A pré-visualização de página inteira existe apenas na distribuição Strapi 5; estas opções não têm efeito no Strapi 4.",
  "modeForm": "Campos",
  "modeSplit": "Campos + página",
@@ -109,5 +109,15 @@
  "noPreview": "sem pré-visualização",
  "templates.none": "Sem pré-visualização",
  "noChanges": "Sem alterações pendentes",
- "rowPreview": "Abrir a pré-visualização de {label}"
+ "rowPreview": "Abrir a pré-visualização de {label}",
+ "deviceGroup": "Largura da pré-visualização",
+ "device.fit": "Ajustar",
+ "device.mobile": "Telemóvel",
+ "device.tablet": "Tablet",
+ "device.desktop": "Computador",
+ "contentTypes": "Tipos de conteúdo",
+ "contentTypesHelp": "A galeria, os acordeões e a pré-visualização da página funcionam nestes tipos de conteúdo (os que têm uma zona dinâmica). Desligue um para manter a edição nativa. \"Abre em\" é como começa cada ecrã de edição desse tipo; quem edita pode sempre mudar durante a edição.",
+ "typeMode": "Abre em",
+ "modeDefault": "Predefinição ({mode})",
+ "blockModalDone": "Concluir"
 }

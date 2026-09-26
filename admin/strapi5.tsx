@@ -94,7 +94,8 @@ function Panel() {
     if (close) c.form.addFieldRow(zone.name, { __component: close }, at + 1);
     return true;
   };
-  if (!zones.length || !catalog?.editor?.enabled) return null;
+  const typeSettings = catalog?.contentTypes?.[c.model] || {};
+  if (!zones.length || !catalog?.editor?.enabled || typeSettings.enabled === false) return null;
   const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
   return {
     title: t.gallery,
@@ -114,7 +115,7 @@ function Panel() {
           userId={user?.id}
         />
         <PagePreview
-          editor={catalog.editor}
+          editor={{ ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode }}
           groups={catalog.groups || null}
           Modal={Modal}
           Toggle={ToggleField}

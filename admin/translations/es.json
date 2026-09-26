@@ -54,7 +54,7 @@
  "modes.form": "Campos",
  "modes.split": "Campos + página",
  "modes.preview": "Editor visual",
- "previewModeHelp": "Se aplica al abrir un documento; cada editor puede cambiar de modo y el navegador recuerda la última elección.",
+ "previewModeHelp": "Cada vista de edición se abre en este modo, salvo que su tipo de contenido defina el suyo abajo. Quien edita puede cambiarlo mientras edita; el cambio no se recuerda.",
  "previewV4": "La vista previa de página completa solo existe en la distribución Strapi 5; estas opciones no tienen efecto en Strapi 4.",
  "modeForm": "Campos",
  "modeSplit": "Campos + página",
@@ -109,5 +109,15 @@
  "noPreview": "sin vista previa",
  "templates.none": "Sin vista previa",
  "noChanges": "Sin cambios pendientes",
- "rowPreview": "Abrir la vista previa de {label}"
+ "rowPreview": "Abrir la vista previa de {label}",
+ "deviceGroup": "Ancho de la vista previa",
+ "device.fit": "Ajustar",
+ "device.mobile": "Móvil",
+ "device.tablet": "Tableta",
+ "device.desktop": "Escritorio",
+ "contentTypes": "Tipos de contenido",
+ "contentTypesHelp": "La galería, los acordeones y la vista previa de página funcionan en estos tipos de contenido (los que tienen una Dynamic Zone). Desactiva uno para dejar su edición nativa. \"Se abre en\" define cómo empieza cada vista de edición de ese tipo; quien edita puede cambiarlo mientras edita.",
+ "typeMode": "Se abre en",
+ "modeDefault": "Predeterminado ({mode})",
+ "blockModalDone": "Listo"
 }

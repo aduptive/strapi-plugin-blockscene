@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
-import styled from "styled-components";
+import styled, { useTheme } from "styled-components";
 import { Box, Button, Flex, Typography } from "@strapi/design-system";
 import {
   DescriptionComponentRenderer,
@@ -15,7 +15,6 @@ import {
   unstable_useDocument as useDocument,
   useDocumentRBAC,
 } from "@strapi/content-manager/strapi-admin";
-import { FieldEditorModal } from "./FieldEditorModal";
 import { PickerModal } from "./Gallery";
 import { componentDefaults, editableZones } from "./model.mjs";
 import { findZoneList, toggles } from "./accordions.mjs";
@@ -41,13 +40,15 @@ import { useMessages } from "./messages";
 // public Strapi 5 APIs only: no patch of the Content Manager. The frontend
 // owns the page it renders; the admin validates every request from it.
 type Mode = "form" | "split" | "preview";
-const MODE_KEY = "blockscene:page-mode",
-  RATIO_KEY = "blockscene:page-split-ratio";
+const RATIO_KEY = "blockscene:page-split-ratio",
+  DEVICE_KEY = "blockscene:page-device";
+// Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
+const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
+type Device = keyof typeof DEVICES;
 const MIN_PANE = 360,
   MIN_FORM = 520,
   NARROW = 960,
   KEY_STEP = 32;
-const MODAL_TYPES = ["customField", "string", "text"];
 const read = (key: string) => {
   try {
     return localStorage.getItem(key);
@@ -135,17 +136,45 @@ const Handle = styled.div`
   }
 `;
 const Frame = styled.iframe`
-  flex: 1;
-  width: 100%;
+  position: absolute;
+  top: 0;
   border: 0;
   background: white;
+  transform-origin: top left;
 `;
+// The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
+function useStageSize(el: HTMLDivElement | null) {
+  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  React.useEffect(() => {
+    if (!el) return;
+    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    const observer = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
+    observer?.observe(el);
+    return () => observer?.disconnect();
+  }, [el]);
+  return size;
+}
+const frameStyle = (device: Device, stage: { width: number; height: number }) => {
+  const width = DEVICES[device];
+  if (!width || !stage.width) return { left: 0, width: "100%", height: "100%" };
+  const scale = Math.min(1, stage.width / width);
+  return { left: Math.max(0, (stage.width - width * scale) / 2), width, height: stage.height / scale, transform: `scale(${scale})` };
+};
 const SPLIT_STYLE = `
 body.bp-split #main-content { padding-right: calc(var(--bp-pane, 50vw) + 1.6rem) !important; }
 body.bp-split [data-bp-grid] { display: flex !important; flex-direction: column-reverse; gap: 1.6rem; }
 body.bp-split [data-bp-panels] { width: 100%; }
 body.bp-split [data-bp-panels] > div { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 1.2rem; }
 body.bp-split [data-bp-panels] > div > * { flex: 1 1 24rem; }`;
+// Visual editor: the block's own native form item, lifted over the preview (every field type keeps working).
+const BLOCK_TOP = "calc(6vh + 5.6rem)";
+const blockModalStyle = (background: string) => `
+body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%);
+  width: min(96rem, 92vw); max-height: calc(88vh - 5.6rem); overflow: auto; z-index: 1001; margin: 0 !important;
+  background: ${background}; border-radius: 0 0 8px 8px; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
+body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
+body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }`;
 const markLayout = (anchor: HTMLElement | null) => {
   let item: HTMLElement | null = anchor;
   while (
@@ -346,14 +375,19 @@ export function PagePreview({
     !c.form?.disabled &&
     typeof addFieldRow === "function",
   );
-  const [mode, setModeState] = React.useState<Mode>(() => {
-    const v = read(MODE_KEY);
-    return v === "split" || v === "preview" ? v : editor?.previewMode || "form";
+  // Every edit view opens in the configured mode (per content type, else global); a switch lasts for this view only.
+  const [mode, setMode] = React.useState<Mode>(() => editor?.previewMode || "form");
+  const [device, setDeviceState] = React.useState<Device>(() => {
+    const v = read(DEVICE_KEY);
+    return v && v in DEVICES ? (v as Device) : "fit";
   });
-  const setMode = (next: Mode) => {
-    setModeState(next);
-    write(MODE_KEY, next);
+  const setDevice = (next: Device) => {
+    setDeviceState(next);
+    write(DEVICE_KEY, next);
   };
+  // Callback ref: the pane mounts only while the preview is active.
+  const [stage, setStage] = React.useState<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stage);
   const [ratio, setRatio] = React.useState<number>(() => {
     const v = Number(read(RATIO_KEY));
     return v > 0 && v < 1 ? v : 0.5;
@@ -367,11 +401,12 @@ export function PagePreview({
   const [picking, setPicking] = React.useState<any>(null);
   // Another document or locale: every pending dialog of the previous one is dropped (a stale modal must never write into the new form).
   React.useEffect(() => {
-    setEditing(null);
     setPicking(null);
     setInserting(null);
+    setBlockModal(null);
   }, [c.id, c.form?.initialValues?.locale]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [editing, setEditing] = React.useState<any>(null);
+  const [blockModal, setBlockModal] = React.useState<{ index: number; field?: string } | null>(null);
+  const theme: any = useTheme();
   const [inserting, setInserting] = React.useState<{
     after: string | null;
   } | null>(null);
@@ -504,9 +539,11 @@ export function PagePreview({
         depth++
       )
         container = container.parentElement;
+      // CKEditor also renders a hidden helper input (.ck-hidden): prefer its editable, and never a field that is not rendered.
       const editable = container?.matches(INPUT)
         ? container
-        : container?.querySelector<HTMLElement>(INPUT);
+        : container?.querySelector<HTMLElement>(".ck-editor__editable") ||
+          [...(container?.querySelectorAll<HTMLElement>(INPUT) || [])].find((el) => el.getClientRects().length > 0);
       if (!editable) return;
       if (
         editable.classList.contains("ck-editor__editable") &&
@@ -517,9 +554,54 @@ export function PagePreview({
       if (document.activeElement !== editable) return;
       clearInterval(timer);
       editable.scrollIntoView({ block: "center", behavior: "smooth" });
+      // The field clicked in the page stays marked for a moment so it is found at a glance.
+      const mark = (container && container !== editable ? container : editable) as HTMLElement;
+      mark.style.outline = "2px solid #4945ff";
+      mark.style.outlineOffset = "4px";
+      setTimeout(() => {
+        mark.style.outline = "";
+        mark.style.outlineOffset = "";
+      }, 2500);
     }, 150);
   };
 
+  const blockLabel = (index: number) => {
+    const uid = latest.current[index]?.__component;
+    return c.components?.[uid]?.info?.displayName || uid || "";
+  };
+  // Lift the block's native form item over the preview; the field clicked in the page gets focus. Esc, the backdrop
+  // or Done put it back. Escape is left to any dialog opened from inside the block (Media Library, CKEditor).
+  React.useEffect(() => {
+    if (mode !== "preview" || !active) setBlockModal(null);
+  }, [mode, active]);
+  React.useEffect(() => {
+    if (!blockModal) return;
+    const item = findZoneList(live.current.zoneLabel)?.querySelectorAll(":scope > li")[blockModal.index] as HTMLElement | undefined;
+    if (!item) {
+      setBlockModal(null);
+      return;
+    }
+    const header = toggles(item.parentElement as HTMLElement)[blockModal.index];
+    if (header?.getAttribute("aria-expanded") === "false") header.click();
+    item.setAttribute("data-bp-block-modal", "");
+    document.body.classList.add("bp-block-modal");
+    // Focus leaves the iframe either way, so Escape reaches this document. Deferred: the page still owns focus while
+    // its click finishes (a site adapter may place the caret there), and would take it back from an immediate focus().
+    const later = setTimeout(() => {
+      if (blockModal.field) focusField(blockModal.index, blockModal.field);
+      else document.querySelector<HTMLElement>('[data-testid="block-modal-done"]')?.focus();
+    }, 250);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-testid="block-modal-bar"])')) setBlockModal(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(later);
+      item.removeAttribute("data-bp-block-modal");
+      document.body.classList.remove("bp-block-modal");
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [blockModal]); // eslint-disable-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     if (!active) return;
     setReady(false);
@@ -625,7 +707,8 @@ export function PagePreview({
             item.style.outline = "";
           }, 1500);
         }
-        if (mode === "preview") setMode("split");
+        if (mode === "preview" && canEdit) setBlockModal({ index });
+        else if (mode === "preview") setMode("split");
         iframe.current?.contentWindow?.postMessage(
           { protocol: PROTOCOL, channel, type: "highlight", key },
           origin,
@@ -633,19 +716,8 @@ export function PagePreview({
       } else if (is("focus")) {
         const attr = validateFocus(uid, event.data.field, components);
         if (!attr) return;
-        // Mode-aware: preview-only edits in a modal over the preview; side by side focuses the native field on the left.
-        if (
-          mode === "preview" &&
-          canEdit &&
-          (attr.customField || MODAL_TYPES.includes(attr.type))
-        )
-          setEditing({
-            key,
-            field: event.data.field,
-            attr,
-            label: `${components[uid]?.info?.displayName || uid} · ${event.data.field}`,
-            value: getIn(latest.current[index], event.data.field),
-          });
+        // Mode-aware: the visual editor opens the whole block with this field focused; side by side focuses it on the left.
+        if (mode === "preview" && canEdit) setBlockModal({ index, field: event.data.field });
         else focusField(index, event.data.field);
       } else if (is("media") && canEdit) {
         const attr = mediaAttribute(uid, event.data.field, components);
@@ -705,6 +777,23 @@ export function PagePreview({
           disabled={!url && value !== "form"}
         >
           {label}
+        </Button>
+      ))}
+    </Flex>
+  );
+  const devices = (
+    <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
+      {(Object.keys(DEVICES) as Device[]).map((value) => (
+        <Button
+          key={value}
+          type="button"
+          size="S"
+          variant={device === value ? "secondary" : "tertiary"}
+          aria-pressed={device === value}
+          onClick={() => setDevice(value)}
+          title={DEVICES[value] ? `${DEVICES[value]} px` : undefined}
+        >
+          {t.device[value]}
         </Button>
       ))}
     </Flex>
@@ -852,6 +941,7 @@ export function PagePreview({
               style={{ position: "sticky", top: 0, zIndex: 2 }}
             >
               {switcher}
+              {devices}
               <Flex
                 gap={2}
                 alignItems="center"
@@ -878,18 +968,21 @@ export function PagePreview({
                 />
               </Flex>
             </Flex>
-            <Frame
-              key={attempt}
-              ref={iframe}
-              title={t.previewPane}
-              src={url!.href}
-              sandbox="allow-scripts allow-same-origin"
-              referrerPolicy="no-referrer"
-              onLoad={() => {
-                loaded.current = true;
-              }}
-              style={dragging ? { pointerEvents: "none" } : undefined}
-            />
+            <div ref={setStage} data-testid="page-preview-stage" data-device={device}
+              style={{ position: "relative", flex: 1, overflow: "hidden", background: device === "fit" ? undefined : "#eaeaef" }}>
+              <Frame
+                key={attempt}
+                ref={iframe}
+                title={t.previewPane}
+                src={url!.href}
+                sandbox="allow-scripts allow-same-origin"
+                referrerPolicy="no-referrer"
+                onLoad={() => {
+                  loaded.current = true;
+                }}
+                style={{ ...frameStyle(device, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
+              />
+            </div>
           </Pane>,
           document.body,
         )}
@@ -939,20 +1032,22 @@ export function PagePreview({
           }}
         />
       )}
-      {editing && (
-        <FieldEditorModal
-          label={editing.label}
-          attribute={editing.attr}
-          value={editing.value}
-          onCancel={() => setEditing(null)}
-          onApply={(value: unknown) => {
-            const index = indexOf(editing.key);
-            setEditing(null);
-            if (index >= 0)
-              onChange(`${zone}.${index}.${editing.field}`, value);
-          }}
-        />
-      )}
+      {blockModal &&
+        createPortal(
+          <>
+            <style>{blockModalStyle(theme?.colors?.neutral0 || "#fff")}</style>
+            <div data-testid="block-modal-backdrop" onClick={() => setBlockModal(null)}
+              style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(33, 33, 52, 0.45)" }} />
+            <Flex data-testid="block-modal-bar" role="dialog" aria-label={blockLabel(blockModal.index)} background="neutral100"
+              paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
+              style={{ position: "fixed", top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)",
+                height: "5.6rem", zIndex: 1001, borderRadius: "8px 8px 0 0", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)" }}>
+              <Typography variant="delta" tag="h2">{blockLabel(blockModal.index)}</Typography>
+              <Button size="S" onClick={() => setBlockModal(null)} data-testid="block-modal-done">{t.blockModalDone}</Button>
+            </Flex>
+          </>,
+          document.body,
+        )}
       {picking && MediaLibraryDialog && (
         <MediaLibraryDialog
           allowedTypes={picking.attr.allowedTypes || ["images"]}

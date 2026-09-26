@@ -54,7 +54,7 @@
  "modes.form": "Felder",
  "modes.split": "Felder + Seite",
  "modes.preview": "Visueller Editor",
- "previewModeHelp": "Gilt beim Öffnen eines Dokuments; jeder Redakteur kann den Modus wechseln und der Browser merkt sich die letzte Wahl.",
+ "previewModeHelp": "Jede Bearbeitungsansicht öffnet in diesem Modus, außer ihr Inhaltstyp legt unten einen eigenen fest. Beim Bearbeiten lässt sich wechseln; der Wechsel wird nicht gespeichert.",
  "previewV4": "Die Ganzseiten-Vorschau gibt es nur in der Strapi-5-Distribution; diese Optionen haben unter Strapi 4 keine Wirkung.",
  "modeForm": "Felder",
  "modeSplit": "Felder + Seite",
@@ -109,5 +109,15 @@
  "noPreview": "keine Vorschau",
  "templates.none": "Keine Vorschau",
  "noChanges": "Keine ungespeicherten Änderungen",
- "rowPreview": "Vorschau von {label} öffnen"
+ "rowPreview": "Vorschau von {label} öffnen",
+ "deviceGroup": "Vorschaubreite",
+ "device.fit": "Anpassen",
+ "device.mobile": "Mobil",
+ "device.tablet": "Tablet",
+ "device.desktop": "Desktop",
+ "contentTypes": "Inhaltstypen",
+ "contentTypesHelp": "Galerie, Akkordeons und Seitenvorschau arbeiten auf diesen Inhaltstypen (denen mit einer Dynamic Zone). Schalte einen aus, um seine Bearbeitung nativ zu lassen. „Öffnet in“ bestimmt, wie jede Bearbeitungsansicht dieses Typs startet; beim Bearbeiten lässt sich weiter wechseln.",
+ "typeMode": "Öffnet in",
+ "modeDefault": "Standard ({mode})",
+ "blockModalDone": "Fertig"
 }
