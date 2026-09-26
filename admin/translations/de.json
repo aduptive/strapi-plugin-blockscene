@@ -120,5 +120,6 @@
  "typeMode": "Öffnet in",
  "modeDefault": "Standard ({mode})",
  "blockModalDone": "Fertig",
- "crashed": "Blockscene wurde hier wegen eines Fehlers beendet. Der native Editor ist nicht betroffen. Passiert es erneut, schalte Blockscene unter Settings, Blockscene aus."
+ "crashed": "Blockscene wurde hier wegen eines Fehlers beendet. Der native Editor ist nicht betroffen. Passiert es erneut, schalte Blockscene unter Settings, Blockscene aus.",
+ "sidebarLabel": "Seitenfelder"
 }

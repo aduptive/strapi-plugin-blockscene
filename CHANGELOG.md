@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Visual editor sidebar (per content type, left/right/bottom): buttons that open
+  some of the document's own fields (native inputs, components and repeatables
+  included) in a modal or a drawer. Configured through the settings API for now.
+
 - Page preview widths: Fit, Mobile (390), Tablet (834), Desktop (1440). The
   page renders at the device width and scales down to fit the pane.
 - Settings, Content types: turn the plugin off per content type (its edit view
