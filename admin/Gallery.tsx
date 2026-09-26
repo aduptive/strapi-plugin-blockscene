@@ -28,6 +28,7 @@ import {
 import { Wireframe } from "./wireframes";
 import { RowPreviews } from "./RowPreviews";
 import { useMessages } from "./messages";
+import { Tool } from "./icons";
 
 // Masonry per category (CSS columns): tiles keep their thumbnail's real proportions, so a global
 // alphabetical order would read as scrambled; grouping by category is the useful axis.
@@ -596,26 +597,8 @@ function ZoneControls({ zone, editor, contentType, userId }: any) {
       wrap="wrap"
       data-testid={`block-accordion-controls-${zone.name}`}
     >
-      {editor.showOpenAll && (
-        <Button
-          type="button"
-          variant="tertiary"
-          size="S"
-          onClick={() => apply(true)}
-        >
-          {t.openAll}
-        </Button>
-      )}
-      {editor.showCloseAll && (
-        <Button
-          type="button"
-          variant="tertiary"
-          size="S"
-          onClick={() => apply(false)}
-        >
-          {t.closeAll}
-        </Button>
-      )}
+      {editor.showOpenAll && <Tool icon="expand" label={t.openAll} onClick={() => apply(true)} />}
+      {editor.showCloseAll && <Tool icon="collapse" label={t.closeAll} onClick={() => apply(false)} />}
     </Flex>
   );
 }

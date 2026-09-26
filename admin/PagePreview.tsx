@@ -34,7 +34,7 @@ import {
   validateFocus,
 } from "./preview.mjs";
 import { useMessages } from "./messages";
-import { Icon } from "./icons";
+import { Icon, Tool } from "./icons";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
 // (split) or over (preview) the native form, which stays mounted. Works with
@@ -46,6 +46,7 @@ const RATIO_KEY = "blockscene:page-split-ratio",
 // Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
 const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
 type Device = keyof typeof DEVICES;
+const MODE_ICONS: Record<Mode, string> = { form: "list", split: "split", preview: "eye" };
 const MIN_PANE = 360,
   MIN_FORM = 520,
   NARROW = 960,
@@ -861,34 +862,15 @@ export function PagePreview({
       aria-label={t.modeGroup}
     >
       {modes.map(([value, label]) => (
-        <Button
-          key={value}
-          type="button"
-          size="S"
-          variant={mode === value ? "default" : "tertiary"}
-          aria-pressed={mode === value}
-          onClick={() => setMode(value)}
-          disabled={!url && value !== "form"}
-        >
-          {label}
-        </Button>
+        <Tool key={value} icon={MODE_ICONS[value]} label={label} active={mode === value} onClick={() => setMode(value)} />
       ))}
     </Flex>
   );
   const devices = (
     <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
       {(Object.keys(DEVICES) as Device[]).map((value) => (
-        <Button
-          key={value}
-          type="button"
-          size="S"
-          variant={device === value ? "secondary" : "tertiary"}
-          aria-pressed={device === value}
-          onClick={() => setDevice(value)}
-          title={DEVICES[value] ? `${DEVICES[value]} px` : undefined}
-        >
-          {t.device[value]}
-        </Button>
+        <Tool key={value} icon={value} label={DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]}
+          active={device === value} onClick={() => setDevice(value)} />
       ))}
     </Flex>
   );

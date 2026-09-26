@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Icon buttons with tooltips for the tools: open/close all, the three preview
+  modes and the four widths (accessible names unchanged). Add block, Save and
+  Publish keep their text.
+
 - Visual editor sidebar (per content type, left/right/bottom): buttons that open
   some of the document's own fields (native inputs, components and repeatables
   included) in a modal or a drawer. Configured through the settings API for now.
