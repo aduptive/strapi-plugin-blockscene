@@ -25,6 +25,7 @@ import { PagePreview } from "./PagePreview";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults } from "./model.mjs";
 import { useMessages } from "./messages";
+import { Guard } from "./Guard";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
 
@@ -100,6 +101,7 @@ function Panel() {
   return {
     title: t.gallery,
     content: (
+      <Guard>
       <Flex direction="column" alignItems="stretch" gap={4}>
         <Gallery
           zones={zones}
@@ -121,6 +123,7 @@ function Panel() {
           Toggle={ToggleField}
         />
       </Flex>
+      </Guard>
     ),
   };
 }
@@ -209,6 +212,7 @@ function usePermissions() {
   };
 }
 const SettingsPage = () => (
+  <Guard>
   <Settings
     useClient={useFetchClient}
     usePermissions={usePermissions}
@@ -218,6 +222,7 @@ const SettingsPage = () => (
     TextField={TextField}
     previewSupported
   />
+  </Guard>
 );
 export default {
   register(app: any) {

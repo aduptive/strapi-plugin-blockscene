@@ -21,6 +21,7 @@ import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert } from "./model.mjs";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
+import { Guard } from "./Guard";
 
 function Modal({ open, onOpenChange, trigger, title, children }: any) {
   const id = React.useId();
@@ -161,6 +162,7 @@ function usePermissions() {
   };
 }
 const SettingsPage = () => (
+  <Guard>
   <Settings
     useClient={useFetchClient}
     usePermissions={usePermissions}
@@ -169,6 +171,7 @@ const SettingsPage = () => (
     SelectField={SelectField}
     previewSupported={false}
   />
+  </Guard>
 );
 export default {
   register(app: any) {
@@ -179,7 +182,11 @@ export default {
   bootstrap(app: any) {
     app.injectContentManagerComponent("editView", "right-links", {
       name: "blockscene",
-      Component: Picker,
+      Component: () => (
+        <Guard>
+          <Picker />
+        </Guard>
+      ),
     });
   },
 };

@@ -491,6 +491,7 @@ try {
       ['pt-BR', { add: 'Adicionar bloco', openAll: 'Abrir todos os blocos', split: 'Campos + página', palette: 'Paleta dos wireframes' }],
       ['ja', { add: 'Add block', openAll: 'Open all blocks', split: 'Fields + page', palette: 'Wireframe palette' }],
       ['en', { add: 'Add block', openAll: 'Open all blocks', split: 'Fields + page', palette: 'Wireframe palette' }]]
+    if (major === 5) await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     for (const [locale, expect] of cases) {
       await page.evaluate(value => localStorage.setItem('strapi-admin-language', value), locale)
       await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor()
@@ -501,6 +502,11 @@ try {
       await page.getByText(expect.palette, { exact: true }).first().waitFor()
       const text = await page.locator('body').innerText()
       assert.ok(!/blockscene\.[a-zA-Z]/.test(text), `${locale}: no raw message ids on the settings page`)
+    }
+    if (major === 5) {
+      await putSettings({})
+      await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor()
+      assert.equal(await page.getByTestId('page-preview-modes').count(), 0, 'no preview route: no dead mode buttons, only the hint')
     }
   })
   await page.goto('/admin/settings/image-pipeline')

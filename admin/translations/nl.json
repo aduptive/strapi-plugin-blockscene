@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "Het gekozen medium bestaat niet meer; de volgende bron wordt gebruikt.",
  "editor": "Editorvoorkeuren",
- "enabled": "Editorverbeteringen ingeschakeld",
- "enabledHelp": "Uit herstelt de native kiezer en accordeons. Deze pagina blijft beschikbaar om ze weer in te schakelen.",
+ "enabled": "Blockscene aan",
+ "enabledHelp": "Uit zet de hele plugin meteen uit, zonder herstart: elke bewerkweergave is weer native en de groepscontrole bij publiceren stopt. Gebruik dit als er in productie iets misgaat.",
  "showOpenAll": "\"Alle blokken openen\" tonen",
  "showCloseAll": "\"Alle blokken sluiten\" tonen",
  "initialState": "Beginstand van de accordeons",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "De galerij, accordeons en paginavoorbeeld werken op deze contenttypes (die met een Dynamic Zone). Zet er een uit om de bewerking native te laten. \"Opent in\" bepaalt hoe elke bewerkweergave van dat type start; tijdens het bewerken kan je nog wisselen.",
  "typeMode": "Opent in",
  "modeDefault": "Standaard ({mode})",
- "blockModalDone": "Klaar"
+ "blockModalDone": "Klaar",
+ "crashed": "Blockscene is hier gestopt door een fout. De native editor blijft werken. Gebeurt het opnieuw, zet Blockscene uit in Settings, Blockscene."
 }

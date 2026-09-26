@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "Das gewählte Medium existiert nicht mehr; die nächste Quelle wird verwendet.",
  "editor": "Editor-Einstellungen",
- "enabled": "Editor-Erweiterungen aktiv",
- "enabledHelp": "Aus stellt die native Auswahl und die Akkordeons wieder her. Diese Seite bleibt verfügbar, um sie wieder einzuschalten.",
+ "enabled": "Blockscene aktiv",
+ "enabledHelp": "Aus schaltet das ganze Plugin sofort ab, ohne Neustart: jede Bearbeitungsansicht ist wieder nativ und die Gruppenprüfung beim Veröffentlichen stoppt. Für den Fall, dass in Produktion etwas schiefgeht.",
  "showOpenAll": "„Alle Blöcke öffnen“ anzeigen",
  "showCloseAll": "„Alle Blöcke schließen“ anzeigen",
  "initialState": "Anfangszustand der Akkordeons",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "Galerie, Akkordeons und Seitenvorschau arbeiten auf diesen Inhaltstypen (denen mit einer Dynamic Zone). Schalte einen aus, um seine Bearbeitung nativ zu lassen. „Öffnet in“ bestimmt, wie jede Bearbeitungsansicht dieses Typs startet; beim Bearbeiten lässt sich weiter wechseln.",
  "typeMode": "Öffnet in",
  "modeDefault": "Standard ({mode})",
- "blockModalDone": "Fertig"
+ "blockModalDone": "Fertig",
+ "crashed": "Blockscene wurde hier wegen eines Fehlers beendet. Der native Editor ist nicht betroffen. Passiert es erneut, schalte Blockscene unter Settings, Blockscene aus."
 }

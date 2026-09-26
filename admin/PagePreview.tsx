@@ -758,7 +758,8 @@ export function PagePreview({
     ["split", t.modeSplit],
     ["preview", t.modePreview],
   ];
-  const switcher = (
+  // No preview route configured: no mode buttons at all (only the hint below), rather than two dead buttons.
+  const switcher = url && (
     <Flex
       gap={1}
       wrap="wrap"
@@ -835,9 +836,9 @@ export function PagePreview({
           {problems.map((error: any) => (
             <li
               key={`${error.code}-${error.index}`}
-              style={{ marginBottom: 6 }}
+              style={{ marginBottom: 8 }}
             >
-              <Typography variant="pi" textColor="danger700">
+              <Typography variant="pi" textColor="neutral800" tag="p">
                 {t.f(
                   error.code === "closeBeforeOpen"
                     ? "diagCloseBeforeOpen"
@@ -859,6 +860,8 @@ export function PagePreview({
                     variant="danger-light"
                     data-testid={`diag-insert-close-${error.index}`}
                     onClick={() => insertClose(error)}
+                    // Long labels wrap left-aligned inside a narrow panel instead of a centred three-line block.
+                    style={{ height: "auto", minHeight: 32, whiteSpace: "normal", textAlign: "left", paddingTop: 6, paddingBottom: 6 }}
                   >
                     {t.f("diagInsertClose", {
                       n: error.index + 1,
@@ -868,7 +871,7 @@ export function PagePreview({
                 </Box>
               )}
               {error.code === "closeBeforeOpen" && (
-                <Typography variant="pi" textColor="neutral600">
+                <Typography variant="pi" textColor="neutral600" tag="p" style={{ marginTop: 2 }}>
                   {t.diagStrayHint}
                 </Typography>
               )}

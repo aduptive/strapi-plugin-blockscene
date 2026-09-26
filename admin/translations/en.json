@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "The selected media no longer exists; the next source is used.",
  "editor": "Editor preferences",
- "enabled": "Editor enhancements enabled",
- "enabledHelp": "Off restores the native picker and accordions. This page stays available to turn it back on.",
+ "enabled": "Blockscene enabled",
+ "enabledHelp": "Off turns the whole plugin off at once, with no restart: every edit view is native again and the layout group publish check stops. Use it if something goes wrong in production.",
  "showOpenAll": "Show \"Open all blocks\"",
  "showCloseAll": "Show \"Close all blocks\"",
  "initialState": "Initial accordion state",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "The gallery, accordions and page preview work on these content types (the ones with a Dynamic Zone). Turn one off to leave its edit view native. \"Opens in\" is how every edit view of that type starts; editors can still switch while they edit.",
  "typeMode": "Opens in",
  "modeDefault": "Default ({mode})",
- "blockModalDone": "Done"
+ "blockModalDone": "Done",
+ "crashed": "Blockscene stopped here after an error. The native editor is unaffected. If it happens again, turn Blockscene off in Settings, Blockscene."
 }

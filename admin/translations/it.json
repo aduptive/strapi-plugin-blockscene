@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "Il media scelto non esiste più; viene usata l'origine successiva.",
  "editor": "Preferenze dell'editor",
- "enabled": "Miglioramenti dell'editor attivi",
- "enabledHelp": "Disattivato ripristina il selettore e le fisarmoniche native. Questa pagina resta disponibile per riattivarli.",
+ "enabled": "Blockscene attivo",
+ "enabledHelp": "Disattivato, l'intero plugin si ferma subito, senza riavvio: ogni vista di modifica torna nativa e il controllo dei gruppi alla pubblicazione si ferma. Da usare se qualcosa va storto in produzione.",
  "showOpenAll": "Mostra \"Apri tutti i blocchi\"",
  "showCloseAll": "Mostra \"Chiudi tutti i blocchi\"",
  "initialState": "Stato iniziale delle fisarmoniche",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "La galleria, le fisarmoniche e l'anteprima di pagina funzionano su questi tipi di contenuto (quelli con una Dynamic Zone). Disattivane uno per lasciarne la modifica nativa. «Si apre in» è il modo in cui parte ogni vista di modifica di quel tipo; durante la modifica si può sempre cambiare.",
  "typeMode": "Si apre in",
  "modeDefault": "Predefinito ({mode})",
- "blockModalDone": "Fatto"
+ "blockModalDone": "Fatto",
+ "crashed": "Blockscene si è fermato qui a causa di un errore. L'editor nativo non è toccato. Se succede di nuovo, disattiva Blockscene in Settings, Blockscene."
 }

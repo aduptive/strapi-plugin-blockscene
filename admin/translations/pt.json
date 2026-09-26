@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "A mídia escolhida não existe mais; a próxima origem é usada.",
  "editor": "Preferências do editor",
- "enabled": "Melhorias do editor ativas",
- "enabledHelp": "Desligado restaura o seletor e os accordions nativos. Esta página continua disponível para reativar.",
+ "enabled": "Blockscene ligado",
+ "enabledHelp": "Desligado, o plugin inteiro para de imediato, sem reinício: todos os ecrãs de edição voltam a ser nativos e a verificação de grupos na publicação para. Use-o se algo correr mal em produção.",
  "showOpenAll": "Mostrar \"Abrir todos os blocos\"",
  "showCloseAll": "Mostrar \"Fechar todos os blocos\"",
  "initialState": "Estado inicial dos accordions",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "A galeria, os acordeões e a pré-visualização da página funcionam nestes tipos de conteúdo (os que têm uma zona dinâmica). Desligue um para manter a edição nativa. \"Abre em\" é como começa cada ecrã de edição desse tipo; quem edita pode sempre mudar durante a edição.",
  "typeMode": "Abre em",
  "modeDefault": "Predefinição ({mode})",
- "blockModalDone": "Concluir"
+ "blockModalDone": "Concluir",
+ "crashed": "O Blockscene parou aqui devido a um erro. O editor nativo não foi afetado. Se voltar a acontecer, desligue o Blockscene em Settings, Blockscene."
 }

@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "Le média choisi n'existe plus ; la source suivante est utilisée.",
  "editor": "Préférences de l'éditeur",
- "enabled": "Améliorations de l'éditeur activées",
- "enabledHelp": "Désactivé rétablit le sélecteur et les accordéons natifs. Cette page reste disponible pour les réactiver.",
+ "enabled": "Blockscene activé",
+ "enabledHelp": "Désactivé, tout le plugin s'arrête aussitôt, sans redémarrage : chaque vue d'édition redevient native et la vérification des groupes à la publication s'arrête. À utiliser si quelque chose se passe mal en production.",
  "showOpenAll": "Afficher « Ouvrir tous les blocs »",
  "showCloseAll": "Afficher « Fermer tous les blocs »",
  "initialState": "État initial des accordéons",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "La galerie, les accordéons et l'aperçu de page fonctionnent sur ces types de contenu (ceux qui ont une Dynamic Zone). Désactivez-en un pour garder son édition native. « S'ouvre en » définit le mode de départ de chaque vue d'édition de ce type ; l'éditeur peut toujours changer pendant l'édition.",
  "typeMode": "S'ouvre en",
  "modeDefault": "Par défaut ({mode})",
- "blockModalDone": "Terminé"
+ "blockModalDone": "Terminé",
+ "crashed": "Blockscene s'est arrêté ici à cause d'une erreur. L'éditeur natif n'est pas touché. Si cela se reproduit, désactivez Blockscene dans Settings, Blockscene."
 }

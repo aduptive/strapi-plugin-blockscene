@@ -13,6 +13,15 @@
   one-field dialog. Done, Esc or the backdrop close it.
 - Fix: focusing a CKEditor field from the page picked CKEditor's hidden helper
   input and never focused (side by side and visual editor).
+- Kill switch: "Blockscene enabled" off in Settings now stops the whole plugin at
+  once, the server publish check for layout groups included (before, only the
+  editor UI); a content type turned off skips the check too. No restart.
+- A render error inside the plugin now unmounts only the plugin and shows a
+  notice; the native edit view keeps working.
+- Several zones: each group of Open all / Close all carries its zone name.
+- No preview route configured: the mode buttons are hidden (only the hint).
+- Group diagnostics: readable detail text (dark theme), hints on their own
+  line, the repair button wraps left-aligned.
 
 ## 2.0.0-alpha.4 (Strapi 5) and 1.0.0-alpha.4 (Strapi 4) — 2026-09-24
 

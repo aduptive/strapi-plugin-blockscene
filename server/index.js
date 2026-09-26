@@ -45,6 +45,13 @@ function registerPublishGuard(strapi) {
   const groups = safeGroups(plugin.config('groups'), componentUids(strapi))
   if (plugin.config('groups') && !groups) strapi.log.warn(`[${PLUGIN}] "groups" config ignored: expected { "<open component uid>": "<close component uid>" } with existing components; every block is treated as ordinary.`)
   if (!groups) return
+  // The guard follows the same switches as the editor: the env/config bypass, the Settings on/off and the per-type
+  // off. Read on every publish (one store read), so turning the plugin off in the panel takes effect at once.
+  const active = async (uid) => {
+    if (plugin.config('disabled') === true) return false
+    const settings = await plugin.service('settings').get()
+    return settings.editor.enabled && settings.contentTypes?.[uid]?.enabled !== false
+  }
   if (strapi.documents?.use) {
     // Strapi 5. Every publish path of the document service goes through the facade: `publish`, and `create`/`update`
     // with `status: 'published'` (the repository then calls its internal publish, which never re-enters this
@@ -61,7 +68,7 @@ function registerPublishGuard(strapi) {
       if (!publishing || !ctx.uid) return next()
       const model = strapi.getModel(ctx.uid)
       const zones = zonesOf(model)
-      if (!zones.length) return next()
+      if (!zones.length || !(await active(ctx.uid))) return next()
       if (action === 'create') { checkZones(strapi, ctx.uid, params.data || {}, groups); return next() }
       const populate = Object.fromEntries(zones.map(name => [name, true]))
       const localized = Boolean(model?.pluginOptions?.i18n?.localized)
@@ -85,18 +92,18 @@ function registerPublishGuard(strapi) {
   // Strapi 4: publishing sets publishedAt through entityService.update/create (admin, REST) or db updateMany (bulk publish).
   const published = (data) => Boolean(data && data.publishedAt)
   strapi.db.lifecycles.subscribe({
-    async beforeCreate(event) { if (published(event.params?.data)) checkZones(strapi, event.model.uid, event.params.data, groups) },
+    async beforeCreate(event) { if (published(event.params?.data) && await active(event.model.uid)) checkZones(strapi, event.model.uid, event.params.data, groups) },
     async beforeUpdate(event) {
       const { data, where } = event.params || {}
       const zones = zonesOf(strapi.getModel(event.model.uid))
-      if (!published(data) || !zones.length) return
+      if (!published(data) || !zones.length || !(await active(event.model.uid))) return
       const entry = zones.every(name => Array.isArray(data[name])) ? data : { ...(await strapi.entityService.findOne(event.model.uid, where?.id, { populate: zones })), ...data }
       checkZones(strapi, event.model.uid, entry, groups)
     },
     async beforeUpdateMany(event) {
       const { data, where } = event.params || {}
       const zones = zonesOf(strapi.getModel(event.model.uid))
-      if (!published(data) || !zones.length) return
+      if (!published(data) || !zones.length || !(await active(event.model.uid))) return
       for (const entry of await strapi.entityService.findMany(event.model.uid, { filters: where, populate: zones })) checkZones(strapi, event.model.uid, entry, groups)
     },
   })

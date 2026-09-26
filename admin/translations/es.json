@@ -39,8 +39,8 @@
  "templates.faq": "FAQ",
  "brokenMedia": "El medio elegido ya no existe; se usa el siguiente origen.",
  "editor": "Preferencias del editor",
- "enabled": "Mejoras del editor activadas",
- "enabledHelp": "Desactivado restaura el selector y los acordeones nativos. Esta página sigue disponible para reactivarlas.",
+ "enabled": "Blockscene activado",
+ "enabledHelp": "Desactivado, todo el plugin se detiene al instante, sin reinicio: cada vista de edición vuelve a ser nativa y se detiene la verificación de grupos al publicar. Úsalo si algo falla en producción.",
  "showOpenAll": "Mostrar «Abrir todos los bloques»",
  "showCloseAll": "Mostrar «Cerrar todos los bloques»",
  "initialState": "Estado inicial de los acordeones",
@@ -119,5 +119,6 @@
  "contentTypesHelp": "La galería, los acordeones y la vista previa de página funcionan en estos tipos de contenido (los que tienen una Dynamic Zone). Desactiva uno para dejar su edición nativa. \"Se abre en\" define cómo empieza cada vista de edición de ese tipo; quien edita puede cambiarlo mientras edita.",
  "typeMode": "Se abre en",
  "modeDefault": "Predeterminado ({mode})",
- "blockModalDone": "Listo"
+ "blockModalDone": "Listo",
+ "crashed": "Blockscene se detuvo aquí por un error. El editor nativo no se ve afectado. Si vuelve a pasar, desactiva Blockscene en Settings, Blockscene."
 }

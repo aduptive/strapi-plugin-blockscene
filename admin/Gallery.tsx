@@ -639,6 +639,10 @@ export function Gallery({
       />
       {zones.map((zone: any) => (
         <Flex key={zone.name} direction="column" alignItems="stretch" gap={2}>
+          {/* Several zones: name each group of controls, or two identical "Open all" pairs read as a duplicate. */}
+          {zones.length > 1 && (zone.count > 0 || !zone.full) && (
+            <Typography variant="sigma" textColor="neutral600" tag="h3">{zone.label}</Typography>
+          )}
           {!zone.full && <ZoneGallery zone={zone} {...props} />}
           <ZoneControls
             zone={zone}
