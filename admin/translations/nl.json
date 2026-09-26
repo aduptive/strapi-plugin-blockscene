@@ -120,5 +120,6 @@
  "typeMode": "Opent in",
  "modeDefault": "Standaard ({mode})",
  "blockModalDone": "Klaar",
- "crashed": "Blockscene is hier gestopt door een fout. De native editor blijft werken. Gebeurt het opnieuw, zet Blockscene uit in Settings, Blockscene."
+ "crashed": "Blockscene is hier gestopt door een fout. De native editor blijft werken. Gebeurt het opnieuw, zet Blockscene uit in Settings, Blockscene.",
+ "sidebarLabel": "Paginavelden"
 }

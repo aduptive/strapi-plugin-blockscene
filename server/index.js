@@ -27,7 +27,10 @@ async function resolveMedia(strapi, settings) {
 }
 
 // Content types the plugin can act on: the project's own types that have a Dynamic Zone.
-const contentTypeUids = (strapi) => Object.entries(strapi.contentTypes || {}).filter(([uid, schema]) => uid.startsWith('api::') && zonesOf(schema).length).map(([uid]) => uid)
+// uid -> its attribute names (sidebar items may only name fields of their own type).
+const contentTypeUids = (strapi) => Object.fromEntries(Object.entries(strapi.contentTypes || {})
+  .filter(([uid, schema]) => uid.startsWith('api::') && zonesOf(schema).length)
+  .map(([uid, schema]) => [uid, Object.keys(schema.attributes || {})]))
 const zonesOf = (schema) => Object.entries(schema?.attributes || {}).filter(([, attr]) => attr?.type === 'dynamiczone').map(([name]) => name)
 const label = (error) => `row ${error.index + 1}: ${error.code === 'closeBeforeOpen' ? `close marker ${error.uid} has no open marker before it` :
   error.code === 'mismatch' ? `close marker ${error.uid} does not match the open group ${error.open} (expected ${error.expected})` : `group ${error.uid} is not closed (expected ${error.expected})`}`
@@ -160,7 +163,8 @@ module.exports = {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
         const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
           displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0] }))
-        const contentTypes = contentTypeUids(strapi).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind }))
+        const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
+          attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
         ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES,
           disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS }
       },

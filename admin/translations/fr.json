@@ -120,5 +120,6 @@
  "typeMode": "S'ouvre en",
  "modeDefault": "Par défaut ({mode})",
  "blockModalDone": "Terminé",
- "crashed": "Blockscene s'est arrêté ici à cause d'une erreur. L'éditeur natif n'est pas touché. Si cela se reproduit, désactivez Blockscene dans Settings, Blockscene."
+ "crashed": "Blockscene s'est arrêté ici à cause d'une erreur. L'éditeur natif n'est pas touché. Si cela se reproduit, désactivez Blockscene dans Settings, Blockscene.",
+ "sidebarLabel": "Champs de la page"
 }

@@ -153,6 +153,31 @@ your frontend serves; the page renders them with its own components and styles
 and can ask the admin to open a block, edit a field or pick media. Nothing is
 saved or published by the preview.
 
+### Visual editor sidebar
+
+Per content type, a bar of buttons on the left, right or bottom edge of the
+visual editor. Each button (label, optional icon) opens some of the document's
+own fields in a modal or a drawer: the native form itself, with every other
+field hidden, so components, repeatable components, media, relations and custom
+fields all keep working. Done, Esc or the backdrop put the form back.
+
+```js
+// Settings, Blockscene (stored), for now through PUT /blockscene/settings:
+contentTypes: {
+  'api::page.page': {
+    sidebarPosition: 'left', // left | right | bottom
+    sidebar: [
+      { label: 'Title', icon: 'text', open: 'modal', fields: ['title'] },
+      { label: 'SEO', icon: 'seo', open: 'drawer', fields: ['pageSeo'] },
+    ],
+  },
+}
+```
+
+Icons: text, tag, seo, settings, image, link, palette, list, globe, info (or
+none). Fields are the type's own top-level attributes; an item naming a field
+removed from the schema is dropped on read. Up to 12 items.
+
 The pane toolbar sets the page width: Fit (the pane), Mobile (390 px), Tablet
 (834 px) or Desktop (1440 px). A device renders at its own width and scales down
 when the pane is narrower, so the desktop layout fits side by side; switching

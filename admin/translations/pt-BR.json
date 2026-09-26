@@ -120,5 +120,6 @@
  "typeMode": "Abre em",
  "modeDefault": "Padrão ({mode})",
  "blockModalDone": "Concluir",
- "crashed": "O Blockscene parou aqui por causa de um erro. O editor nativo não foi afetado. Se acontecer de novo, desligue o Blockscene em Settings, Blockscene."
+ "crashed": "O Blockscene parou aqui por causa de um erro. O editor nativo não foi afetado. Se acontecer de novo, desligue o Blockscene em Settings, Blockscene.",
+ "sidebarLabel": "Campos da página"
 }

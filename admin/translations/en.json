@@ -120,5 +120,6 @@
  "typeMode": "Opens in",
  "modeDefault": "Default ({mode})",
  "blockModalDone": "Done",
- "crashed": "Blockscene stopped here after an error. The native editor is unaffected. If it happens again, turn Blockscene off in Settings, Blockscene."
+ "crashed": "Blockscene stopped here after an error. The native editor is unaffected. If it happens again, turn Blockscene off in Settings, Blockscene.",
+ "sidebarLabel": "Page fields"
 }

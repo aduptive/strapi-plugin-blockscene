@@ -207,3 +207,18 @@ test('per content type settings: only types with a zone, only known keys; stale 
   const merged = mergeSaved({ contentTypes: { 'api::gone.gone': { enabled: false }, 'api::page.page': { enabled: false, previewMode: 'weird' } } }, [], types)
   assert.deepEqual(merged.contentTypes, { 'api::page.page': { enabled: false } })
 })
+
+test('visual editor sidebar: items name their own type fields, known icons, modal or drawer; stale items dropped on read', () => {
+  const { validateSettings, mergeSaved } = require('../server/settings')
+  const types = { 'api::page.page': ['title', 'name', 'pageSeo', 'blocks'] }
+  const sidebar = [{ label: 'SEO', icon: 'seo', open: 'drawer', fields: ['pageSeo'] }, { label: 'Title', open: 'modal', fields: ['title', 'name'] }]
+  const ok = validateSettings({ contentTypes: { 'api::page.page': { sidebar, sidebarPosition: 'right' } } }, [], types)
+  assert.deepEqual(ok.contentTypes['api::page.page'], { sidebar, sidebarPosition: 'right' })
+  const item = (patch) => ({ contentTypes: { 'api::page.page': { sidebar: [{ label: 'X', open: 'modal', fields: ['title'], ...patch }] } } })
+  for (const bad of [item({ fields: ['password'] }), item({ fields: [] }), item({ icon: 'rocket' }), item({ open: 'popup' }), item({ label: '<b>' }), item({ label: '' }),
+    item({ extra: 1 }), { contentTypes: { 'api::page.page': { sidebarPosition: 'top' } } },
+    { contentTypes: { 'api::page.page': { sidebar: Array.from({ length: 13 }, () => ({ label: 'X', open: 'modal', fields: ['title'] })) } } }])
+    assert.throws(() => validateSettings(bad, [], types), { name: 'ValidationError' }, `rejects ${JSON.stringify(bad).slice(0, 80)}`)
+  const merged = mergeSaved({ contentTypes: { 'api::page.page': { sidebar: [...sidebar, { label: 'Gone', open: 'modal', fields: ['removedField'] }] } } }, [], types)
+  assert.deepEqual(merged.contentTypes['api::page.page'].sidebar, sidebar, 'an item naming a removed field is dropped, the rest kept')
+})

@@ -116,7 +116,8 @@ function Panel() {
           userId={user?.id}
         />
         <PagePreview
-          editor={{ ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode }}
+          editor={{ ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
+            sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left" }}
           groups={catalog.groups || null}
           Modal={Modal}
           Toggle={ToggleField}

@@ -34,6 +34,7 @@ import {
   validateFocus,
 } from "./preview.mjs";
 import { useMessages } from "./messages";
+import { Icon, Tool } from "./icons";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
 // (split) or over (preview) the native form, which stays mounted. Works with
@@ -45,6 +46,7 @@ const RATIO_KEY = "blockscene:page-split-ratio",
 // Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
 const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
 type Device = keyof typeof DEVICES;
+const MODE_ICONS: Record<Mode, string> = { form: "list", split: "split", preview: "eye" };
 const MIN_PANE = 360,
   MIN_FORM = 520,
   NARROW = 960,
@@ -175,6 +177,39 @@ body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${B
   background: ${background}; border-radius: 0 0 8px 8px; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
 body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }`;
+// Sidebar item: the native form column itself, lifted as a modal or a drawer with every other field hidden.
+const DRAWER_WIDTH = 640;
+type Box = { top: number; left: number; width: number; height: number };
+const fieldsStyle = (background: string, drawer: Box | null) => `
+body.bp-fields [data-bp-hide] { display: none !important; }
+body.bp-fields [data-bp-show] { grid-column: 1 / -1 !important; }
+body.bp-fields [data-bp-fields] { position: fixed !important; z-index: 1001; overflow: auto; margin: 0 !important;
+  padding: 1.6rem 2.4rem; background: ${background}; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
+body.bp-fields [data-bp-fields="modal"] { top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%); width: min(96rem, 92vw);
+  max-height: calc(88vh - 5.6rem); border-radius: 0 0 8px 8px; }
+${drawer ? `body.bp-fields [data-bp-fields="drawer"] { top: ${drawer.top + 56}px; left: ${drawer.left}px; width: ${drawer.width}px; height: ${drawer.height - 56}px; }` : ""}`;
+// The form column: the grid sibling of the item that holds the plugin panel.
+const formColumn = (anchor: HTMLElement | null) => {
+  let item = anchor;
+  while (item?.parentElement && getComputedStyle(item.parentElement).display !== "grid") item = item.parentElement;
+  return item?.parentElement ? ([...item.parentElement.children].find((child) => child !== item) as HTMLElement | undefined) : undefined;
+};
+// The top-level layout item of an attribute (a component's inner fields climb to the component's own item).
+const fieldItem = (column: HTMLElement, name: string) => {
+  const e = CSS.escape(name);
+  const hit = column.querySelector<HTMLElement>(`[name="${e}"], [name^="${e}."], label[for="${e}"], label[for^="${e}."]`);
+  let top: HTMLElement | null = null;
+  for (let el = hit; el && el !== column; el = el.parentElement) if (el.parentElement && getComputedStyle(el.parentElement).display === "grid") top = el;
+  return top || hit;
+};
+const RailButton = styled.button<{ $active: boolean }>`
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 5.6rem; padding: 6px 4px; border: 0;
+  border-radius: 4px; cursor: pointer; font-size: 1.1rem; line-height: 1.2;
+  color: ${({ theme, $active }) => ($active ? theme.colors.primary600 : theme.colors.neutral700)};
+  background: ${({ theme, $active }) => ($active ? theme.colors.primary100 : "transparent")};
+  &:hover { background: ${({ theme }) => theme.colors.neutral150}; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary600}; }
+`;
 const markLayout = (anchor: HTMLElement | null) => {
   let item: HTMLElement | null = anchor;
   while (
@@ -404,8 +439,30 @@ export function PagePreview({
     setPicking(null);
     setInserting(null);
     setBlockModal(null);
+    setFieldsPanel(null);
   }, [c.id, c.form?.initialValues?.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [blockModal, setBlockModal] = React.useState<{ index: number; field?: string } | null>(null);
+  const sidebar: any[] = editor?.sidebar || [];
+  const sidebarPosition: "left" | "right" | "bottom" = editor?.sidebarPosition || "left";
+  const [fieldsPanel, setFieldsPanel] = React.useState<any>(null);
+  const [railEl, setRailEl] = React.useState<HTMLDivElement | null>(null);
+  // A drawer slides out of the sidebar itself (beside it, or above a bottom bar); the bar stays visible and clickable.
+  const [drawer, setDrawer] = React.useState<Box | null>(null);
+  React.useLayoutEffect(() => {
+    if (fieldsPanel?.open !== "drawer" || !railEl) return setDrawer(null);
+    const place = () => {
+      const r = railEl.getBoundingClientRect();
+      const pane = (railEl.closest('[data-testid="page-preview-pane"]') as HTMLElement).getBoundingClientRect();
+      const width = Math.min(DRAWER_WIDTH, window.innerWidth * 0.9);
+      if (sidebarPosition === "bottom") {
+        const height = Math.min(window.innerHeight * 0.6, r.top - pane.top);
+        setDrawer({ left: pane.left, width: pane.width, top: r.top - height, height });
+      } else setDrawer({ left: sidebarPosition === "right" ? r.left - width : r.right, width, top: r.top, height: r.height });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [fieldsPanel, railEl, sidebarPosition]);
   const theme: any = useTheme();
   const [inserting, setInserting] = React.useState<{
     after: string | null;
@@ -571,8 +628,45 @@ export function PagePreview({
   };
   // Lift the block's native form item over the preview; the field clicked in the page gets focus. Esc, the backdrop
   // or Done put it back. Escape is left to any dialog opened from inside the block (Media Library, CKEditor).
+  // Sidebar item: lift the form column and hide everything that does not hold one of the item's fields.
   React.useEffect(() => {
-    if (mode !== "preview" || !active) setBlockModal(null);
+    if (!fieldsPanel) return;
+    const column = formColumn(anchor.current);
+    const shown = column ? (fieldsPanel.fields as string[]).map((name) => fieldItem(column, name)).filter(Boolean) as HTMLElement[] : [];
+    if (!column || !shown.length) {
+      setFieldsPanel(null);
+      return;
+    }
+    const marked: HTMLElement[] = [];
+    const walk = (el: HTMLElement) => {
+      for (const child of [...el.children] as HTMLElement[]) {
+        if (shown.includes(child)) { child.setAttribute("data-bp-show", ""); marked.push(child); }
+        else if (shown.some((item) => child.contains(item))) walk(child);
+        else { child.setAttribute("data-bp-hide", ""); marked.push(child); }
+      }
+    };
+    walk(column);
+    column.setAttribute("data-bp-fields", fieldsPanel.open);
+    column.scrollTop = 0;
+    document.body.classList.add("bp-fields");
+    const later = setTimeout(() => document.querySelector<HTMLElement>('[data-testid="fields-panel-done"]')?.focus(), 250);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-bp-chrome])')) setFieldsPanel(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(later);
+      for (const el of marked) { el.removeAttribute("data-bp-show"); el.removeAttribute("data-bp-hide"); }
+      column.removeAttribute("data-bp-fields");
+      document.body.classList.remove("bp-fields");
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [fieldsPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (mode !== "preview" || !active) {
+      setBlockModal(null);
+      setFieldsPanel(null);
+    }
   }, [mode, active]);
   React.useEffect(() => {
     if (!blockModal) return;
@@ -592,7 +686,7 @@ export function PagePreview({
       else document.querySelector<HTMLElement>('[data-testid="block-modal-done"]')?.focus();
     }, 250);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-testid="block-modal-bar"])')) setBlockModal(null);
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-bp-chrome])')) setBlockModal(null);
     };
     document.addEventListener("keydown", onKey);
     return () => {
@@ -768,34 +862,15 @@ export function PagePreview({
       aria-label={t.modeGroup}
     >
       {modes.map(([value, label]) => (
-        <Button
-          key={value}
-          type="button"
-          size="S"
-          variant={mode === value ? "default" : "tertiary"}
-          aria-pressed={mode === value}
-          onClick={() => setMode(value)}
-          disabled={!url && value !== "form"}
-        >
-          {label}
-        </Button>
+        <Tool key={value} icon={MODE_ICONS[value]} label={label} active={mode === value} onClick={() => setMode(value)} />
       ))}
     </Flex>
   );
   const devices = (
     <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
       {(Object.keys(DEVICES) as Device[]).map((value) => (
-        <Button
-          key={value}
-          type="button"
-          size="S"
-          variant={device === value ? "secondary" : "tertiary"}
-          aria-pressed={device === value}
-          onClick={() => setDevice(value)}
-          title={DEVICES[value] ? `${DEVICES[value]} px` : undefined}
-        >
-          {t.device[value]}
-        </Button>
+        <Tool key={value} icon={value} label={DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]}
+          active={device === value} onClick={() => setDevice(value)} />
       ))}
     </Flex>
   );
@@ -971,6 +1046,22 @@ export function PagePreview({
                 />
               </Flex>
             </Flex>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: sidebarPosition === "bottom" ? "column-reverse" : sidebarPosition === "right" ? "row-reverse" : "row" }}>
+            {mode === "preview" && sidebar.length > 0 && (
+              <div ref={setRailEl} style={{ display: "flex" }}>
+              <Flex data-testid="page-preview-sidebar" data-position={sidebarPosition} role="toolbar" aria-label={t.sidebarLabel}
+                direction={sidebarPosition === "bottom" ? "row" : "column"} gap={1} padding={1} background="neutral100" justifyContent={sidebarPosition === "bottom" ? "center" : "flex-start"}
+                style={{ [sidebarPosition === "bottom" ? "borderTop" : sidebarPosition === "right" ? "borderLeft" : "borderRight"]: `1px solid ${theme?.colors?.neutral200 || "#dcdce4"}`, overflow: "auto" }}>
+                {sidebar.map((item: any, i: number) => (
+                  <RailButton key={`${item.label}-${i}`} type="button" $active={fieldsPanel === item} aria-pressed={fieldsPanel === item}
+                    title={item.label} data-testid={`sidebar-item-${i}`} onClick={() => setFieldsPanel(fieldsPanel === item ? null : item)}>
+                    {item.icon && <Icon name={item.icon} />}
+                    <span>{item.label}</span>
+                  </RailButton>
+                ))}
+              </Flex>
+              </div>
+            )}
             <div ref={setStage} data-testid="page-preview-stage" data-device={device}
               style={{ position: "relative", flex: 1, overflow: "hidden", background: device === "fit" ? undefined : "#eaeaef" }}>
               <Frame
@@ -985,6 +1076,7 @@ export function PagePreview({
                 }}
                 style={{ ...frameStyle(device, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
               />
+            </div>
             </div>
           </Pane>,
           document.body,
@@ -1041,12 +1133,35 @@ export function PagePreview({
             <style>{blockModalStyle(theme?.colors?.neutral0 || "#fff")}</style>
             <div data-testid="block-modal-backdrop" onClick={() => setBlockModal(null)}
               style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(33, 33, 52, 0.45)" }} />
-            <Flex data-testid="block-modal-bar" role="dialog" aria-label={blockLabel(blockModal.index)} background="neutral100"
+            <Flex data-testid="block-modal-bar" data-bp-chrome="" role="dialog" aria-label={blockLabel(blockModal.index)} background="neutral100"
               paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
               style={{ position: "fixed", top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)",
                 height: "5.6rem", zIndex: 1001, borderRadius: "8px 8px 0 0", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)" }}>
               <Typography variant="delta" tag="h2">{blockLabel(blockModal.index)}</Typography>
               <Button size="S" onClick={() => setBlockModal(null)} data-testid="block-modal-done">{t.blockModalDone}</Button>
+            </Flex>
+          </>,
+          document.body,
+        )}
+      {fieldsPanel &&
+        createPortal(
+          <>
+            <style>{fieldsStyle(theme?.colors?.neutral0 || "#fff", drawer)}</style>
+            {/* A drawer dims only the page, so the sidebar stays usable; a modal dims everything. */}
+            <div data-testid="fields-panel-backdrop" onClick={() => setFieldsPanel(null)}
+              style={{ position: "fixed", zIndex: 1000, background: "rgba(33, 33, 52, 0.45)",
+                ...(fieldsPanel.open === "drawer" && stage ? (({ top, left, width, height }) => ({ top, left, width, height }))(stage.getBoundingClientRect()) : { inset: 0 }) }} />
+            <Flex data-testid="fields-panel-bar" data-bp-chrome="" role="dialog" aria-label={fieldsPanel.label} background="neutral100"
+              paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
+              style={{ position: "fixed", zIndex: 1001, height: "5.6rem", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)",
+                ...(fieldsPanel.open === "modal"
+                  ? { top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)", borderRadius: "8px 8px 0 0" }
+                  : drawer ? { top: drawer.top, left: drawer.left, width: drawer.width } : { display: "none" }) }}>
+              <Flex gap={2} alignItems="center">
+                {fieldsPanel.icon && <Icon name={fieldsPanel.icon} />}
+                <Typography variant="delta" tag="h2">{fieldsPanel.label}</Typography>
+              </Flex>
+              <Button size="S" onClick={() => setFieldsPanel(null)} data-testid="fields-panel-done">{t.blockModalDone}</Button>
             </Flex>
           </>,
           document.body,
