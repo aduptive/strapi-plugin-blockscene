@@ -177,15 +177,16 @@ body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${B
 body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
 body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }`;
 // Sidebar item: the native form column itself, lifted as a modal or a drawer with every other field hidden.
-const DRAWER_WIDTH = "min(64rem, 92vw)";
-const fieldsStyle = (background: string, side: "left" | "right") => `
+const DRAWER_WIDTH = 640;
+type Box = { top: number; left: number; width: number; height: number };
+const fieldsStyle = (background: string, drawer: Box | null) => `
 body.bp-fields [data-bp-hide] { display: none !important; }
 body.bp-fields [data-bp-show] { grid-column: 1 / -1 !important; }
 body.bp-fields [data-bp-fields] { position: fixed !important; z-index: 1001; overflow: auto; margin: 0 !important;
   padding: 1.6rem 2.4rem; background: ${background}; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-fields [data-bp-fields="modal"] { top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%); width: min(96rem, 92vw);
   max-height: calc(88vh - 5.6rem); border-radius: 0 0 8px 8px; }
-body.bp-fields [data-bp-fields="drawer"] { top: 5.6rem; bottom: 0; ${side}: 0; width: ${DRAWER_WIDTH}; }`;
+${drawer ? `body.bp-fields [data-bp-fields="drawer"] { top: ${drawer.top + 56}px; left: ${drawer.left}px; width: ${drawer.width}px; height: ${drawer.height - 56}px; }` : ""}`;
 // The form column: the grid sibling of the item that holds the plugin panel.
 const formColumn = (anchor: HTMLElement | null) => {
   let item = anchor;
@@ -443,6 +444,24 @@ export function PagePreview({
   const sidebar: any[] = editor?.sidebar || [];
   const sidebarPosition: "left" | "right" | "bottom" = editor?.sidebarPosition || "left";
   const [fieldsPanel, setFieldsPanel] = React.useState<any>(null);
+  const [railEl, setRailEl] = React.useState<HTMLDivElement | null>(null);
+  // A drawer slides out of the sidebar itself (beside it, or above a bottom bar); the bar stays visible and clickable.
+  const [drawer, setDrawer] = React.useState<Box | null>(null);
+  React.useLayoutEffect(() => {
+    if (fieldsPanel?.open !== "drawer" || !railEl) return setDrawer(null);
+    const place = () => {
+      const r = railEl.getBoundingClientRect();
+      const pane = (railEl.closest('[data-testid="page-preview-pane"]') as HTMLElement).getBoundingClientRect();
+      const width = Math.min(DRAWER_WIDTH, window.innerWidth * 0.9);
+      if (sidebarPosition === "bottom") {
+        const height = Math.min(window.innerHeight * 0.6, r.top - pane.top);
+        setDrawer({ left: pane.left, width: pane.width, top: r.top - height, height });
+      } else setDrawer({ left: sidebarPosition === "right" ? r.left - width : r.right, width, top: r.top, height: r.height });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [fieldsPanel, railEl, sidebarPosition]);
   const theme: any = useTheme();
   const [inserting, setInserting] = React.useState<{
     after: string | null;
@@ -1047,6 +1066,7 @@ export function PagePreview({
             </Flex>
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: sidebarPosition === "bottom" ? "column-reverse" : sidebarPosition === "right" ? "row-reverse" : "row" }}>
             {mode === "preview" && sidebar.length > 0 && (
+              <div ref={setRailEl} style={{ display: "flex" }}>
               <Flex data-testid="page-preview-sidebar" data-position={sidebarPosition} role="toolbar" aria-label={t.sidebarLabel}
                 direction={sidebarPosition === "bottom" ? "row" : "column"} gap={1} padding={1} background="neutral100" justifyContent={sidebarPosition === "bottom" ? "center" : "flex-start"}
                 style={{ [sidebarPosition === "bottom" ? "borderTop" : sidebarPosition === "right" ? "borderLeft" : "borderRight"]: `1px solid ${theme?.colors?.neutral200 || "#dcdce4"}`, overflow: "auto" }}>
@@ -1058,6 +1078,7 @@ export function PagePreview({
                   </RailButton>
                 ))}
               </Flex>
+              </div>
             )}
             <div ref={setStage} data-testid="page-preview-stage" data-device={device}
               style={{ position: "relative", flex: 1, overflow: "hidden", background: device === "fit" ? undefined : "#eaeaef" }}>
@@ -1143,15 +1164,17 @@ export function PagePreview({
       {fieldsPanel &&
         createPortal(
           <>
-            <style>{fieldsStyle(theme?.colors?.neutral0 || "#fff", sidebarPosition === "right" ? "right" : sidebarPosition === "left" ? "left" : "right")}</style>
+            <style>{fieldsStyle(theme?.colors?.neutral0 || "#fff", drawer)}</style>
+            {/* A drawer dims only the page, so the sidebar stays usable; a modal dims everything. */}
             <div data-testid="fields-panel-backdrop" onClick={() => setFieldsPanel(null)}
-              style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(33, 33, 52, 0.45)" }} />
+              style={{ position: "fixed", zIndex: 1000, background: "rgba(33, 33, 52, 0.45)",
+                ...(fieldsPanel.open === "drawer" && stage ? (({ top, left, width, height }) => ({ top, left, width, height }))(stage.getBoundingClientRect()) : { inset: 0 }) }} />
             <Flex data-testid="fields-panel-bar" data-bp-chrome="" role="dialog" aria-label={fieldsPanel.label} background="neutral100"
               paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
               style={{ position: "fixed", zIndex: 1001, height: "5.6rem", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)",
                 ...(fieldsPanel.open === "modal"
                   ? { top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)", borderRadius: "8px 8px 0 0" }
-                  : { top: 0, [sidebarPosition === "left" ? "left" : "right"]: 0, width: DRAWER_WIDTH }) }}>
+                  : drawer ? { top: drawer.top, left: drawer.left, width: drawer.width } : { display: "none" }) }}>
               <Flex gap={2} alignItems="center">
                 {fieldsPanel.icon && <Icon name={fieldsPanel.icon} />}
                 <Typography variant="delta" tag="h2">{fieldsPanel.label}</Typography>
