@@ -48,12 +48,12 @@ test('thumbnail candidates follow manual > configured > automatic, then wirefram
 })
 
 test('gallery never offers a configured CLOSE on its own; the OPEN stays', async () => {
-  const { entriesFor, categoriesFor } = await import('../admin/model.mjs')
+  const { entriesFor, optionsFor } = await import('../admin/model.mjs')
   const zone = { components: ['blocks.text', 'wrappers.mutate', 'wrappers.close'] }
   const schema = Object.fromEntries(zone.components.map(uid => [uid, { info: { displayName: uid } }]))
   const uids = config => entriesFor(zone, schema, config, '').map(e => e.uid)
   assert.deepEqual(uids({ components: {}, groups: { 'wrappers.mutate': 'wrappers.close' } }), ['blocks.text', 'wrappers.mutate'])
-  assert.equal(categoriesFor(zone, schema, { components: {}, groups: { 'wrappers.mutate': 'wrappers.close' } }).reduce((n, [, c]) => n + c, 0), 2)
+  assert.equal(optionsFor(zone, schema, { components: {}, groups: { 'wrappers.mutate': 'wrappers.close' } }).total, 2)
   assert.deepEqual(uids({ components: {}, groups: null }).sort(), [...zone.components].sort(), 'no groups config: every allowed component')
 })
 
@@ -221,4 +221,88 @@ test('visual editor sidebar: items name their own type fields, known icons, moda
     assert.throws(() => validateSettings(bad, [], types), { name: 'ValidationError' }, `rejects ${JSON.stringify(bad).slice(0, 80)}`)
   const merged = mergeSaved({ contentTypes: { 'api::page.page': { sidebar: [...sidebar, { label: 'Gone', open: 'modal', fields: ['removedField'] }] } } }, [], types)
   assert.deepEqual(merged.contentTypes['api::page.page'].sidebar, sidebar, 'an item naming a removed field is dropped, the rest kept')
+})
+
+test('gallery taxonomy: facets from the schema one level deep, typology guess, overrides and legacy category as tag', () => {
+  const { facetsOf, guessTypology, catalog } = require('../server/settings')
+  const schemas = {
+    'blocks.hero-banner': { info: { displayName: 'Hero' }, attributes: { image: { type: 'media', allowedTypes: ['images'] }, body: { type: 'richtext' } } },
+    'blocks.media': { info: { displayName: 'Media' }, attributes: { files: { type: 'media', multiple: true, allowedTypes: ['images', 'videos'] } } },
+    'blocks.cards': { info: { displayName: 'Cards' }, attributes: { items: { type: 'component', component: 'shared.card', repeatable: true } } },
+    'shared.card': { attributes: { text: { type: 'customField', customField: 'plugin::ckeditor5.CKEditor' }, deep: { type: 'component', component: 'shared.deep' } } },
+    'shared.deep': { attributes: { post: { type: 'relation' } } },
+    'blocks.related-posts': { info: { displayName: 'Posts' }, attributes: {} },
+    'blocks.newsletter': { info: { displayName: 'Contact us' }, attributes: { any: { type: 'media' } } },
+  }
+  const facets = uid => facetsOf(uid, schemas[uid], schemas).sort()
+  assert.deepEqual(facets('blocks.hero-banner'), ['image', 'richtext'])
+  assert.deepEqual(facets('blocks.media'), ['gallery', 'image', 'video'])
+  assert.deepEqual(facets('blocks.cards'), ['list', 'richtext'], 'nested one level: the relation two levels down is not read')
+  assert.deepEqual(facets('blocks.related-posts'), ['dynamic'])
+  assert.deepEqual(facets('blocks.newsletter'), ['form', 'image', 'video'], 'no allowedTypes means every media type')
+  for (const [uid, name, typology] of [['blocks.hero', '', 'hero'], ['x.cover', '', 'hero'], ['x.quote', '', 'text'], ['x.carousel', '', 'media'],
+    ['x.archive', '', 'listing'], ['x.card-grid', '', 'cards'], ['x.button', '', 'cta'], ['x.contact', '', 'form'], ['x.spacer', '', 'layout'],
+    ['x.faq', '', 'text'], ['sections.faq', 'FAQ', 'text'], ['x.thing', 'Two columns', 'layout']]) assert.equal(guessTypology(uid, name), typology, uid)
+  const base = catalog({ components: { 'blocks.media': { typology: 'hero', tags: [' Home ', 'Home', 'x'.repeat(30)] }, 'blocks.cards': { category: 'Editorial' },
+    'blocks.hero-banner': { typology: 'nope' } }, schemas })
+  assert.equal(base.components['blocks.media'].typology, 'hero'); assert.deepEqual(base.components['blocks.media'].tags, ['Home'])
+  assert.deepEqual(base.components['blocks.cards'].tags, ['Editorial'], 'legacy category filters as a tag')
+  assert.equal(base.components['blocks.hero-banner'].typology, 'hero', 'invalid code typology falls back to the guess')
+  assert.deepEqual(base.components['blocks.related-posts'], { facets: ['dynamic'], typology: 'listing', tags: [] })
+})
+
+test('settings: per component typology and tags are validated strictly, read leniently', () => {
+  const { validateSettings, mergeSaved } = require('../server/settings')
+  const uids = ['blocks.hero']
+  const ok = validateSettings({ components: { 'blocks.hero': { typology: 'cta', tags: [' Home ', 'Landing'] } } }, uids)
+  assert.deepEqual(ok.components['blocks.hero'], { typology: 'cta', tags: ['Home', 'Landing'] })
+  for (const bad of [{ typology: 'banner' }, { typology: 1 }, { tags: 'home' }, { tags: [''] }, { tags: ['  '] }, { tags: ['x'.repeat(25)] },
+    { tags: Array.from({ length: 11 }, (_, i) => `t${i}`) }, { tags: [3] }, { tags: ['<b>'] }])
+    assert.throws(() => validateSettings({ components: { 'blocks.hero': bad } }, uids), { name: 'ValidationError' }, JSON.stringify(bad))
+  const merged = mergeSaved({ components: { 'blocks.hero': { typology: 'weird', tags: ['ok', '', 5, 'x'.repeat(40)], template: 'faq' } } }, uids)
+  assert.deepEqual(merged.components['blocks.hero'], { tags: ['ok'], template: 'faq' })
+  assert.deepEqual(mergeSaved({ components: { 'blocks.hero': { typology: 'form', tags: [] } } }, uids).components['blocks.hero'], { typology: 'form' })
+})
+
+test('gallery filters: typology, recent/starred uids, menus any-of within, all-of across; options count the whole zone', async () => {
+  const { entriesFor, optionsFor, groupEntries } = await import('../admin/model.mjs')
+  const zone = { components: ['a.hero', 'a.text', 'a.video'] }
+  const schema = Object.fromEntries(zone.components.map(uid => [uid, { info: { displayName: uid } }]))
+  const config = { components: { 'a.hero': { typology: 'hero', facets: ['image'], tags: ['Home'] }, 'a.text': { typology: 'text', facets: ['richtext'] },
+    'a.video': { typology: 'media', facets: ['video', 'list'], tags: ['Home'] } } }
+  const uids = filter => entriesFor(zone, schema, config, '', filter).map(e => e.uid)
+  assert.deepEqual(uids(), ['a.hero', 'a.text', 'a.video'], 'typology order')
+  assert.deepEqual(uids({ typology: 'text' }), ['a.text'])
+  assert.deepEqual(uids({ uids: ['a.video'] }), ['a.video'])
+  assert.deepEqual(uids({ media: ['image', 'video'] }), ['a.hero', 'a.video'])
+  assert.deepEqual(uids({ media: ['video'], content: ['richtext'] }), [])
+  assert.deepEqual(uids({ tags: ['Home'], content: ['list'] }), ['a.video'])
+  assert.deepEqual(entriesFor(zone, schema, config, 'home').map(e => e.uid), ['a.hero', 'a.video'], 'search reads tags')
+  const options = optionsFor(zone, schema, config)
+  assert.equal(options.total, 3)
+  assert.deepEqual(options.typologies, [['hero', 1], ['text', 1], ['media', 1]])
+  assert.deepEqual(options.tags, [['Home', 2]]); assert.deepEqual(options.media, [['image', 1], ['video', 1]]); assert.deepEqual(options.content, [['richtext', 1], ['list', 1]])
+  assert.deepEqual(groupEntries(entriesFor(zone, schema, config, '')).map(g => g.typology), ['hero', 'text', 'media'])
+})
+
+test('per user prefs: starred and recent hold existing uids only, bounded; stale uids dropped on read', async () => {
+  const { validatePrefs, mergePrefs } = require('../server/settings')
+  const uids = ['a.one', 'a.two']
+  assert.deepEqual(validatePrefs({ starred: ['a.one', 'a.one'], recent: ['a.two', 'a.one'] }, uids), { starred: ['a.one'], recent: ['a.two', 'a.one'] })
+  assert.deepEqual(validatePrefs({}, uids), { starred: [], recent: [] })
+  for (const bad of [null, [], 'x', { starred: ['a.gone'] }, { recent: 'a.one' }, { recent: [1] }, { other: [] },
+    { recent: Array.from({ length: 21 }, () => 'a.one') }, { starred: Array.from({ length: 201 }, () => 'a.one') }])
+    assert.throws(() => validatePrefs(bad, uids), { name: 'ValidationError' }, JSON.stringify(bad))
+  assert.deepEqual(mergePrefs({ starred: ['a.gone', 'a.two'], recent: 'bad' }, uids), { starred: ['a.two'], recent: [] })
+  assert.deepEqual(mergePrefs(null, uids), { starred: [], recent: [] })
+  const plugin = require('../server')
+  const stored = new Map()
+  const strapi = { components: { 'a.one': {}, 'a.two': {} }, store: () => ({ get: async ({ key }) => stored.get(key), set: async ({ key, value }) => stored.set(key, value) }) }
+  const prefs = plugin.controllers.prefs({ strapi })
+  await prefs.update({ state: { user: { id: 7 } }, request: { body: { starred: ['a.two'] } } })
+  assert.deepEqual(stored.get('prefs:7'), { starred: ['a.two'], recent: [] })
+  const ctx = { state: { user: { id: 8 } } }; await prefs.find(ctx); assert.deepEqual(ctx.body, { starred: [], recent: [] }, 'per user')
+  let denied = false; await prefs.find({ state: {}, unauthorized: () => { denied = true } }); assert.ok(denied)
+  const routes = plugin.routes.admin.routes.filter(r => r.path === '/me/prefs')
+  assert.deepEqual(routes.map(r => r.method).sort(), ['GET', 'PUT']); assert.ok(routes.every(r => r.config.policies.includes('admin::isAuthenticatedAdmin')))
 })

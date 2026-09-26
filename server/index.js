@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, DEFAULTS, catalog, validateSettings, mergeSaved, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, mergeSaved, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
 
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
@@ -148,11 +148,12 @@ module.exports = {
         const plugin = strapi.plugin(PLUGIN)
         const base = catalog({ components: plugin.config('components'), previewBaseUrl: plugin.config('previewBaseUrl'),
           previewVersion: plugin.config('previewVersion'), disabled: plugin.config('disabled'), blockPreview: plugin.config('blockPreview'),
-          groups: plugin.config('groups'), componentUids: componentUids(strapi) })
+          groups: plugin.config('groups'), componentUids: componentUids(strapi), schemas: strapi.components })
         const settings = await plugin.service('settings').get()
         const media = await resolveMedia(strapi, settings)
         for (const [uid, entry] of Object.entries(settings.components)) {
-          base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template }
+          base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template,
+            ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }) }
         }
         ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled } }
@@ -161,18 +162,33 @@ module.exports = {
     settings: ({ strapi }) => ({
       async find(ctx) {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
+        // typology: the value without a Settings override (code config, else the guess), shown as "Automatic".
+        const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components }).components
         const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
-          displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0] }))
+          displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology }))
         const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
           attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
-        ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES,
+        ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES, typologies: TYPOLOGIES,
           disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS }
       },
       async update(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').set(ctx.request?.body) },
     }),
+    prefs: ({ strapi }) => ({
+      async find(ctx) {
+        const id = ctx.state?.user?.id; if (!id) return ctx.unauthorized()
+        ctx.body = mergePrefs(await store(strapi).get({ key: `prefs:${id}` }), componentUids(strapi))
+      },
+      async update(ctx) {
+        const id = ctx.state?.user?.id; if (!id) return ctx.unauthorized()
+        const value = validatePrefs(ctx.request?.body, componentUids(strapi))
+        await store(strapi).set({ key: `prefs:${id}`, value })
+        ctx.body = value
+      },
+    }),
   },
   routes: { admin: { type: 'admin', routes: [
     { method: 'GET', path: '/catalog', handler: 'catalog.find', config: { policies: ['admin::isAuthenticatedAdmin'] } },
+    ...['GET', 'PUT'].map(method => ({ method, path: '/me/prefs', handler: `prefs.${method === 'GET' ? 'find' : 'update'}`, config: { policies: ['admin::isAuthenticatedAdmin'] } })),
     ...['find', 'update'].map((handler, index) => ({ method: index ? 'PUT' : 'GET', path: '/settings', handler: `settings.${handler}`,
       config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions',
         config: { actions: [`plugin::${PLUGIN}.settings.${index ? 'update' : 'read'}`] } }] } })),
