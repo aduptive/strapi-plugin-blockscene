@@ -343,7 +343,8 @@ function ZoneGallery({
             onClick={() => setOpen(true)}
             data-testid={`open-gallery-${zone.name}`}
           >
-            {t.add}: {zone.name}
+            {/* The zone is named by the heading above when there are several; its raw field name never shows. */}
+            {t.add}
           </Button>
         )
       }

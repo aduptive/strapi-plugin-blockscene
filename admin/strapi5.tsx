@@ -24,7 +24,6 @@ import { Gallery } from "./Gallery";
 import { PagePreview } from "./PagePreview";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults } from "./model.mjs";
-import { useMessages } from "./messages";
 import { Guard } from "./Guard";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
@@ -47,7 +46,6 @@ function Panel() {
   const c: any = useContext();
   const rbac: any = useDocumentRBAC("Blockscene", (state: any) => state);
   const { get } = useFetchClient();
-  const t = useMessages();
   const user: any = useAuth("Blockscene", (state: any) => state.user);
   // Live form values: the context's `form.values` snapshot can lag behind edits made through the preview, which misplaces insertions.
   const formValues: any = useForm("Blockscene", (state: any) => state.values);
@@ -99,7 +97,8 @@ function Panel() {
   if (!zones.length || !catalog?.editor?.enabled || typeSettings.enabled === false) return null;
   const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
   return {
-    title: t.gallery,
+    // The panel is the plugin (gallery, accordions, preview modes), so it carries the plugin's name; the dialog stays "Block gallery".
+    title: "Blockscene",
     content: (
       <Guard>
       <Flex direction="column" alignItems="stretch" gap={4}>

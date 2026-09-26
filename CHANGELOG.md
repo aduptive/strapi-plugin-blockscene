@@ -20,6 +20,8 @@
   notice; the native edit view keeps working.
 - Several zones: each group of Open all / Close all carries its zone name.
 - No preview route configured: the mode buttons are hidden (only the hint).
+- The edit view panel is titled "Blockscene" (it holds more than the gallery), and
+  the gallery button reads "Add block" instead of "Add block: <field name>".
 - Group diagnostics: readable detail text (dark theme), hints on their own
   line, the repair button wraps left-aligned.
 
