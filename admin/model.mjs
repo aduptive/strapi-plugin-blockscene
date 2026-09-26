@@ -99,64 +99,78 @@ export const fieldsOf = (schema) =>
   Object.entries(schema?.attributes || {})
     .filter(([name]) => !SYSTEM_FIELDS.includes(name))
     .map(([name, attr]) => ({ name, type: fieldType(attr) }));
-export const categoryOf = (uid, schema, meta = {}) =>
-  meta.category || schema?.category || uid.split(".")[0];
-// System-ish categories ("admin") sort after everything else; the rest alphabetical (section order and filter options).
-export const byCategory = (a, b) =>
-  (a === "admin" ? 1 : 0) - (b === "admin" ? 1 : 0) || a.localeCompare(b);
+// Taxonomy computed by the server catalog (server/settings.js): typology order, facet groups of the filter menus.
+export const TYPOLOGIES = ["hero", "text", "media", "listing", "cards", "cta", "form", "layout"];
+export const FACETS = { media: ["image", "video", "gallery"], content: ["richtext", "list", "dynamic", "form"] };
+const typologyRank = (t) => (TYPOLOGIES.indexOf(t) + 1 || 99);
 
 // A configured CLOSE is never offered on its own: it comes with its OPEN, and alone it would leave an unbalanced group.
 const pickable = (zone, config) => {
   const closers = Object.values(config.groups || {});
   return zone.components.filter((uid) => !closers.includes(uid));
 };
+function entryOf(uid, schema, config) {
+  const meta = config.components?.[uid] || {};
+  return {
+    uid,
+    label: meta.label || schema.info?.displayName || uid,
+    description: meta.description || schema.info?.description || "",
+    typology: meta.typology || "text",
+    facets: meta.facets || [],
+    tags: meta.tags || [],
+    keywords: meta.keywords || "",
+    fields: fieldsOf(schema),
+    candidates: candidatesFor(uid, meta, config),
+    template: meta.template || "generic",
+  };
+}
+const allEntries = (zone, components, config) =>
+  pickable(zone, config).flatMap((uid) => (components[uid] ? [entryOf(uid, components[uid], config)] : []));
 
-export function entriesFor(zone, components, config, query, category = "all") {
+// filter: { typology, uids (recent/starred view), tags, media, content }. Several values of one menu match any of
+// them; different menus combine.
+export function entriesFor(zone, components, config, query, filter = {}) {
   const needle = query.trim().toLocaleLowerCase();
-  return pickable(zone, config)
-    .flatMap((uid) => {
-      const schema = components[uid];
-      if (!schema) return [];
-      const meta = config.components?.[uid] || {};
-      const entry = {
-        uid,
-        label: meta.label || schema.info?.displayName || uid,
-        description: meta.description || schema.info?.description || "",
-        category: categoryOf(uid, schema, meta),
-        fields: fieldsOf(schema),
-        candidates: candidatesFor(uid, meta, config),
-        template: meta.template || "generic",
-      };
-      if (category !== "all" && entry.category !== category) return [];
-      return `${entry.label} ${entry.description} ${entry.category} ${uid} ${meta.keywords || ""}`
-        .toLocaleLowerCase()
-        .includes(needle)
-        ? [entry]
-        : [];
-    })
-    .sort(
-      (a, b) =>
-        byCategory(a.category, b.category) || a.label.localeCompare(b.label),
-    );
+  const any = (picked, values) => !picked?.length || picked.some((value) => values.includes(value));
+  return allEntries(zone, components, config)
+    .filter(
+      (entry) =>
+        (!filter.typology || entry.typology === filter.typology) &&
+        (!filter.uids || filter.uids.includes(entry.uid)) &&
+        any(filter.tags, entry.tags) &&
+        any(filter.media, entry.facets) &&
+        any(filter.content, entry.facets) &&
+        `${entry.label} ${entry.description} ${entry.typology} ${entry.tags.join(" ")} ${entry.uid} ${entry.keywords}`
+          .toLocaleLowerCase()
+          .includes(needle),
+    )
+    .sort((a, b) => typologyRank(a.typology) - typologyRank(b.typology) || a.label.localeCompare(b.label));
 }
-// Category -> count over the whole allowed list (the filter options never shrink while searching).
-export function categoriesFor(zone, components, config) {
-  const counts = new Map();
-  for (const uid of pickable(zone, config)) {
-    const schema = components[uid];
-    if (!schema) continue;
-    const c = categoryOf(uid, schema, config.components?.[uid] || {});
-    counts.set(c, (counts.get(c) || 0) + 1);
-  }
-  return [...counts.entries()].sort(([a], [b]) => byCategory(a, b));
+// value -> count over the whole allowed list (sidebar and menu options never shrink while filtering).
+export function optionsFor(zone, components, config) {
+  const count = (values) => {
+    const counts = new Map();
+    for (const value of values) counts.set(value, (counts.get(value) || 0) + 1);
+    return [...counts.entries()];
+  };
+  const entries = allEntries(zone, components, config);
+  const facets = entries.flatMap((entry) => entry.facets);
+  return {
+    total: entries.length,
+    uids: entries.map((entry) => entry.uid),
+    typologies: count(entries.map((entry) => entry.typology)).sort(([a], [b]) => typologyRank(a) - typologyRank(b)),
+    tags: count(entries.flatMap((entry) => entry.tags)).sort(([a], [b]) => a.localeCompare(b)),
+    media: count(facets.filter((facet) => FACETS.media.includes(facet))),
+    content: count(facets.filter((facet) => FACETS.content.includes(facet))),
+  };
 }
-// Sections in category order; entries keep the order entriesFor produced.
+// Sections in typology order; entries keep the order entriesFor produced.
 export function groupEntries(entries) {
   const map = new Map();
   for (const entry of entries)
-    map.set(entry.category, [...(map.get(entry.category) || []), entry]);
-  return [...map.entries()].map(([category, items]) => ({
-    category,
+    map.set(entry.typology, [...(map.get(entry.typology) || []), entry]);
+  return [...map.entries()].map(([typology, items]) => ({
+    typology,
     entries: items,
   }));
 }

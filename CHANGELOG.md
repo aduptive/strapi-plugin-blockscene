@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Gallery as a block browser: collapsible sidebar (All, Recently used,
+  Starred, typologies), Tags/Media/Content filter menus with chips, facet
+  badges, stars, hover quick insert and a detail pane. Facets come from the
+  schema; typology is guessed and overridable, with tags, in Settings or the
+  config. Stars and recents are stored per admin user (`/blockscene/me/prefs`).
+  The category select is gone; `category` in the config now acts as a tag.
+
 - Icon buttons with tooltips for the tools: open/close all, the three preview
   modes and the four widths (accessible names unchanged). Add block, Save and
   Publish keep their text.

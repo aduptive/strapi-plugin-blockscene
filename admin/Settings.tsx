@@ -49,6 +49,19 @@ function ColorField({ name, label, value, onChange, disabled }: any) {
   </Label>
 }
 
+// Comma separated tags; the text is kept while typing so a trailing comma or space does not vanish.
+function TagsField({ name, label, hint, value, onChange, disabled }: any) {
+  const [text, setText] = React.useState(value.join(', '))
+  return <Label>
+    <Typography variant="pi" fontWeight="bold" textColor="neutral800">{label}</Typography>
+    <input name={name} value={text} disabled={disabled} onChange={e => {
+      setText(e.target.value)
+      onChange([...new Set(e.target.value.split(',').map(tag => tag.replace(/[<>]/g, '').trim().slice(0, 24)).filter(Boolean))].slice(0, 10))
+    }} style={{ padding: '6px 8px', border: '1px solid #dcdce4', borderRadius: 4, fontSize: 13 }} />
+    <Typography variant="pi" textColor="neutral600">{hint}</Typography>
+  </Label>
+}
+
 export const permissions = { read: [{ action: 'plugin::blockscene.settings.read', subject: null }], update: [{ action: 'plugin::blockscene.settings.update', subject: null }] }
 
 export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, previewSupported = false }: any) {
@@ -88,6 +101,13 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
     } catch { setStatus(t.saveFailed) }
     finally { setSaving(false) }
   }
+  // Only overrides are stored: undefined removes the key, and an empty entry disappears.
+  const setComponent = (uid: string, key: string, value: unknown) => update(s => {
+    const next = { ...s.components[uid] }
+    if (value === undefined) delete next[key]; else next[key] = value
+    if (Object.keys(next).length) s.components[uid] = next; else delete s.components[uid]
+    return s
+  })
   const editor = settings?.editor || {}
   const components = (data?.components || []).filter((c: any) => `${c.displayName} ${c.uid}`.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()))
   const sourceOf = (uid: string, manual: boolean) => {
@@ -213,6 +233,11 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
               <SelectField name={`template-${component.uid}`} label={t.template} value={entry.template || 'generic'} disabled={!canUpdate || saving}
                 options={TEMPLATES.map(value => ({ value, label: t.templates[value] }))}
                 onChange={(v: string) => update(s => { s.components[component.uid] = { ...s.components[component.uid], template: v }; return s })} />
+              <SelectField name={`typology-${component.uid}`} label={t.typology} value={entry.typology || 'auto'} disabled={!canUpdate || saving}
+                options={[{ value: 'auto', label: t.f('typologyAuto', { name: t.typologies[component.typology] || component.typology }) }, ...(data.typologies || []).map((value: string) => ({ value, label: t.typologies[value] }))]}
+                onChange={(v: string) => setComponent(component.uid, 'typology', v === 'auto' ? undefined : v)} />
+              <TagsField name={`tags-${component.uid}`} label={t.tags} hint={t.tagsHelp} value={entry.tags || []} disabled={!canUpdate || saving}
+                onChange={(tags: string[]) => setComponent(component.uid, 'tags', tags.length ? tags : undefined)} />
             </Flex>
           </Card>
         })}</Grid>

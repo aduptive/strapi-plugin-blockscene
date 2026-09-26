@@ -45,7 +45,7 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
 function Panel() {
   const c: any = useContext();
   const rbac: any = useDocumentRBAC("Blockscene", (state: any) => state);
-  const { get } = useFetchClient();
+  const { get, put } = useFetchClient();
   const user: any = useAuth("Blockscene", (state: any) => state.user);
   // Live form values: the context's `form.values` snapshot can lag behind edits made through the preview, which misplaces insertions.
   const formValues: any = useForm("Blockscene", (state: any) => state.values);
@@ -109,6 +109,7 @@ function Panel() {
           Modal={Modal}
           Toggle={ToggleField}
           get={get}
+          put={put}
           editor={catalog.editor}
           catalog={catalog}
           docKey={docKey}

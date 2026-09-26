@@ -33,7 +33,8 @@ module.exports = {
         'blocks.hero': {
           label: 'Hero banner',
           description: 'Introduce a page with a prominent title and image.',
-          category: 'Editorial',
+          typology: 'hero', // optional; guessed from the name otherwise
+          tags: ['Editorial'],
           keywords: 'heading introduction',
           image: '/block-previews/hero.png',
         },
@@ -49,14 +50,43 @@ editor panel provides one gallery button per editable, non-full zone plus
 
 ## Gallery
 
-The modal has one header row: block count (`34 blocks`, or `3 of 34` while
-filtering), search, a category filter (only when the zone spans more than one
-category, with counts), a "Fields" switch that shows each block's attribute
-list on its card, and a columns slider (1 to 5, remembered per browser). Blocks
-are grouped by category, system-like categories (`admin`) last; search and the
-category filter combine, and the empty state offers a reset. Categories come
-from `config.components[uid].category`, else the component's `category` in its
-schema. The modal is 80vw wide.
+The modal is a block browser (80vw wide):
+
+- **Sidebar** (collapsible to icons; remembered per browser): All, Recently
+  used and Starred with counts, then the typologies present in the zone.
+- **Top bar**: count (`34 blocks`, or `3 of 34` while filtering), search,
+  filter menus Tags, Media and Content (checkboxes; several values in one menu
+  match any of them, different menus combine), a "Fields" switch that shows
+  each block's attribute list on its card, and a columns slider (1 to 5,
+  remembered per browser). Active values show as removable chips with "Clear
+  all"; the empty state offers a reset.
+- **Cards**, grouped by typology: facet badges (IMAGE, VIDEO, GALLERY, RICH
+  TEXT, LIST, DYNAMIC, FORM), a star and a hover "+" that inserts at once.
+- A click opens the **detail pane** (large preview, description, badges,
+  fields with their types, star, Insert). Double click, "+" or Enter on a
+  focused card inserts without it.
+
+Stars and recently used blocks are stored per admin user on the server
+(`GET`/`PUT /blockscene/me/prefs`, `{ starred, recent }`, at most 200 and 20
+existing component uids).
+
+### Taxonomy
+
+Facets are read from each component schema and the components it nests (one
+level): media fields (`image`, `video` by allowed types, `gallery` when
+multiple), `richtext` (rich text, blocks or a CKEditor custom field), `list`
+(repeatable component), `dynamic` (a relation, or a uid with query, archive or
+related) and `form` (uid or display name with form or contact).
+
+The typology is one of hero, text, media, listing, cards, cta, form and
+layout, guessed from the component name and display name (hero, banner,
+cover; text, rich, quote, title; image, media, video, gallery, carousel; list,
+query, archive, related, posts, projects; card; cta, button, link; form,
+contact; wrapper, column, grid, divider, spacer, section; else text). Override
+it, and add up to 10 tags (1 to 24 characters), in Settings, Blockscene, or in
+the plugin config: `components[uid].typology` and `components[uid].tags`. A
+Settings value wins over the config. The former `category` config key still
+works: it becomes the block's tag when no tags are set.
 
 The native "Add a component to <zone>" button of an editable zone opens this
 gallery as well (the click is intercepted in the capture phase; Strapi's
@@ -109,7 +139,8 @@ needed for the gallery to pick them up. Reading requires the
 - Wireframe palette (background, surfaces, text, accent) with a live preview
   and "Restore default colors". Colors must be `#RRGGBB`.
 - Component list with the effective source, choose/replace image from the
-  Media Library, "Use automatic image" and the wireframe template.
+  Media Library, "Use automatic image", the wireframe template, the gallery
+  typology ("Automatic" shows the guess) and tags (comma separated).
 - Editor preferences: enhancements on/off, visibility of each collective
   button, initial accordion state and the initial block mode.
 - Content types: every project type with a Dynamic Zone, each with on/off

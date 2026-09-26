@@ -29,7 +29,7 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
     <>
       {trigger}
       {open && (
-        <ModalLayout onClose={() => onOpenChange(false)} labelledBy={id}>
+        <ModalLayout onClose={() => onOpenChange(false)} labelledBy={id} width="80vw">
           <ModalHeader>
             <Typography id={id} variant="beta">
               {title}
@@ -43,7 +43,7 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
 }
 function Picker() {
   const c: any = useCMEditViewDataManager();
-  const { get } = useFetchClient();
+  const { get, put } = useFetchClient();
   const catalog = useCatalog(get);
   const components = c.allLayoutData?.components || {};
   const schema = c.layout || c.allLayoutData?.contentType;
@@ -96,6 +96,7 @@ function Picker() {
       Modal={Modal}
       Toggle={ToggleField}
       get={get}
+      put={put}
       editor={catalog.editor}
       catalog={catalog}
       docKey={docKey}

@@ -23,16 +23,28 @@ const PATHS: Record<string, string> = {
   desktop: 'M3 4h18v12H3zM8 20h8M12 16v4',
   expand: 'M7 7l5 5 5-5M7 13l5 5 5-5',
   collapse: 'M7 17l5-5 5 5M7 11l5-5 5 5',
+  // Gallery: navigation, card actions and typologies (text, media, listing and cta reuse text, image, list and link).
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+  star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9L12 3z',
+  plus: 'M12 5v14M5 12h14',
+  close: 'M6 6l12 12M18 6L6 18',
+  chevron: 'M6 9l6 6 6-6',
+  sidebar: 'M3 4h18v16H3zM9 4v16',
+  hero: 'M3 4h18v10H3zM7 18h10M9 21h6',
+  cards: 'M3 5h8v14H3zM13 5h8v14h-8z',
+  form: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h4',
+  layout: 'M3 4h18v16H3zM3 10h18M12 10v10',
 }
-export function Icon({ name, size = 18 }: { name: string; size?: number }) {
+export function Icon({ name, size = 18, filled }: { name: string; size?: number; filled?: boolean }) {
   const d = PATHS[name]
   if (!d) return null
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 }
 
 // Square icon button: the label is its accessible name and its tooltip (Strapi 4 and 5 themes).
 export const ToolButton = styled.button<{ $active?: boolean }>`
-  display: inline-flex; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
   border: 1px solid ${({ theme }) => theme.colors.neutral200}; border-radius: 4px; cursor: pointer;
   color: ${({ theme, $active }) => ($active ? theme.colors.primary600 : theme.colors.neutral700)};
   background: ${({ theme, $active }) => ($active ? theme.colors.primary100 : theme.colors.neutral0)};

@@ -41,6 +41,43 @@ const PREVIEW_URL = /^https?:\/\/[^\s"'<>]{1,500}$/
 const COLOR = /^#[0-9A-Fa-f]{6}$/
 const UID = /^[a-z0-9-]+\.[a-z0-9-]+$/
 
+// Gallery taxonomy. Facets are read from the schema; the typology is guessed from the name unless overridden.
+const TYPOLOGIES = ['hero', 'text', 'media', 'listing', 'cards', 'cta', 'form', 'layout']
+const TAG = /^[^<>\n]{1,24}$/
+const cleanTags = (value) => Array.isArray(value) ? [...new Set(value.filter(tag => typeof tag === 'string' && TAG.test(tag.trim())).map(tag => tag.trim()))].slice(0, 10) : []
+const validTags = (value) => Array.isArray(value) && value.length <= 10 && value.every(tag => typeof tag === 'string' && TAG.test(tag.trim()))
+const GUESSES = [['hero', /hero|banner|cover/], ['text', /text|rich|quote|title/], ['media', /image|media|video|gallery|carousel/],
+  ['listing', /list|query|archive|related|posts|projects/], ['cards', /card/], ['cta', /cta|button|link/], ['form', /form|contact/],
+  ['layout', /wrapper|column|grid|divider|divisor|spacer|section/]]
+// The uid's category ("sections.faq") is left out: it names a folder, not the block.
+function guessTypology(uid, displayName = '') {
+  const name = `${uid.split('.').pop()} ${displayName}`.toLowerCase()
+  return GUESSES.find(([, pattern]) => pattern.test(name))?.[0] || 'text'
+}
+// Attributes of the component and of the components it nests, one level down.
+function facetsOf(uid, schema, schemas = {}) {
+  const facets = new Set()
+  const read = (attributes, nested) => {
+    for (const attr of Object.values(attributes || {})) {
+      if (attr?.type === 'media') {
+        const allowed = attr.allowedTypes
+        if (!allowed || allowed.includes('images')) facets.add('image')
+        if (!allowed || allowed.includes('videos')) facets.add('video')
+        if (attr.multiple) facets.add('gallery')
+      } else if (['richtext', 'blocks'].includes(attr?.type) || (attr?.type === 'customField' && /ckeditor/i.test(String(attr.customField)))) facets.add('richtext')
+      else if (attr?.type === 'relation') facets.add('dynamic')
+      else if (attr?.type === 'component') {
+        if (attr.repeatable) facets.add('list')
+        if (!nested) read(schemas[attr.component]?.attributes, true)
+      }
+    }
+  }
+  read(schema?.attributes, false)
+  if (/query|archive|related/i.test(uid)) facets.add('dynamic')
+  if (/form|contact/i.test(`${uid} ${schema?.info?.displayName || ''}`)) facets.add('form')
+  return [...facets]
+}
+
 const safeUrl = (value) => typeof value === 'string' &&
   (/^\/(?!\/)/.test(value) || /^https?:\/\//.test(value)) ? value : undefined
 const { safeGroups } = require('./groups')
@@ -52,6 +89,8 @@ const fail = (message, details) => {
   throw new ValidationError(message, details)
 }
 
+// `schemas` (the host's components) adds facets, typology and tags to every component; the code config can set
+// typology and tags, and its legacy `category` still filters as a tag.
 function catalog(config = {}) {
   const entries = {}
   for (const [uid, entry] of Object.entries(config.components || {})) {
@@ -61,6 +100,15 @@ function catalog(config = {}) {
         .map(key => [key, entry[key]])
     )
     entries[uid].image = safeUrl(entry.image)
+    if (TYPOLOGIES.includes(entry.typology)) entries[uid].typology = entry.typology
+    const tags = cleanTags(entry.tags)
+    if (tags.length || entries[uid].category) entries[uid].tags = tags.length ? tags : cleanTags([entries[uid].category])
+  }
+  for (const [uid, schema] of Object.entries(config.schemas || {})) {
+    const entry = entries[uid] ||= {}
+    entry.facets = facetsOf(uid, schema, config.schemas)
+    entry.typology ||= guessTypology(uid, schema?.info?.displayName)
+    entry.tags ||= []
   }
   return { components: entries, previewBaseUrl: safeUrl(config.previewBaseUrl) || '/block-previews',
     previewVersion: safeVersion(config.previewVersion), disabled: config.disabled === true, blockPreviewAvailable: config.blockPreview === true,
@@ -95,6 +143,8 @@ function validateSettings(input, componentUids, contentTypeUids = []) {
     const clean = {}
     for (const key of Object.keys(entry)) {
       if (key === 'template') { if (!TEMPLATES.includes(entry.template)) fail(`Unknown template for "${uid}"`); clean.template = entry.template }
+      else if (key === 'typology') { if (!TYPOLOGIES.includes(entry.typology)) fail(`Unknown typology for "${uid}"`); clean.typology = entry.typology }
+      else if (key === 'tags') { if (!validTags(entry.tags)) fail(`Invalid tags for "${uid}": up to 10, each 1 to 24 characters`); clean.tags = cleanTags(entry.tags) }
       else if (key === 'mediaId') { if (!Number.isInteger(entry.mediaId) || entry.mediaId <= 0) fail(`Invalid media for "${uid}"`); clean.mediaId = entry.mediaId }
       else fail(`Unknown component setting "${key}"`)
     }
@@ -128,7 +178,13 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     if (key === 'previewUrl' && value && !PREVIEW_URL.test(value)) continue
     out.editor[key] = value
   }
-  for (const [uid, entry] of Object.entries(saved.components || {})) if (componentUids.includes(uid) && entry && typeof entry === 'object') out.components[uid] = { ...entry }
+  for (const [uid, entry] of Object.entries(saved.components || {})) {
+    if (!componentUids.includes(uid) || !entry || typeof entry !== 'object') continue
+    const clean = { ...entry }
+    if ('typology' in clean && !TYPOLOGIES.includes(clean.typology)) delete clean.typology
+    if ('tags' in clean) { clean.tags = cleanTags(clean.tags); if (!clean.tags.length) delete clean.tags }
+    out.components[uid] = clean
+  }
   for (const [uid, entry] of Object.entries(saved.contentTypes || {})) {
     if (!(uid in types) || !entry || typeof entry !== 'object') continue
     // A sidebar naming a field that no longer exists keeps its other items.
@@ -139,4 +195,19 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
   return out
 }
 
-module.exports = { PLUGIN, TEMPLATES, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, safeUrl, fail }
+// Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.
+const PREFS = { starred: 200, recent: 20 }
+function validatePrefs(input, componentUids) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Preferences must be an object')
+  const out = { starred: [], recent: [] }
+  for (const [key, value] of Object.entries(input)) {
+    if (!(key in PREFS)) fail(`Unknown preference "${key}"`)
+    if (!Array.isArray(value) || value.length > PREFS[key] || !value.every(uid => typeof uid === 'string' && componentUids.includes(uid))) fail(`Invalid value for "${key}"`)
+    out[key] = [...new Set(value)]
+  }
+  return out
+}
+const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
+  [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
+
+module.exports = { PLUGIN, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, safeUrl, fail }

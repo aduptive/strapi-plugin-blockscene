@@ -467,7 +467,7 @@ export function PagePreview({
   const [inserting, setInserting] = React.useState<{
     after: string | null;
   } | null>(null);
-  const { get } = useFetchClient();
+  const { get, put } = useFetchClient();
   const { toggleNotification } = useNotification();
   const zoneAttr: any = zone ? c.contentType?.attributes?.[zone] : null;
   const iframe = React.useRef<HTMLIFrameElement>(null);
@@ -1092,6 +1092,7 @@ export function PagePreview({
           Modal={Modal}
           Toggle={Toggle}
           get={get}
+          put={put}
           open
           onOpenChange={(open: boolean) => {
             if (!open) setInserting(null);
