@@ -443,12 +443,13 @@ test('lazyFields: strict PUT validation, lenient read, code defaults', () => {
   assert.equal(mergeSaved({ editor: { lazyEditors: 'no' } }, []).editor.lazyEditors, true)
 })
 
-test('rich-text preview sanitizer drops scripts, frames, styles, handlers and script URLs', async () => {
+test('rich-text preview sanitizer drops scripts, frames, handlers, script URLs and non-text styles', async () => {
   const { cleanTree } = await import('../admin/sanitize.mjs')
   // Minimal DOM stub: enough of Element for cleanTree.
   const el = (tagName, attrs = {}, children = []) => {
     const node = { tagName, children, attributes: Object.entries(attrs).map(([name, value]) => ({ name, value })) }
     node.removeAttribute = (name) => { node.attributes = node.attributes.filter(a => a.name !== name) }
+    node.setAttribute = (name, value) => { node.attributes = node.attributes.map(a => a.name === name ? { name, value } : a) }
     node.remove = () => { node.parent.children = node.parent.children.filter(c => c !== node) }
     children.forEach(c => { c.parent = node })
     return node
@@ -458,10 +459,12 @@ test('rich-text preview sanitizer drops scripts, frames, styles, handlers and sc
     el('SCRIPT'), el('style'), el('IFRAME', { src: 'https://x' }), el('OBJECT'), el('EMBED'), el('LINK'),
     el('IMG', { src: 'https://cdn.test/a.png', onerror: 'x()', srcset: 'javascript:1' }),
     el('DIV', {}, [el('FORM', {}, [el('INPUT')]), el('SPAN', { OnMouseOver: 'x()' })]),
+    el('H2', { style: 'text-align:center; color: #e30613; position:fixed; background-color: url(https://x); font-size:32px' }),
   ])
   cleanTree(root)
   const tags = (n) => n.children.flatMap(c => [c.tagName, ...tags(c)])
-  assert.deepEqual(tags(root), ['P', 'A', 'A', 'IMG', 'DIV', 'SPAN'])
+  assert.deepEqual(tags(root), ['P', 'A', 'A', 'IMG', 'DIV', 'SPAN', 'H2'])
   const attrs = (n) => n.children.flatMap(c => [...c.attributes.map(a => `${c.tagName}.${a.name}=${a.value}`), ...attrs(c)])
-  assert.deepEqual(attrs(root), ['P.class=x', 'A.title=t', 'A.href=https://ok.test/', 'IMG.src=https://cdn.test/a.png'])
+  assert.deepEqual(attrs(root), ['P.class=x', 'A.title=t', 'A.href=https://ok.test/', 'IMG.src=https://cdn.test/a.png', 'H2.style=text-align: center; color: #e30613; font-size: 32px'],
+    'text formatting kept; positioning and url() values dropped')
 })
