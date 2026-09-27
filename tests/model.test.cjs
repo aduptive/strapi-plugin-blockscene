@@ -398,3 +398,22 @@ test('history: record, coalesce, undo, redo, cap and shortcuts', async () => {
   assert.equal(k('Z', { metaKey: true, shiftKey: true }), 'redo'); assert.equal(k('y', { ctrlKey: true }), 'redo')
   assert.equal(k('z'), null); assert.equal(k('y', { metaKey: true }), null); assert.equal(k('z', { ctrlKey: true, altKey: true }), null)
 })
+
+test('row thumbnails option: boolean, on by default, strict and lenient', () => {
+  const { validateSettings, mergeSaved } = require('../server/settings')
+  assert.equal(validateSettings({}, []).editor.showRowThumbnails, true)
+  assert.equal(validateSettings({ editor: { showRowThumbnails: false } }, []).editor.showRowThumbnails, false)
+  assert.throws(() => validateSettings({ editor: { showRowThumbnails: 'no' } }, []), { name: 'ValidationError' })
+  assert.equal(mergeSaved({ editor: { showRowThumbnails: 'no' } }, []).editor.showRowThumbnails, true, 'bad saved value falls back')
+  assert.equal(mergeSaved({ editor: { showRowThumbnails: false } }, []).editor.showRowThumbnails, false)
+})
+
+test('hover messages: null clears, only keys of current rows pass', async () => {
+  const { hoverKey } = await import('../admin/preview.mjs')
+  const rows = [{ __component: 'blocks.hero', id: 3 }, { __component: 'blocks.text', __temp_key__: 'a0' }]
+  assert.equal(hoverKey(null, rows), null)
+  assert.equal(hoverKey('blocks.hero#3', rows), 'blocks.hero#3')
+  assert.equal(hoverKey('a0', rows), 'a0')
+  for (const bad of ['blocks.hero#4', 3, undefined, {}, 'x'.repeat(201), '']) assert.equal(hoverKey(bad, rows), undefined, `ignores ${String(bad).slice(0, 20)}`)
+  assert.equal(hoverKey('a0', null), undefined)
+})

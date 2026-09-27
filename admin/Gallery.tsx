@@ -1,5 +1,5 @@
 import * as React from "react";
-import { unstable_batchedUpdates } from "react-dom";
+import { createPortal, unstable_batchedUpdates } from "react-dom";
 import {
   Box,
   Button,
@@ -1265,9 +1265,48 @@ function useInitialAccordions({
   }, [docKey, editor?.enabled, editor?.initialState, contentType]);
 }
 
+// Open all / Close all sit right after the native zone label pill ("blocks (2)"): one inert <span> is inserted
+// in the label row and the buttons are portalled into it, re-inserted when Strapi re-renders (as RowPreviews does).
+// ponytail: DOM injection; drop it if Strapi ever exposes a zone label slot.
+const ZONE_ATTR = "data-blockscene-zone-controls";
+function useLabelAnchor(zone: any, enabled: boolean) {
+  const [el, setEl] = React.useState<HTMLElement | null>(null);
+  React.useEffect(() => {
+    if (!enabled) return;
+    let frame = 0;
+    const sync = () => {
+      const list = findZoneList(zone.label);
+      // The label row is the first child of the zone box with text (DS1 and DS2 render it before the list).
+      const row = list && ([...(list.parentElement?.children || [])] as HTMLElement[]).find((child) => child !== list && child.textContent?.trim());
+      let anchor = document.querySelector<HTMLElement>(`[${ZONE_ATTR}="${CSS.escape(zone.name)}"]`);
+      if (anchor && anchor.parentElement !== row) { anchor.remove(); anchor = null; }
+      if (!anchor && row) {
+        anchor = document.createElement("span");
+        anchor.setAttribute(ZONE_ATTR, zone.name);
+        anchor.style.cssText = "display:inline-flex;align-items:center;margin-left:8px";
+        row.appendChild(anchor);
+      }
+      setEl(anchor);
+    };
+    sync();
+    const observer = new MutationObserver(() => {
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; sync(); });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      document.querySelector(`[${ZONE_ATTR}="${CSS.escape(zone.name)}"]`)?.remove();
+      setEl(null);
+    };
+  }, [zone.name, zone.label, enabled]);
+  return el;
+}
 function ZoneControls({ zone, editor, contentType, userId }: any) {
   const t = useMessages();
-  if (!zone.count || !(editor.showOpenAll || editor.showCloseAll)) return null;
+  const shown = Boolean(zone.count && (editor.showOpenAll || editor.showCloseAll));
+  const anchor = useLabelAnchor(zone, shown);
+  if (!shown || !anchor) return null;
   const apply = (open: boolean) => {
     const list = findZoneList(zone.label);
     if (list) setAll(list, open, unstable_batchedUpdates);
@@ -1277,15 +1316,12 @@ function ZoneControls({ zone, editor, contentType, userId }: any) {
       open ? "open" : "closed",
     );
   };
-  return (
-    <Flex
-      gap={2}
-      wrap="wrap"
-      data-testid={`block-accordion-controls-${zone.name}`}
-    >
+  return createPortal(
+    <Flex gap={1} data-testid={`block-accordion-controls-${zone.name}`}>
       {editor.showOpenAll && <Tool icon="expand" label={t.openAll} onClick={() => apply(true)} />}
       {editor.showCloseAll && <Tool icon="collapse" label={t.closeAll} onClick={() => apply(false)} />}
-    </Flex>
+    </Flex>,
+    anchor,
   );
 }
 
@@ -1301,16 +1337,18 @@ export function Gallery({
   useInitialAccordions({ zones, editor, docKey, contentType, userId });
   return (
     <Flex direction="column" alignItems="stretch" gap={3}>
-      <RowPreviews
-        zones={zones}
-        components={props.components}
-        catalog={catalog}
-        Modal={props.Modal}
-      />
+      {editor.showRowThumbnails !== false && (
+        <RowPreviews
+          zones={zones}
+          components={props.components}
+          catalog={catalog}
+          Modal={props.Modal}
+        />
+      )}
       {zones.map((zone: any) => (
         <Flex key={zone.name} direction="column" alignItems="stretch" gap={2}>
-          {/* Several zones: name each group of controls, or two identical "Open all" pairs read as a duplicate. */}
-          {zones.length > 1 && (zone.count > 0 || !zone.full) && (
+          {/* Several zones: name each gallery trigger's zone. */}
+          {zones.length > 1 && !zone.full && (
             <Typography variant="sigma" textColor="neutral600" tag="h3">{zone.label}</Typography>
           )}
           {/* docKey ends with the content locale (both versions): the {locale} of blockPreviewUrl. */}

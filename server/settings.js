@@ -12,7 +12,7 @@ const DEFAULTS = {
   // blockPreviewInForm: compact read-only preview above a block's fields in form
   // mode. Only installations that ship the accordion integration (server config
   // `blockPreview: true`) show and honour it; the page preview is the editor.
-  editor: { enabled: true, showOpenAll: true, showCloseAll: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewUrl: '', blockPreviewInForm: false },
+  editor: { enabled: true, showOpenAll: true, showCloseAll: true, showRowThumbnails: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewUrl: '', blockPreviewInForm: false },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},

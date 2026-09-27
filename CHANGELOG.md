@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Hover sync (Strapi 5, side by side): a hovered form row outlines its block in
+  the page and a hovered block outlines its form row (primary color, no
+  scroll); an edge arrow scrolls the form to a row out of view. New bridge
+  message `hover` in both directions (`key` or `null`, sent on change,
+  validated against the current rows); pages that ignore it keep working.
+- Open all / Close all moved from the side panel to beside each zone's native
+  label pill, injected like the row thumbnails.
+- New editor option `showRowThumbnails` (default on) with a Settings toggle.
+- Split divider: always visible, neutral with a grip, primary on hover or drag,
+  12 px hit area; a double click resets it to half.
+
 - Preview canvas: the admin's page background with a faint 24 px grid, both from
   the theme (a customised admin carries over), behind the page (whole-page pane
   and the gallery's magnified block).

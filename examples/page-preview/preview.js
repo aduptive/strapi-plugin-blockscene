@@ -8,7 +8,8 @@
   if (!channel || window.parent === window) return
   const post = (message) => window.parent.postMessage({ protocol: PROTOCOL, channel, ...message }, ADMIN_ORIGIN)
   const ok = (event, type) => event.origin === ADMIN_ORIGIN && event.source === window.parent && event.data?.protocol === PROTOCOL && event.data?.channel === channel && event.data?.type === type
-  let editing = null, pending = null, selected = null
+  let editing = null, pending = null, selected = null, marked = null
+  const mark = () => document.querySelectorAll('[data-block-key], [data-group-key]').forEach(el => { if (marked !== null && (el.dataset.blockKey || el.dataset.groupKey) === marked) el.dataset.hovered = ''; else delete el.dataset.hovered })
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   // Example renderer: title (inline plain text, explicitly mapped), body (rich, opens the admin editor), image (Media Library).
   // Groups (only when the admin sends a `groups` map, OPEN uid -> CLOSE uid): an OPEN row … its CLOSE,
@@ -65,6 +66,7 @@
       }
     }
     renderNodes(groupOf(blocks), page)
+    mark()
     for (const title of page.querySelectorAll('[data-block-field="title"]')) {
       const key = title.closest('[data-block-key]').dataset.blockKey
       let timer
@@ -101,8 +103,15 @@
   window.addEventListener('message', (event) => {
     if (ok(event, 'ping')) post({ type: 'ready' })
     if (ok(event, 'update-page') && Array.isArray(event.data.blocks)) { clearInterval(retry); groups = event.data.groups || null; if (editing) pending = event.data.blocks; else render(event.data.blocks) }
+    if (ok(event, 'hover') && (event.data.key === null || typeof event.data.key === 'string')) { marked = event.data.key; mark() }
     if (ok(event, 'highlight') && typeof event.data.key === 'string') { selected = event.data.key; document.querySelectorAll('[data-block-key]').forEach(s => { if (s.dataset.blockKey === selected) s.dataset.selected = ''; else delete s.dataset.selected }); document.querySelector(`[data-block-key="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'center' }) }
   })
+  // Hover sync: the block under the pointer is reported when it changes (null off blocks or outside the page);
+  // the admin's hovered form row is marked with data-hovered, without scrolling.
+  let hovered = null
+  const hover = (key) => { if (key !== hovered) { hovered = key; post({ type: 'hover', key }) } }
+  document.addEventListener('pointerover', (event) => { const el = event.target.closest?.('[data-block-key], [data-group-key]'); hover(el ? el.dataset.blockKey || el.dataset.groupKey : null) })
+  document.addEventListener('pointerout', (event) => { if (!event.relatedTarget) hover(null) })
   const notify = () => post({ type: 'ready' })
   notify()
   const retry = setInterval(notify, 2000)

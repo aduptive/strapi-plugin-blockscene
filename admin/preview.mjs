@@ -98,6 +98,9 @@ export function validateEdit(uid, field, value, components) {
 export const mediaAttribute = (uid, field, components) => { const attr = resolveField(uid, field, components); return attr?.type === 'media' ? attr : null }
 // Reads a dotted path (repeatable rows included) on a row; undefined when any step is missing.
 export const getIn = (row, path) => String(path).split('.').reduce((value, key) => (value == null ? undefined : value[key]), row)
+// Hover sync (both directions): null clears; otherwise a key of the current rows. undefined means "ignore the message".
+export const hoverKey = (key, rows) => key === null ? null
+  : typeof key === 'string' && key.length <= 200 && (Array.isArray(rows) ? rows : []).some(row => blockKey(row) === key) ? key : undefined
 export function isPreviewMessage(event, origin, source, channel, type) {
   return event.origin === origin && event.source === source && event.data?.protocol === PROTOCOL && event.data?.channel === channel && event.data?.type === type
 }

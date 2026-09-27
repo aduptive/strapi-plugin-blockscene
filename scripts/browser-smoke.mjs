@@ -202,6 +202,10 @@ try {
   })
   await step('open all / close all drive the native accordions per zone', async () => {
     const controls = page.getByTestId('block-accordion-controls-blocks')
+    // Beside the native zone label pill ("blocks (2)"), not in the side panel.
+    assert.ok(await controls.evaluate(el => { const anchor = el.closest('[data-blockscene-zone-controls="blocks"]'); const list = anchor?.parentElement?.parentElement?.querySelector(':scope > ol[aria-describedby]'); return Boolean(list && /^blocks\s*\(\d+\)/.test(anchor.parentElement.textContent.trim())) }), 'controls next to the zone label')
+    await page.locator('[data-blockscene-zone-controls="blocks"]').evaluate(el => el.parentElement.parentElement.scrollIntoView({ block: 'center' }))
+    await page.screenshot({ path: `artifacts/strapi${major}-zone-label-controls.png`, animations: 'disabled' })
     await controls.getByRole('button', { name: 'Open all blocks' }).click()
     await waitOpenCount(2)
     assert.equal((await expanded()).filter(v => v === 'false').length, 1, 'sidebar zone untouched')
@@ -234,6 +238,15 @@ try {
     assert.equal(await page.getByTestId('block-accordion-controls-blocks').count(), 0)
     await firstHeader().click() // native header still works
     await page.waitForFunction(() => document.querySelector('ol[aria-describedby] > li').querySelector('button[aria-expanded]').getAttribute('aria-expanded') === 'true')
+  })
+  await step('row thumbnails follow editor.showRowThumbnails', async () => {
+    await putSettings({})
+    await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor()
+    await page.locator('[data-blockscene-row-thumb]').first().waitFor({ state: 'attached' })
+    await putSettings({ editor: { showRowThumbnails: false } })
+    await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await page.waitForTimeout(800)
+    assert.equal(await page.locator('[data-blockscene-row-thumb]').count(), 0, 'no thumbnails when off')
+    await putSettings({})
   })
   await step('panel bypass restores the native editor and keeps unsaved edits; re-enabling works', async () => {
     await putSettings({ editor: { enabled: false } })
@@ -426,6 +439,53 @@ try {
     await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
     await putSettings({})
     void dialog
+  })
+  if (major === 5) await step('hover sync (Strapi 5): form row -> page block, page block -> form row, edge indicator, divider reset', async () => {
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'split' } })
+    await page.goto(docUrl)
+    await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
+    const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
+    await frame.locator('[data-block-key]').nth(2).waitFor()
+    // Form -> page: a closed row's header marks its block (no scroll); leaving the form clears it.
+    await rows().nth(1).locator('button[aria-expanded]').first().hover()
+    await frame.locator('[data-block-key]').nth(1).and(frame.locator('[data-hovered]')).waitFor()
+    assert.equal(await frame.locator('[data-hovered]').count(), 1)
+    await page.screenshot({ path: 'artifacts/strapi5-split-hover-form.png', animations: 'disabled' })
+    // Page -> form: the matching row gets the highlight attribute; the form row under the pointer is cleared on the page.
+    await frame.locator('[data-block-key]').first().hover()
+    await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li')[0]?.hasAttribute('data-blockscene-hover'))
+    await frame.locator('[data-hovered]').waitFor({ state: 'detached' })
+    await page.screenshot({ path: 'artifacts/strapi5-split-hover-page.png', animations: 'disabled' })
+    await frame.locator('main').hover({ position: { x: 40, y: 4 } })
+    await page.waitForFunction(() => !document.querySelector('[data-blockscene-hover]'))
+    // Out of view: the edge indicator scrolls the form to the row.
+    await page.getByTestId('block-accordion-controls-blocks').getByRole('button', { name: 'Open all blocks' }).click()
+    await waitOpenCount(3)
+    await page.setViewportSize({ width: 1440, height: 560 })
+    // The edit view scrolls inside a container (not the window): back to its top, so the last row is below the fold.
+    await page.evaluate(() => { for (let el = document.querySelector('ol[aria-describedby] > li'); el; el = el.parentElement) if (/(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight) el.scrollTop = 0 })
+    // Opening all blocks may still be scrolling the form: wait until the top of the form is reached and stays.
+    await page.waitForFunction(() => new Promise(done => { const top = () => document.querySelector('ol[aria-describedby] > li').getBoundingClientRect().top; const a = top(); setTimeout(() => done(a === top() && a > 0), 300) }))
+    await frame.locator('[data-block-key]').last().hover()
+    assert.ok(await page.evaluate(() => [...document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li')].pop().getBoundingClientRect().top > innerHeight), 'last row below the fold')
+    const edge = page.getByTestId('page-preview-hover-edge')
+    await edge.waitFor(); assert.equal(await edge.getAttribute('data-direction'), 'down')
+    await edge.click()
+    await page.waitForFunction(() => { const r = [...document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li')].pop().getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight })
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    // Divider: double click resets the split to half of the content area.
+    const resizer = page.getByTestId('page-preview-resizer')
+    const box = await resizer.boundingBox()
+    await page.mouse.move(box.x + 6, box.y + 300); await page.mouse.down(); await page.mouse.move(box.x - 200, box.y + 300); await page.mouse.up()
+    await resizer.dblclick()
+    const half = await page.evaluate(() => { const m = document.getElementById('main-content').getBoundingClientRect(); return Math.abs(document.querySelector('[data-testid="page-preview-pane"]').getBoundingClientRect().width - m.width / 2) <= 2 })
+    assert.ok(half, 'double click resets to 50/50')
+    const at = await resizer.boundingBox()
+    await page.mouse.move(at.x - 200, 300)
+    await page.screenshot({ path: 'artifacts/strapi5-divider.png', clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
+    await resizer.hover()
+    await page.screenshot({ path: 'artifacts/strapi5-divider-hover.png', clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
+    await putSettings({})
   })
   if (major === 5) await step('undo / redo (Strapi 5): gallery insert and field edits, buttons and keyboard, panel and toolbar share one history', async () => {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'split' } })

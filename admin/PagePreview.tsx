@@ -29,6 +29,7 @@ import {
   validateGroups,
   groupRange,
   getIn,
+  hoverKey,
   projectPage,
   validateEdit,
   validateFocus,
@@ -110,12 +111,13 @@ function useMainRect() {
   }, []);
   return rect;
 }
+// Split divider: always visible (4 px, neutral) with a grip pill; primary on hover, drag or focus. 12 px hit area.
 const Handle = styled.div`
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -5px;
-  width: 10px;
+  left: -6px;
+  width: 12px;
   cursor: col-resize;
   z-index: 3;
   touch-action: none;
@@ -125,17 +127,52 @@ const Handle = styled.div`
     top: 0;
     bottom: 0;
     left: 4px;
-    width: 2px;
+    width: 4px;
+    background: ${({ theme }) => theme.colors.neutral200};
+  }
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 1px;
+    width: 10px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 5px;
+    background: ${({ theme }) => theme.colors.neutral300} radial-gradient(circle, ${({ theme }) => theme.colors.neutral0} 1px, transparent 1.5px) center / 10px 6px;
   }
   &:hover::after,
+  &:hover::before,
   &[data-dragging="true"]::after,
-  &:focus-visible::after {
-    background: ${({ theme }) => theme.colors.primary600};
+  &[data-dragging="true"]::before,
+  &:focus-visible::after,
+  &:focus-visible::before {
+    background-color: ${({ theme }) => theme.colors.primary600};
   }
   &:focus-visible {
     outline: none;
   }
 `;
+// Form side of the hover sync: the row highlighted from the page is out of view; a click scrolls to it.
+const EdgeButton = styled.button`
+  position: fixed;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  transform: translateX(-50%);
+  color: ${({ theme }) => theme.colors.neutral0};
+  background: ${({ theme }) => theme.colors.primary600};
+  box-shadow: ${({ theme }) => theme.shadows.popupShadow};
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary700}; outline-offset: 2px; }
+`;
+const HOVER_ATTR = "data-blockscene-hover",
+  HOVER_GRACE = 1200;
 // The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
 const Frame = styled.iframe`
   position: absolute;
@@ -489,6 +526,17 @@ export function PagePreview({
   const [failed, setFailed] = React.useState(false);
   const [attempt, retry] = React.useReducer((n: number) => n + 1, 0);
   const [picking, setPicking] = React.useState<any>(null);
+  // Block hovered in the page (key), its form row when out of view, and the grace before a clear lands.
+  const [hovered, setHovered] = React.useState<string | null>(null);
+  const [edge, setEdge] = React.useState<"up" | "down" | null>(null);
+  const hoverRow = React.useRef<HTMLElement | null>(null);
+  const hoverTimer = React.useRef<any>(0);
+  const overEdge = React.useRef(false);
+  // The clear is skipped while the pointer rests on the edge indicator (the page's null can arrive after it got there).
+  const clearHover = () => {
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => !overEdge.current && setHovered(null), HOVER_GRACE);
+  };
   // Another document or locale: every pending dialog of the previous one is dropped (a stale modal must never write into the new form).
   React.useEffect(() => {
     setPicking(null);
@@ -844,6 +892,15 @@ export function PagePreview({
         );
         return;
       }
+      if (is("hover")) {
+        // A clear waits a moment: the pointer leaving the page for the form must still reach the edge indicator.
+        const next = hoverKey(event.data.key, latest.current);
+        if (next === undefined) return;
+        if (next === null) return clearHover();
+        clearTimeout(hoverTimer.current);
+        setHovered(next);
+        return;
+      }
       const key = typeof event.data?.key === "string" ? event.data.key : "";
       const index = key ? indexOf(key) : -1;
       const uid = index >= 0 ? latest.current[index]?.__component : "";
@@ -906,6 +963,59 @@ export function PagePreview({
     const timer = setTimeout(send, 120);
     return () => clearTimeout(timer);
   }, [values, c.components, ready, active, send, mode]); // mode travels with the update
+  // Form -> page hover: the zone row under the pointer (open or closed), sent only when it changes.
+  React.useEffect(() => {
+    if (!active || !ready) return;
+    let last: string | null = null;
+    const post = (key: string | null) => {
+      if (key === last) return;
+      last = key;
+      iframe.current?.contentWindow?.postMessage({ protocol: PROTOCOL, channel, type: "hover", key }, origin);
+    };
+    const onOver = (event: PointerEvent) => {
+      const list = findZoneList(live.current.zoneLabel);
+      const target = event.target as Node;
+      const index = list?.contains(target)
+        ? [...list.querySelectorAll(":scope > li")].findIndex((li) => li.contains(target))
+        : -1;
+      post(index >= 0 ? blockKey(latest.current[index]) : null);
+    };
+    const onOut = (event: PointerEvent) => {
+      if (!event.relatedTarget) post(null);
+    };
+    document.addEventListener("pointerover", onOver);
+    document.addEventListener("pointerout", onOut);
+    return () => {
+      document.removeEventListener("pointerover", onOver);
+      document.removeEventListener("pointerout", onOut);
+      post(null);
+    };
+  }, [active, ready, channel, origin]);
+  // Page -> form hover: the matching row gets the highlight attribute; out of view, an edge indicator points to it.
+  React.useEffect(() => {
+    const item = hovered && active
+      ? (findZoneList(live.current.zoneLabel)?.querySelectorAll(":scope > li")[indexOf(hovered)] as HTMLElement | undefined)
+      : undefined;
+    hoverRow.current = item || null;
+    if (!item) return setEdge(null);
+    item.setAttribute(HOVER_ATTR, "");
+    const measure = () => {
+      const r = item.getBoundingClientRect();
+      setEdge(r.bottom < 0 ? "up" : r.top > window.innerHeight ? "down" : null);
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      item.removeAttribute(HOVER_ATTR);
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [hovered, active]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (!edge) overEdge.current = false; // an indicator that unmounts under the pointer never gets its pointerleave
+  }, [edge]);
+  React.useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
   if (!zone) return null;
   const modes: Array<[Mode, string]> = [
@@ -1047,12 +1157,33 @@ export function PagePreview({
               userSelect: dragging ? "none" : undefined,
             }}
           >
-            <style>{SPLIT_STYLE}</style>
+            <style>{`${SPLIT_STYLE}\n[${HOVER_ATTR}] { outline: 2px solid ${theme?.colors?.primary600 || "#4945ff"}; outline-offset: 2px; border-radius: 4px; }`}</style>
+            {resizable && edge && (
+              <EdgeButton
+                type="button"
+                data-testid="page-preview-hover-edge"
+                data-direction={edge}
+                aria-label={t.scrollToHovered}
+                title={t.scrollToHovered}
+                style={{ left: main.left + (main.width - paneWidth) / 2, ...(edge === "up" ? { top: 16 } : { bottom: 16 }) }}
+                onPointerEnter={() => {
+                  overEdge.current = true;
+                }}
+                onPointerLeave={() => {
+                  overEdge.current = false;
+                  clearHover();
+                }}
+                onClick={() => hoverRow.current?.scrollIntoView({ block: "center", behavior: "smooth" })}
+              >
+                <Icon name={edge} size={16} />
+              </EdgeButton>
+            )}
             {resizable && (
               <Handle
                 role="separator"
                 aria-orientation="vertical"
                 aria-label={t.resize}
+                title={t.resizeHint}
                 tabIndex={0}
                 aria-valuemin={MIN_PANE}
                 aria-valuemax={Math.max(MIN_PANE, vw - MIN_FORM)}
@@ -1075,6 +1206,7 @@ export function PagePreview({
                   applyWidth(main.left + main.width - e.clientX, true);
                 }}
                 onPointerCancel={() => setDragging(false)}
+                onDoubleClick={() => applyWidth(vw / 2, true)}
                 onKeyDown={onKey}
               />
             )}
