@@ -23,6 +23,8 @@ const PATHS: Record<string, string> = {
   desktop: 'M3 4h18v12H3zM8 20h8M12 16v4',
   expand: 'M7 7l5 5 5-5M7 13l5 5 5-5',
   collapse: 'M7 17l5-5 5 5M7 11l5-5 5 5',
+  undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
+  redo: 'M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
   // Gallery: navigation, card actions and typologies (text, media, listing and cta reuse text, image, list and link).
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',

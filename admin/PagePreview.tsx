@@ -35,6 +35,7 @@ import {
 } from "./preview.mjs";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
+import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
 // (split) or over (preview) the native form, which stays mounted. Works with
@@ -355,6 +356,74 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
   );
 }
 
+// Undo/redo of the whole edit view: snapshots of the native form values, one step per ~400 ms of continuous change.
+// A new document, locale or loaded initial values (a Save re-initialises the form) starts a fresh history.
+const COALESCE_MS = 400;
+const clone = (value: any) => {
+  try {
+    return structuredClone(value);
+  } catch {
+    return value;
+  }
+};
+// Fields keep their own native undo: the shortcut is ours only when the focus is outside them.
+const inField = (el: any) =>
+  el instanceof Element &&
+  ((el as HTMLElement).isContentEditable ||
+    Boolean(el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .ck')));
+function useFormHistory(docKey: string, enabled: boolean) {
+  const values = useForm("BlocksceneHistory", (state: any) => state.values);
+  const initialValues = useForm("BlocksceneHistory", (state: any) => state.initialValues);
+  const setValues = useForm("BlocksceneHistory", (state: any) => state.setValues);
+  const state = React.useRef<any>(null);
+  const [, rerender] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const s = state.current;
+    if (!s || s.key !== docKey || s.initial !== initialValues) {
+      state.current = { key: docKey, initial: initialValues, h: createHistory(clone(values)), at: 0, applied: null };
+      return rerender();
+    }
+    // Our own undo/redo coming back through the form: already the present step (SET_VALUES keeps the reference).
+    if (values === s.applied) return;
+    const now = Date.now();
+    s.h = record(s.h, clone(values), now - s.at < COALESCE_MS);
+    s.at = now;
+    rerender();
+  }, [values, initialValues, docKey]);
+  const apply = (step: typeof undo) => {
+    const s = state.current;
+    const next = s && step(s.h);
+    if (!enabled || !next || next === s.h || typeof setValues !== "function") return;
+    s.h = next;
+    s.at = 0; // the next change starts a new step
+    s.applied = clone(next.present);
+    setValues(s.applied);
+    rerender();
+  };
+  const live = React.useRef(apply);
+  live.current = apply;
+  React.useEffect(() => {
+    if (!enabled) return;
+    // The preview iframe is cross-origin: shortcuts pressed inside it never reach this document.
+    const onKey = (event: KeyboardEvent) => {
+      const action = historyKey(event);
+      if (!action || event.defaultPrevented || inField(event.target)) return;
+      event.preventDefault();
+      live.current(action === "undo" ? undo : redo);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled]);
+  const h = state.current?.h;
+  return {
+    canUndo: enabled && Boolean(h?.past.length),
+    canRedo: enabled && Boolean(h?.future.length),
+    undo: () => apply(undo),
+    redo: () => apply(redo),
+  };
+}
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
 export function PagePreview({
   editor,
   groups = null,
@@ -391,6 +460,10 @@ export function PagePreview({
     (state: any) => state.moveFieldRow,
   );
   const fields = c.layout?.edit?.layout?.flat(3) || [];
+  const history = useFormHistory(
+    `${c.model}:${c.id || "new"}:${c.form?.initialValues?.locale || ""}`,
+    !c.form?.disabled,
+  );
   // Same zone rules as the gallery panel: the first Dynamic Zone the user may read (create: any), never a conditional one;
   // editing additionally needs the update/create permission on the field and an enabled, non-disabled form.
   const readable = (name: string) =>
@@ -866,6 +939,12 @@ export function PagePreview({
       ))}
     </Flex>
   );
+  const historyTools = !c.form?.disabled && (
+    <Flex gap={1} data-testid="blockscene-history" role="group" aria-label={t.historyGroup}>
+      <Tool icon="undo" label={`${t.undo} (${MAC ? "⌘Z" : "Ctrl+Z"})`} disabled={!history.canUndo} onClick={history.undo} />
+      <Tool icon="redo" label={`${t.redo} (${MAC ? "⇧⌘Z" : "Ctrl+Y"})`} disabled={!history.canRedo} onClick={history.redo} />
+    </Flex>
+  );
   const devices = (
     <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
       {(Object.keys(DEVICES) as Device[]).map((value) => (
@@ -958,7 +1037,10 @@ export function PagePreview({
   );
   return (
     <Flex direction="column" alignItems="stretch" gap={2} ref={anchor}>
-      {switcher}
+      <Flex gap={2} wrap="wrap">
+        {switcher}
+        {historyTools}
+      </Flex>
       {diagnostics}
       <Typography variant="pi" textColor="neutral600">
         {url ? t.previewHelp : t.previewNoUrl}
@@ -1019,6 +1101,7 @@ export function PagePreview({
               style={{ position: "sticky", top: 0, zIndex: 2 }}
             >
               {switcher}
+              {historyTools}
               {devices}
               <Flex
                 gap={2}

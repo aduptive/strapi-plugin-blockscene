@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Undo and redo of the whole edit view (Strapi 5): buttons in the Blockscene
+  panel and the pane toolbar, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y outside
+  text fields. Steps coalesce within 400 ms, up to 100; the history starts over
+  on another document, locale or after a Save.
 - Project defaults from code: the plugin config `settings` (same shape as the
   stored settings) is the baseline under what the Settings page saves. Saved
   palette/editor keys win key by key, saved components/contentTypes entries

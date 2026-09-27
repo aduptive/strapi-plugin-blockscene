@@ -297,6 +297,23 @@ fields open the native Media Library. Everything is validated against the schema
 and the zone's edit permission; a published page never receives unsaved values
 by itself. Strapi 4 does not have this panel yet (see `docs/BACKLOG.md`).
 
+### Undo and redo
+
+The Blockscene panel and the pane toolbar have Undo and Redo buttons (Strapi 5).
+They step through the whole edit view: blocks inserted, removed or moved from the
+gallery, the page, groups or the native actions, and any field edit. Changes
+within 400 ms of each other are one step, so a burst of typing undoes at once;
+up to 100 steps. Shortcuts: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y, only while
+the focus is outside a text field, select or rich text editor (those keep their
+own undo).
+
+Limits: the history lives in the open edit view and starts over when the
+document, the locale or its loaded values change, so a Save clears it. Shortcuts
+pressed inside the preview page are not seen (it is another origin); use the
+buttons there. A custom field that reads its value only once on mount keeps
+showing the old text after an undo until the view reloads (CKEditor has not
+been verified in the lab).
+
 ## Layout groups (optional)
 
 Some sites keep "wrappers" in the flat Dynamic Zone: an OPEN component, the

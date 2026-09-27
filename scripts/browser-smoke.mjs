@@ -416,6 +416,43 @@ try {
     await putSettings({})
     void dialog
   })
+  if (major === 5) await step('undo / redo (Strapi 5): gallery insert and field edits, buttons and keyboard, panel and toolbar share one history', async () => {
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'split' } })
+    await page.goto(docUrl)
+    const tools = page.getByTestId('blockscene-history')
+    const undoButton = tools.first().getByRole('button', { name: /^Undo/ }), redoButton = tools.first().getByRole('button', { name: /^Redo/ })
+    await undoButton.waitFor(); await page.getByTestId('page-preview-pane').waitFor()
+    assert.equal(await tools.count(), 2, 'side panel and preview toolbar')
+    assert.ok(await undoButton.isDisabled() && await redoButton.isDisabled(), 'fresh history')
+    const zoneRows = () => page.locator('ol[aria-describedby]').first().locator(':scope > li')
+    const titleInput = page.locator('input[name="title"]')
+    const original = await titleInput.inputValue(), count = await zoneRows().count()
+    const expect = async (rows, title) => {
+      await page.waitForFunction(([rows, title]) => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === rows && document.querySelector('input[name="title"]')?.value === title, [rows, title])
+    }
+    await page.getByTestId('open-gallery-blocks').click()
+    await page.getByTestId('blockscene-blocks.text').hover(); await page.getByTestId('gallery-quick-blocks.text').click()
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    await expect(count + 1, original)
+    await new Promise(r => setTimeout(r, 600))
+    await titleInput.fill('Undo me')
+    await new Promise(r => setTimeout(r, 600))
+    // Continuous typing is one step.
+    await titleInput.click(); await page.keyboard.press('End'); await page.keyboard.type(' twice')
+    await expect(count + 1, 'Undo me twice')
+    assert.ok(!(await page.getByTestId('page-preview-pane').getByTestId('blockscene-history').getByRole('button', { name: /^Undo/ }).isDisabled()), 'toolbar shares the history')
+    await page.getByTestId('page-preview-pane').screenshot({ path: 'artifacts/strapi5-undo-toolbar.png', animations: 'disabled' })
+    await undoButton.click(); await expect(count + 1, 'Undo me')
+    await undoButton.click(); await expect(count + 1, original)
+    // Focus on a button (outside every field): the shortcut is ours.
+    await page.keyboard.press('ControlOrMeta+z'); await expect(count, original)
+    assert.ok(await undoButton.isDisabled(), 'back to the loaded values')
+    await page.keyboard.press('ControlOrMeta+Shift+z'); await expect(count + 1, original)
+    await redoButton.click(); await expect(count + 1, 'Undo me')
+    await tools.first().locator('xpath=..').screenshot({ path: 'artifacts/strapi5-undo-panel.png', animations: 'disabled' })
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    await putSettings({})
+  })
   if (major === 5) await step('settings sidebar editor (Strapi 5): an item built in the UI is saved, shown in the visual editor and opens its field; reset', async () => {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     await page.goto('/admin/settings/blockscene')
