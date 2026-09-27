@@ -21,7 +21,7 @@ import {
   componentDefaults,
 } from "./model.mjs";
 import { PROTOCOL, isPreviewMessage, projectPage } from "./preview.mjs";
-import { DEVICES, type Device, frameStyle, useStageSize, STAGE_BACKGROUND } from "./devices";
+import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from "./devices";
 import {
   findZoneList,
   setAll,
@@ -547,9 +547,9 @@ const Stage = styled.div<{ $device: boolean }>`
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background-color: ${STAGE_BACKGROUND.backgroundColor};
-  background-image: ${STAGE_BACKGROUND.backgroundImage};
-  background-size: ${STAGE_BACKGROUND.backgroundSize};
+  background-color: ${({ theme }) => stageBackground(theme).backgroundColor};
+  background-image: ${({ theme }) => stageBackground(theme).backgroundImage};
+  background-size: 24px 24px;
 `;
 // The card's own thumbnail, contained: it shows at once and stays when the live source fails.
 const Still = styled.div<{ $covered: boolean }>`

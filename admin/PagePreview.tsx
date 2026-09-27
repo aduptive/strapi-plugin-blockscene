@@ -33,7 +33,7 @@ import {
   validateEdit,
   validateFocus,
 } from "./preview.mjs";
-import { DEVICES, type Device, frameStyle, useStageSize, STAGE_BACKGROUND } from "./devices";
+import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from "./devices";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
@@ -1134,7 +1134,7 @@ export function PagePreview({
               </div>
             )}
             <div ref={setStage} data-testid="page-preview-stage" data-device={device}
-              style={{ position: "relative", flex: 1, overflow: "hidden", ...STAGE_BACKGROUND }}>
+              style={{ position: "relative", flex: 1, overflow: "hidden", ...stageBackground(theme) }}>
               <Frame
                 key={attempt}
                 ref={iframe}

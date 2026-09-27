@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- Preview canvas: near black with a faint 24 px grid behind the page (whole-page
-  pane and the gallery's magnified block).
+- Preview canvas: the admin's page background with a faint 24 px grid, both from
+  the theme (a customised admin carries over), behind the page (whole-page pane
+  and the gallery's magnified block).
 - Sidebar drawer/modal: the edit view's cards around the shown fields lose their
   border and padding; the drawer is the frame.
 
