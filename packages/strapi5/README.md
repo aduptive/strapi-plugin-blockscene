@@ -45,8 +45,9 @@ module.exports = {
 ```
 
 Rebuild/restart the admin. Open a content type with a Dynamic Zone. The
-editor panel provides one gallery button per editable, non-full zone plus
-"Open all blocks" / "Close all blocks" for zones that already have blocks.
+editor panel provides one gallery button per editable, non-full zone. Zones
+that already have blocks get "Open all blocks" / "Close all blocks" icon
+buttons right beside the native zone label ("blocks (3)").
 
 ## Gallery
 
@@ -130,7 +131,8 @@ opening or closing the row. The sources are the same as the gallery cards,
 minus the wireframe: a block with no image shows nothing, so nothing new is
 invented for blocks that were never captured. The thumbnail is inserted into
 Strapi's own header through the DOM (no Content Manager patch) and is
-restored when Strapi re-renders the list.
+restored when Strapi re-renders the list. Turn it off with the editor option
+`showRowThumbnails: false`.
 
 ## Thumbnail priority
 
@@ -224,6 +226,7 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Editor enhancements enabled | on/off | on |
 | Show "Open all blocks" | yes/no | yes |
 | Show "Close all blocks" | yes/no | yes |
+| Show block thumbnails in the rows (`showRowThumbnails`) | yes/no | yes |
 | Initial accordion state | all closed / all open / remember | all closed |
 | Preview route base URL (Strapi 5) | full URL or empty | empty: native Preview origin |
 | Block preview URL | http(s) URL with placeholders, up to 500 characters, or empty | empty: page preview route, else image |
@@ -254,6 +257,13 @@ preview. The panel posts the live values of the first Dynamic Zone to a page
 your frontend serves; the page renders them with its own components and styles
 and can ask the admin to open a block, edit a field or pick media. Nothing is
 saved or published by the preview.
+
+Side by side, hovering a zone row in the form (open or closed) outlines its
+block in the page, and hovering a block in the page outlines its form row in the
+theme's primary color; hovering never scrolls. When that row is outside the
+visible form, an arrow at the top or bottom edge of the form scrolls to it. The
+divider between form and page drags to resize, takes the arrow keys, Home and
+End, and a double click resets it to half.
 
 ### Visual editor sidebar
 
@@ -295,6 +305,10 @@ Minimal configuration:
 1. Serve a page that implements the bridge. `examples/page-preview/index.html`
    is a framework-free reference: it answers `ready`/`ping`, renders
    `update-page`, and sends `select`, `focus`, `edit`, `media`, `media-remove`.
+   Hover sync is optional: the page sends `{ type: 'hover', key }` (a block
+   key, or `null` off blocks) when it changes, and marks the block of the
+   admin's `{ type: 'hover', key }` without scrolling. A page that ignores it
+   keeps working.
    Keep the origin check (`admin` query parameter or your own constant).
 2. Allow the admin origin to embed it (`Content-Security-Policy: frame-ancestors`)
    and allow the page origin in the Strapi admin CSP (`frame-src`).
