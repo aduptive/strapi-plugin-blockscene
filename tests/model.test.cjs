@@ -223,6 +223,59 @@ test('visual editor sidebar: items name their own type fields, known icons, moda
   assert.deepEqual(merged.contentTypes['api::page.page'].sidebar, sidebar, 'an item naming a removed field is dropped, the rest kept')
 })
 
+test('project defaults from code: under the saved document, per key and per uid; invalid code ignored; DELETE restores', async () => {
+  const plugin = require('../server')
+  const { DEFAULTS } = require('../server/settings')
+  const code = { palette: { accent: '#112233', text: '#445566' }, editor: { previewMode: 'split', initialState: 'open' },
+    components: { 'blocks.hero': { template: 'banner' }, 'blocks.text': { template: 'faq' } },
+    contentTypes: { 'api::page.page': { sidebarPosition: 'right', sidebar: [{ label: 'SEO', open: 'drawer', fields: ['title'] }] } } }
+  const make = (config) => {
+    const db = { settings: null }; const warnings = []
+    const store = { get: async ({ key }) => key === 'settings' ? db.settings : null, set: async ({ value }) => { db.settings = value }, delete: async () => { db.settings = null } }
+    const strapi = { components: { 'blocks.hero': {}, 'blocks.text': {} }, contentTypes: { 'api::page.page': { attributes: { title: {}, blocks: { type: 'dynamiczone' } } } },
+      log: { warn: m => warnings.push(m) }, store: () => store, db: { query: () => ({ findOne: async () => null }) },
+      plugin: () => ({ config: key => config[key], service: () => service }) }
+    const service = plugin.services.settings({ strapi })
+    return { strapi, db, warnings, service }
+  }
+  const { strapi, db, service } = make({ settings: code })
+  let s = await service.get()
+  assert.equal(s.palette.accent, '#112233'); assert.equal(s.palette.background, DEFAULTS.palette.background)
+  assert.equal(s.editor.previewMode, 'split'); assert.equal(s.contentTypes['api::page.page'].sidebarPosition, 'right')
+  // The admin saves the page as shown, changing one color, one component and the page type: only those are stored.
+  const next = structuredClone(s); next.palette.accent = '#AA0000'; next.components['blocks.hero'] = { template: 'cards' }
+  next.contentTypes['api::page.page'] = { previewMode: 'preview' }; delete next.components['blocks.text']
+  await service.set(next)
+  assert.deepEqual(db.settings.palette, { accent: '#AA0000' }); assert.deepEqual(db.settings.editor, {})
+  assert.deepEqual(db.settings.components, { 'blocks.hero': { template: 'cards' }, 'blocks.text': {} })
+  s = await service.get()
+  assert.equal(s.palette.accent, '#AA0000', 'saved key wins'); assert.equal(s.palette.text, '#445566', 'other keys keep code values')
+  assert.equal(s.editor.initialState, 'open')
+  assert.deepEqual(s.components, { 'blocks.hero': { template: 'cards' } }, 'a saved uid entry replaces the code one; a removed code entry stays removed')
+  assert.deepEqual(s.contentTypes['api::page.page'], { previewMode: 'preview' }, 'the whole type entry is replaced, sidebar included')
+  // A legacy full document (every key) still works: it wins everywhere it speaks.
+  db.settings = { palette: { ...DEFAULTS.palette }, components: {}, contentTypes: {} }
+  assert.equal((await service.get()).palette.accent, DEFAULTS.palette.accent); assert.equal((await service.get()).editor.previewMode, 'split')
+  // GET exposes the validated code settings; DELETE removes the saved document (and the legacy copy).
+  const ctx = {}
+  await plugin.controllers.settings({ strapi }).find(ctx)
+  assert.equal(ctx.body.projectDefaults.palette.accent, '#112233')
+  await plugin.controllers.settings({ strapi }).reset(ctx)
+  assert.equal(db.settings, null); assert.equal(ctx.body.palette.accent, '#112233'); assert.equal(ctx.body.components['blocks.text'].template, 'faq')
+  const route = plugin.routes.admin.routes.find(r => r.method === 'DELETE' && r.path === '/settings')
+  assert.equal(route.handler, 'settings.reset')
+  assert.ok(route.config.policies.some(p => p.config?.actions?.includes('plugin::blockscene.settings.update')), 'DELETE needs the update permission')
+  // Invalid code settings: a warning naming the problem, then the built-in defaults.
+  const bad = make({ settings: { palette: { accent: 'red' } } })
+  assert.equal(bad.service.projectDefaults(), null)
+  assert.match(bad.warnings[0], /"settings" config ignored: Color "accent" must use #RRGGBB/)
+  assert.equal((await bad.service.get()).palette.accent, DEFAULTS.palette.accent)
+  const none = make({})
+  assert.equal(none.service.projectDefaults(), null); assert.equal(none.warnings.length, 0)
+  await none.service.set({ palette: { accent: '#000000' } })
+  assert.equal(none.db.settings.editor.previewMode, 'form', 'without code settings the full document is stored, as before')
+})
+
 test('gallery taxonomy: facets from the schema one level deep, typology guess, overrides and legacy category as tag', () => {
   const { facetsOf, guessTypology, catalog } = require('../server/settings')
   const schemas = {

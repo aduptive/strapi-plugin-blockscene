@@ -416,6 +416,43 @@ try {
     await putSettings({})
     void dialog
   })
+  if (major === 5) await step('settings sidebar editor (Strapi 5): an item built in the UI is saved, shown in the visual editor and opens its field; reset', async () => {
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
+    await page.goto('/admin/settings/blockscene')
+    const uid = 'api::page.page'
+    const editor = page.getByTestId(`sidebar-editor-${uid}`)
+    await editor.waitFor()
+    await page.getByTestId(`sidebar-add-${uid}`).click()
+    await editor.getByText(/Give the item a label/).waitFor()
+    assert.ok(await page.getByTestId('save-blockscene-settings').isDisabled(), 'an invalid item blocks Save')
+    await editor.locator(`input[name="sidebar-label-${uid}-0"]`).fill('Page title')
+    await editor.getByRole('combobox', { name: 'Icon' }).click(); await page.getByRole('option', { name: 'Text', exact: true }).click()
+    await editor.getByRole('combobox', { name: 'Opens as' }).click(); await page.getByRole('option', { name: 'Modal' }).click()
+    await editor.getByRole('combobox', { name: 'Sidebar position' }).click(); await page.getByRole('option', { name: 'Right' }).click()
+    await editor.locator(`input[name="sidebar-field-title-${uid}-0"]`).check()
+    assert.equal(await editor.getByText(/Give the item a label/).count(), 0)
+    await editor.screenshot({ path: `artifacts/strapi${major}-settings-sidebar.png`, animations: 'disabled' })
+    await page.getByTestId('save-blockscene-settings').click()
+    await page.getByText('Settings saved.', { exact: true }).waitFor()
+    assert.deepEqual((await api('GET', '/blockscene/settings')).data.settings.contentTypes[uid],
+      { sidebarPosition: 'right', sidebar: [{ label: 'Page title', open: 'modal', fields: ['title'], icon: 'text' }] })
+    await page.goto(docUrl)
+    await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Visual editor', exact: true }).click()
+    await page.locator('[data-testid="page-preview-sidebar"][data-position="right"]').waitFor()
+    const button = page.getByTestId('sidebar-item-0')
+    assert.equal(await button.getAttribute('title'), 'Page title')
+    await button.click()
+    await page.getByTestId('fields-panel-bar').getByText('Page title').waitFor()
+    await page.locator('[data-bp-fields="modal"] input[name="title"]').waitFor({ state: 'visible' })
+    await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    // Reset from the page: no code defaults in the lab, so the built-in ones.
+    await page.goto('/admin/settings/blockscene')
+    await page.getByTestId('restore-blockscene-settings').getByText('Reset to defaults').click()
+    await page.getByText('Defaults restored.', { exact: true }).waitFor()
+    const after = (await api('GET', '/blockscene/settings')).data
+    assert.deepEqual(after.settings.contentTypes, {}); assert.equal(after.projectDefaults, null)
+  })
   const GROUPS_MODE = process.env.BLOCK_PICKER_GROUPS || '1'
   await step(`layout groups, ${GROUPS_MODE === '1' ? 'configured pair' : 'no config'}: gallery insertion, server publish guard (single, bulk), balanced documents publish${major === 5 ? ', preview group tools and diagnostics' : ''}`, async () => {
     const catalogData = (await api('GET', '/blockscene/catalog')).data

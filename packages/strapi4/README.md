@@ -145,7 +145,51 @@ needed for the gallery to pick them up. Reading requires the
   button, initial accordion state and the initial block mode.
 - Content types: every project type with a Dynamic Zone, each with on/off
   (off leaves its edit view fully native) and, on Strapi 5, the mode its edit
-  views open in ("Default" follows the global preview mode).
+  views open in ("Default" follows the global preview mode) and its visual
+  editor sidebar (see below).
+- "Restore project defaults" (or "Reset to defaults" when the project has no
+  code defaults), after a confirmation, deletes what was saved here
+  (`DELETE /blockscene/settings`, same permission as saving).
+
+### Project defaults from code
+
+A project can ship its baseline in the plugin config, with the same shape as
+the stored settings (every key optional):
+
+```js
+// config/plugins.js
+module.exports = {
+  blockscene: { config: { settings: require('./blockscene.json') } },
+}
+// config/blockscene.json
+{
+  "palette": { "accent": "#AA3300" },
+  "editor": { "previewMode": "split", "initialState": "open" },
+  "components": { "blocks.faq": { "template": "faq", "typology": "text" } },
+  "contentTypes": {
+    "api::page.page": {
+      "sidebarPosition": "right",
+      "sidebar": [{ "label": "SEO", "icon": "seo", "open": "drawer", "fields": ["seo"] }]
+    }
+  }
+}
+```
+
+The effective settings are the built-in defaults, then the code `settings`,
+then what was saved on the page:
+
+- `palette` and `editor`: a saved key wins over the code key by key.
+- `components` and `contentTypes`: a saved entry replaces the code entry for
+  that uid as a whole (a saved `api::page.page` entry replaces its code
+  sidebar too); other uids keep their code values.
+
+Saving stores only what differs from the code defaults, so later changes to the
+code reach every key nobody overrode. A document saved before the project had
+code defaults holds every palette and editor key, and those keep winning until
+"Restore project defaults". The code settings are checked at boot with the same
+rules as `PUT`; if they are invalid a warning names the problem and they are
+ignored (boot continues). `GET /blockscene/settings` returns them as
+`projectDefaults` (null when absent or invalid).
 
 ### Editor preferences
 
@@ -193,7 +237,7 @@ field hidden, so components, repeatable components, media, relations and custom
 fields all keep working. Done, Esc or the backdrop put the form back.
 
 ```js
-// Settings, Blockscene (stored), for now through PUT /blockscene/settings:
+// Settings, Blockscene, Content types (or PUT /blockscene/settings, or the code `settings`):
 contentTypes: {
   'api::page.page': {
     sidebarPosition: 'left', // left | right | bottom
@@ -208,6 +252,11 @@ contentTypes: {
 Icons: text, tag, seo, settings, image, link, palette, list, globe, info (or
 none). Fields are the type's own top-level attributes; an item naming a field
 removed from the schema is dropped on read. Up to 12 items.
+
+The Settings page edits it under each enabled content type: position, then per
+item the label, icon, drawer or modal, the fields (checkboxes), move up/down and
+remove. An item without a label or without fields is flagged and blocks Save.
+Removing every item removes the override.
 
 The pane toolbar sets the page width: Fit (the pane), Mobile (390 px), Tablet
 (834 px) or Desktop (1440 px). A device renders at its own width and scales down

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Project defaults from code: the plugin config `settings` (same shape as the
+  stored settings) is the baseline under what the Settings page saves. Saved
+  palette/editor keys win key by key, saved components/contentTypes entries
+  per uid; only the differences are stored. Invalid code settings are ignored
+  with a warning. `GET /blockscene/settings` returns `projectDefaults`;
+  `DELETE /blockscene/settings` and the "Restore project defaults" / "Reset to
+  defaults" button remove the saved document.
+- Settings: visual editor sidebar editor per content type (Strapi 5): position,
+  items with label, icon, drawer or modal, fields, reorder and remove, up to 12.
+  Invalid items block Save.
+
 - Gallery as a block browser: collapsible sidebar (All, Recently used,
   Starred, typologies), Tags/Media/Content filter menus with chips, facet
   badges, stars, hover quick insert and a detail pane. Facets come from the

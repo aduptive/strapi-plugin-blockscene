@@ -183,7 +183,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     const clean = { ...entry }
     if ('typology' in clean && !TYPOLOGIES.includes(clean.typology)) delete clean.typology
     if ('tags' in clean) { clean.tags = cleanTags(clean.tags); if (!clean.tags.length) delete clean.tags }
-    out.components[uid] = clean
+    if (Object.keys(clean).length) out.components[uid] = clean
   }
   for (const [uid, entry] of Object.entries(saved.contentTypes || {})) {
     if (!(uid in types) || !entry || typeof entry !== 'object') continue
@@ -193,6 +193,25 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     if (Object.keys(clean).length) out.contentTypes[uid] = clean
   }
   return out
+}
+
+// Project baseline (plugin config `settings`, validated) under the saved document: palette and editor key by key,
+// components and contentTypes per uid entry (a saved entry replaces the code entry for that uid).
+const ENTRY_KEYS = ['components', 'contentTypes']
+function layer(base, saved) {
+  if (!base) return saved
+  const doc = saved && typeof saved === 'object' ? saved : {}
+  return Object.fromEntries(Object.keys(DEFAULTS).map(key => [key, { ...base[key], ...(doc[key] && typeof doc[key] === 'object' ? doc[key] : {}) }]))
+}
+// What to store: only what differs from the baseline, so later code changes still reach untouched keys. A baseline
+// uid the admin removed is kept as {} (an empty entry replaces the code entry and is then dropped on read).
+function overrides(next, base) {
+  if (!base) return next
+  return Object.fromEntries(Object.keys(DEFAULTS).map(key => {
+    const entries = Object.entries(next[key] || {}).filter(([name, value]) => JSON.stringify(value) !== JSON.stringify(base[key]?.[name]))
+    if (ENTRY_KEYS.includes(key)) for (const uid of Object.keys(base[key] || {})) if (!(uid in (next[key] || {}))) entries.push([uid, {}])
+    return [key, Object.fromEntries(entries)]
+  }))
 }
 
 // Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.
@@ -210,4 +229,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, safeUrl, fail }
+module.exports = { PLUGIN, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, safeUrl, fail }

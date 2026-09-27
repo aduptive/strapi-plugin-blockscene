@@ -172,10 +172,11 @@ const SelectField = ({
     <SingleSelect
       value={value}
       disabled={disabled}
+      startIcon={options.find((o: any) => o.value === value)?.icon}
       onChange={(v: any) => onChange(String(v))}
     >
       {options.map((o: any) => (
-        <SingleSelectOption key={o.value} value={o.value}>
+        <SingleSelectOption key={o.value} value={o.value} startIcon={o.icon}>
           {o.label}
         </SingleSelectOption>
       ))}

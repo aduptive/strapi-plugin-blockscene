@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, mergeSaved, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
 
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
@@ -121,7 +121,9 @@ module.exports = {
       blockPreview: false,
       // Optional layout groups: OPEN component uid -> its CLOSE uid, e.g. { 'wrappers.join': 'wrappers.close' }.
       // Empty/absent: every Dynamic Zone component is an ordinary block. See README "Layout groups".
-      groups: null },
+      groups: null,
+      // Project defaults from code: same shape as the stored settings, e.g. require('./blockscene.json'). See README "Settings page".
+      settings: null },
     validator: catalog,
   },
   async bootstrap({ strapi }) {
@@ -129,19 +131,39 @@ module.exports = {
       { section: 'plugins', displayName: 'Read gallery settings', uid: 'settings.read', pluginName: PLUGIN },
       { section: 'plugins', displayName: 'Change gallery settings', uid: 'settings.update', pluginName: PLUGIN },
     ])
+    strapi.plugin(PLUGIN).service('settings').projectDefaults()
     registerPublishGuard(strapi)
   },
-  services: { settings: ({ strapi }) => ({
-    async get() { return mergeSaved(await readSettings(strapi), componentUids(strapi), contentTypeUids(strapi)) },
-    async set(value) {
-      const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
-      for (const [uid, entry] of Object.entries(next.components)) {
-        if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
-      }
-      await store(strapi).set({ key: 'settings', value: next })
-      return next
-    },
-  }) },
+  services: { settings: ({ strapi }) => {
+    // Code settings (plugin config `settings`): validated once, strictly; invalid ones are ignored with a warning.
+    let project
+    const projectDefaults = () => {
+      if (project !== undefined) return project
+      const code = strapi.plugin(PLUGIN).config('settings')
+      project = null
+      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi)) }
+      catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
+      return project
+    }
+    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi))
+    return {
+      projectDefaults, get,
+      async set(value) {
+        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
+        for (const [uid, entry] of Object.entries(next.components)) {
+          if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
+        }
+        await store(strapi).set({ key: 'settings', value: overrides(next, projectDefaults()) })
+        return next
+      },
+      // Back to the project defaults (or the built-in ones); the legacy copy goes too, or it would be migrated again.
+      async reset() {
+        await store(strapi).delete({ key: 'settings' })
+        await strapi.store({ type: 'plugin', name: LEGACY_PLUGIN }).delete({ key: 'settings' })
+        return get()
+      },
+    }
+  } },
   controllers: {
     catalog: ({ strapi }) => ({
       async find(ctx) {
@@ -169,9 +191,11 @@ module.exports = {
         const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
           attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
         ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES, typologies: TYPOLOGIES,
-          disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS }
+          disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS,
+          projectDefaults: strapi.plugin(PLUGIN).service('settings').projectDefaults() }
       },
       async update(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').set(ctx.request?.body) },
+      async reset(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').reset() },
     }),
     prefs: ({ strapi }) => ({
       async find(ctx) {
@@ -189,8 +213,8 @@ module.exports = {
   routes: { admin: { type: 'admin', routes: [
     { method: 'GET', path: '/catalog', handler: 'catalog.find', config: { policies: ['admin::isAuthenticatedAdmin'] } },
     ...['GET', 'PUT'].map(method => ({ method, path: '/me/prefs', handler: `prefs.${method === 'GET' ? 'find' : 'update'}`, config: { policies: ['admin::isAuthenticatedAdmin'] } })),
-    ...['find', 'update'].map((handler, index) => ({ method: index ? 'PUT' : 'GET', path: '/settings', handler: `settings.${handler}`,
+    ...[['GET', 'find', 'read'], ['PUT', 'update', 'update'], ['DELETE', 'reset', 'update']].map(([method, handler, action]) => ({ method, path: '/settings', handler: `settings.${handler}`,
       config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions',
-        config: { actions: [`plugin::${PLUGIN}.settings.${index ? 'update' : 'read'}`] } }] } })),
+        config: { actions: [`plugin::${PLUGIN}.settings.${action}`] } }] } })),
   ] } },
 }
