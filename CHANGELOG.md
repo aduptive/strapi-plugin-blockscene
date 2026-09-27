@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Lazy rich-text editors (Strapi 5): fields listed in the new editor option
+  `lazyFields` (default `["plugin::ckeditor5.CKEditor"]`, up to 20 custom field
+  uids) render a sanitized read-only preview and mount the real editor on click,
+  Enter/Space or focus. New option `lazyEditors` (default on) with a Settings
+  toggle and uid list. The page preview's field focus activates it first.
+- Open all opens the rows near the viewport a few per frame and the rest as
+  they approach while scrolling; Close all closes the visible rows first and
+  the rest in idle callbacks. On a 34-block CKEditor page (Strapi 5.31) the
+  longest long task went from 2.9 s to 0.14 s (open all) and 1.6 s to 0.14 s
+  (close all).
 - Hover sync (Strapi 5, side by side): a hovered form row outlines its block in
   the page and a hovered block outlines its form row (primary color, no
   scroll); an edge arrow scrolls the form to a row out of view. New bridge

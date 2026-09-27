@@ -12,7 +12,9 @@ const DEFAULTS = {
   // blockPreviewInForm: compact read-only preview above a block's fields in form
   // mode. Only installations that ship the accordion integration (server config
   // `blockPreview: true`) show and honour it; the page preview is the editor.
-  editor: { enabled: true, showOpenAll: true, showCloseAll: true, showRowThumbnails: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewUrl: '', blockPreviewInForm: false },
+  editor: { enabled: true, showOpenAll: true, showCloseAll: true, showRowThumbnails: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewUrl: '', blockPreviewInForm: false,
+    // Strapi 5: rich-text custom fields render a read-only preview until clicked (see admin/LazyInput.tsx).
+    lazyEditors: true, lazyFields: ['plugin::ckeditor5.CKEditor'] },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -42,6 +44,8 @@ const PREVIEW_URL = /^https?:\/\/[^\s"'<>]{1,500}$/
 const blockPreviewUrl = value => typeof value === 'string' && (value === '' || (PREVIEW_URL.test(value) &&
   !/[{}]/.test(value.replace(/\{(uid|name|category|variant|locale)\}/g, '')) && URL.canParse?.(value.replace(/[{}]/g, '')) !== false))
 const COLOR = /^#[0-9A-Fa-f]{6}$/
+const FIELD_UID = /^(plugin|global)::[\w.-]+$/
+const lazyFields = value => Array.isArray(value) && value.length <= 20 && value.every(uid => typeof uid === 'string' && FIELD_UID.test(uid))
 const UID = /^[a-z0-9-]+\.[a-z0-9-]+$/
 
 // Gallery taxonomy. Facets are read from the schema; the typology is guessed from the name unless overridden.
@@ -135,9 +139,9 @@ function validateSettings(input, componentUids, contentTypeUids = []) {
     if (!(key in DEFAULTS.editor)) fail(`Unknown editor option "${key}"`)
     const valid = key === 'initialState' ? INITIAL_STATES.includes(value) : key === 'previewMode' ? PREVIEW_MODES.includes(value)
       : key === 'previewUrl' ? value === '' || (typeof value === 'string' && PREVIEW_URL.test(value))
-      : key === 'blockPreviewUrl' ? blockPreviewUrl(value) : typeof value === 'boolean'
+      : key === 'blockPreviewUrl' ? blockPreviewUrl(value) : key === 'lazyFields' ? lazyFields(value) : typeof value === 'boolean'
     if (!valid) fail(`Invalid value for editor option "${key}"`)
-    out.editor[key] = key === 'previewUrl' && value ? String(new URL(value).href).replace(/\/$/, '') : value
+    out.editor[key] = key === 'previewUrl' && value ? String(new URL(value).href).replace(/\/$/, '') : key === 'lazyFields' ? [...new Set(value)] : value
   }
   const components = input.components || {}
   if (typeof components !== 'object' || Array.isArray(components)) fail('components must be an object')
@@ -181,6 +185,8 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     if (key === 'previewMode' && !PREVIEW_MODES.includes(value)) continue
     if (key === 'previewUrl' && value && !PREVIEW_URL.test(value)) continue
     if (key === 'blockPreviewUrl' && !blockPreviewUrl(value)) continue
+    // A list with a bad uid keeps its valid ones.
+    if (key === 'lazyFields') { if (!Array.isArray(value)) continue; out.editor[key] = [...new Set(value.filter(uid => lazyFields([uid])))].slice(0, 20); continue }
     out.editor[key] = value
   }
   for (const [uid, entry] of Object.entries(saved.components || {})) {

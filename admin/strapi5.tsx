@@ -27,6 +27,7 @@ import { editableZones, canInsert, componentDefaults } from "./model.mjs";
 import { Guard } from "./Guard";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
+import { setLazyConfig, wrapCustomFields } from "./LazyInput";
 
 function Modal({ open, onOpenChange, trigger, title, children }: any) {
   // Controlled callers (row previews, insertion gaps) pass no trigger: Dialog.Trigger requires a single element child.
@@ -94,6 +95,11 @@ function Panel() {
     return true;
   };
   const typeSettings = catalog?.contentTypes?.[c.model] || {};
+  const lazy = Boolean(catalog?.editor?.enabled && catalog.editor.lazyEditors !== false && typeSettings.enabled !== false);
+  const lazyFields = (catalog?.editor?.lazyFields || []).join(",");
+  React.useEffect(() => {
+    if (catalog) setLazyConfig({ on: lazy, fields: lazyFields ? lazyFields.split(",") : [] });
+  }, [catalog, lazy, lazyFields]);
   if (!zones.length || !catalog?.editor?.enabled || typeSettings.enabled === false) return null;
   const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
   return {
@@ -226,13 +232,18 @@ const SettingsPage = () => (
   />
   </Guard>
 );
+// bootstrap() only receives a few helpers; the custom fields registry lives on the app that register() gets.
+let strapiApp: any = null;
 export default {
   register(app: any) {
+    strapiApp = app;
     register(app, SettingsPage, "blockscene");
     app.registerPlugin({ id: "blockscene", name: "Blockscene" });
   },
   registerTrads,
   bootstrap(app: any) {
     app.getPlugin("content-manager").apis.addEditViewSidePanel([Panel]);
+    // Every plugin has registered its custom fields by now.
+    wrapCustomFields(strapiApp);
   },
 };

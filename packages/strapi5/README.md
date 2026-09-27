@@ -228,6 +228,8 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Show "Close all blocks" | yes/no | yes |
 | Show block thumbnails in the rows (`showRowThumbnails`) | yes/no | yes |
 | Initial accordion state | all closed / all open / remember | all closed |
+| Load rich-text editors on demand (`lazyEditors`, Strapi 5) | yes/no | yes |
+| Custom fields loaded on demand (`lazyFields`, Strapi 5) | up to 20 uids `plugin::x.y` / `global::x` | `["plugin::ckeditor5.CKEditor"]` |
 | Preview route base URL (Strapi 5) | full URL or empty | empty: native Preview origin |
 | Block preview URL | http(s) URL with placeholders, up to 500 characters, or empty | empty: page preview route, else image |
 | Initial preview mode (Strapi 5) | form / side by side / preview | form |
@@ -238,6 +240,16 @@ mode. Editors can switch while they edit; the switch is not remembered.
 The initial state is applied once per document/locale after the blocks
 render; edits, reorders and newly inserted blocks are not re-applied. Hiding a
 button only hides it; native accordion headers keep working.
+
+Lazy editors: a custom field listed in `lazyFields` first shows a read-only
+preview of its HTML (same label, hint and error; scripts, frames, styles, event
+handlers and `javascript:` URLs removed) and mounts the real editor on click,
+Enter/Space or keyboard focus, then puts the caret in it. Once mounted it stays
+for that view; closing and reopening the block shows the preview again.
+Disabled fields only show the preview. The wrapper is installed on every
+registered custom field at boot and passes the others straight through; until
+the catalog loads, and when the plugin or the content type is off, every field
+is native.
 
 "Remember" stores only the last explicit open all / close all click, as
 `open`/`closed` in the browser's localStorage, keyed by admin URL, user id,
@@ -495,11 +507,13 @@ installs without overrides, not a promise for every minor in between. Strapi
 - Authenticated admin catalog endpoint exposes only supported metadata, resolved
   override URLs, palette and editor preferences; never the whole config.
 - Top-level Dynamic Zones only. Conditional fields are omitted conservatively.
-- "Open all" / "Close all" drive the native accordions: opening is batched into
-  one render; closing yields a frame per block so the admin stays responsive.
-  On a page with about 34 blocks whose fields include CKEditor, closing still
-  takes a few seconds with pauses up to about 1.7 s: that is the editors being
-  torn down by the host, not the plugin's loop.
+- "Open all" / "Close all" drive the native accordions without touching the
+  whole list at once: open all opens the rows in and near the visible area, a
+  few per frame, and the others as they approach while scrolling (until Close
+  all or leaving the document); close all closes the visible rows at once and
+  the rest in idle time. With lazy editors, on a 34-block page with CKEditor
+  fields (Strapi 5.31) the longest pause went from about 2.9 s to 0.14 s on
+  open all and from 1.6 s to 0.14 s on close all.
 - No screenshot server, no hourly job, no in-editor rendered preview.
 - Removing the plugin leaves native content intact; remove its config entry and
   rebuild. No plugin data migration is needed.

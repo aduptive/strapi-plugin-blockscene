@@ -25,6 +25,7 @@ import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from 
 import {
   findZoneList,
   setAll,
+  stopAll,
   toggles,
   isNativeAddButton,
 } from "./accordions.mjs";
@@ -1335,6 +1336,8 @@ export function Gallery({
   ...props
 }: any) {
   useInitialAccordions({ zones, editor, docKey, contentType, userId });
+  // A pending open all / close all belongs to the document it was started on.
+  React.useEffect(() => stopAll, [docKey]);
   return (
     <Flex direction="column" alignItems="stretch" gap={3}>
       {editor.showRowThumbnails !== false && (

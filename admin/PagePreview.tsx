@@ -686,7 +686,7 @@ export function PagePreview({
       );
       if (!target) return;
       const INPUT =
-        '.ck-editor__editable, textarea, input:not([type="hidden"]), select';
+        '[data-blockscene-lazy], .ck-editor__editable, textarea, input:not([type="hidden"]), select';
       let container: HTMLElement | null = target.matches(INPUT)
         ? target
         : target.parentElement;
@@ -702,9 +702,11 @@ export function PagePreview({
       // CKEditor also renders a hidden helper input (.ck-hidden): prefer its editable, and never a field that is not rendered.
       const editable = container?.matches(INPUT)
         ? container
-        : container?.querySelector<HTMLElement>(".ck-editor__editable") ||
+        : container?.querySelector<HTMLElement>("[data-blockscene-lazy], .ck-editor__editable") ||
           [...(container?.querySelectorAll<HTMLElement>(INPUT) || [])].find((el) => el.getClientRects().length > 0);
       if (!editable) return;
+      // A lazy rich-text field shows a preview until clicked: mount the editor, then focus it on a later tick.
+      if (editable.matches("[data-blockscene-lazy]")) return editable.click();
       if (
         editable.classList.contains("ck-editor__editable") &&
         !editable.isContentEditable

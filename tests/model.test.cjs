@@ -417,3 +417,51 @@ test('hover messages: null clears, only keys of current rows pass', async () => 
   for (const bad of ['blocks.hero#4', 3, undefined, {}, 'x'.repeat(201), '']) assert.equal(hoverKey(bad, rows), undefined, `ignores ${String(bad).slice(0, 20)}`)
   assert.equal(hoverKey('a0', null), undefined)
 })
+
+test('open/close all planner: rows in or near the visible area now, the rest later, nearest first', async () => {
+  const { planRows } = await import('../admin/accordions.mjs')
+  const rows = [[-900, -700], [-100, 50], [100, 300], [950, 1100], [1500, 1700], [2100, 2300], [3200, 3400]].map(([top, bottom]) => ({ top, bottom }))
+  const view = { top: 0, bottom: 1000 }
+  assert.deepEqual(planRows(rows, view), { now: [1, 2, 3], later: [4, 0, 5, 6] }, 'close: visible only')
+  assert.deepEqual(planRows(rows, view, 1000), { now: [0, 1, 2, 3, 4], later: [5, 6] }, 'open: one viewport of margin each way')
+  assert.deepEqual(planRows([], view), { now: [], later: [] })
+})
+
+test('lazyFields: strict PUT validation, lenient read, code defaults', () => {
+  const { validateSettings, mergeSaved, DEFAULTS } = require('../server/settings')
+  assert.equal(DEFAULTS.editor.lazyEditors, true)
+  assert.deepEqual(DEFAULTS.editor.lazyFields, ['plugin::ckeditor5.CKEditor'])
+  const ok = validateSettings({ editor: { lazyEditors: false, lazyFields: ['global::rich', 'plugin::ckeditor5.CKEditor', 'global::rich'] } }, [])
+  assert.equal(ok.editor.lazyEditors, false)
+  assert.deepEqual(ok.editor.lazyFields, ['global::rich', 'plugin::ckeditor5.CKEditor'], 'deduplicated')
+  assert.deepEqual(validateSettings({ editor: { lazyFields: [] } }, []).editor.lazyFields, [])
+  for (const bad of ['plugin::ckeditor5.CKEditor', [1], ['api::page.page'], ['plugin::x y'], ['plugin::<b>'], Array.from({ length: 21 }, (_, i) => `global::f${i}`)])
+    assert.throws(() => validateSettings({ editor: { lazyFields: bad } }, []), { name: 'ValidationError' }, JSON.stringify(bad))
+  assert.throws(() => validateSettings({ editor: { lazyEditors: 'yes' } }, []), { name: 'ValidationError' })
+  assert.deepEqual(mergeSaved({ editor: { lazyFields: ['global::ok', 'nope', 42] } }, []).editor.lazyFields, ['global::ok'], 'bad entries dropped, good kept')
+  assert.deepEqual(mergeSaved({ editor: { lazyFields: 'plugin::ckeditor5.CKEditor' } }, []).editor.lazyFields, ['plugin::ckeditor5.CKEditor'], 'not a list: default')
+  assert.equal(mergeSaved({ editor: { lazyEditors: 'no' } }, []).editor.lazyEditors, true)
+})
+
+test('rich-text preview sanitizer drops scripts, frames, styles, handlers and script URLs', async () => {
+  const { cleanTree } = await import('../admin/sanitize.mjs')
+  // Minimal DOM stub: enough of Element for cleanTree.
+  const el = (tagName, attrs = {}, children = []) => {
+    const node = { tagName, children, attributes: Object.entries(attrs).map(([name, value]) => ({ name, value })) }
+    node.removeAttribute = (name) => { node.attributes = node.attributes.filter(a => a.name !== name) }
+    node.remove = () => { node.parent.children = node.parent.children.filter(c => c !== node) }
+    children.forEach(c => { c.parent = node })
+    return node
+  }
+  const root = el('BODY', {}, [
+    el('P', { class: 'x', onclick: 'steal()', style: 'position:fixed' }, [el('A', { href: ' JaVa\tScRiPt:alert(1)', title: 't' }), el('A', { href: 'https://ok.test/' })]),
+    el('SCRIPT'), el('style'), el('IFRAME', { src: 'https://x' }), el('OBJECT'), el('EMBED'), el('LINK'),
+    el('IMG', { src: 'https://cdn.test/a.png', onerror: 'x()', srcset: 'javascript:1' }),
+    el('DIV', {}, [el('FORM', {}, [el('INPUT')]), el('SPAN', { OnMouseOver: 'x()' })]),
+  ])
+  cleanTree(root)
+  const tags = (n) => n.children.flatMap(c => [c.tagName, ...tags(c)])
+  assert.deepEqual(tags(root), ['P', 'A', 'A', 'IMG', 'DIV', 'SPAN'])
+  const attrs = (n) => n.children.flatMap(c => [...c.attributes.map(a => `${c.tagName}.${a.name}=${a.value}`), ...attrs(c)])
+  assert.deepEqual(attrs(root), ['P.class=x', 'A.title=t', 'A.href=https://ok.test/', 'IMG.src=https://cdn.test/a.png'])
+})

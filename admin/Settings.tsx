@@ -63,6 +63,18 @@ function TagsField({ name, label, hint, value, onChange, disabled }: any) {
   </Label>
 }
 
+// Custom field uids, comma or space separated; same rule as server/settings.js (lazyFields).
+const FIELD_UID = /^(plugin|global)::[\w.-]+$/
+const LAZY_MAX = 20
+const parseUids = (text: string) => [...new Set(text.split(/[\s,]+/).filter(Boolean))]
+const badUids = (uids: string[] = []) => uids.length > LAZY_MAX || uids.some(uid => !FIELD_UID.test(uid))
+function UidListField({ TextField, value, onChange, ...props }: any) {
+  const [text, setText] = React.useState(value.join(', '))
+  // Save or restore replaced the list: show it, unless it is what is being typed.
+  React.useEffect(() => { if (parseUids(text).join() !== value.join()) setText(value.join(', ')) }, [value.join()])
+  return <TextField {...props} value={text} onChange={(v: string) => { setText(v); onChange(parseUids(v)) }} />
+}
+
 // Visual editor sidebar (Strapi 5), same rules as server/settings.js (ICONS, sidebarItem, 12 items).
 const SIDEBAR_ICONS = ['text', 'tag', 'seo', 'settings', 'image', 'link', 'palette', 'list', 'globe', 'info']
 const SIDEBAR_MAX = 12
@@ -151,7 +163,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   const badColor = settings && (Object.values(settings.palette).some((value: any) => !COLOR.test(value)) ||
     [settings.editor.previewUrl, settings.editor.blockPreviewUrl].some((url: string) => url && !/^https?:\/\/\S+$/.test(url)))
   const badSidebar = settings && Object.values(settings.contentTypes || {}).some((entry: any) => (entry.sidebar || []).some(badItem))
-  const invalid = badColor || badSidebar
+  const badLazy = settings && badUids(settings.editor.lazyFields)
+  const invalid = badColor || badSidebar || badLazy
   const save = async () => {
     if (!settings || invalid || !canUpdate) return
     setSaving(true); setStatus('')
@@ -257,6 +270,10 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <SelectField name="editor-previewMode" label={t.previewMode} value={editor.previewMode || 'form'} disabled={!canUpdate || saving}
             options={['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))} onChange={(v: string) => update(s => { s.editor.previewMode = v; return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewModeHelp}</Typography>
+          <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
+          <UidListField TextField={TextField} name="editor-lazyFields" label={t.lazyFields} value={editor.lazyFields || []} disabled={!canUpdate || saving || editor.lazyEditors === false}
+            placeholder="plugin::ckeditor5.CKEditor" onChange={(uids: string[]) => update(s => { s.editor.lazyFields = uids; return s })} />
+          <Typography variant="pi" textColor={badLazy ? 'danger600' : 'neutral600'} role={badLazy ? 'alert' : undefined}>{badLazy ? t.f('lazyFieldsInvalid', { max: LAZY_MAX }) : t.lazyEditorsHelp}</Typography>
           {data.blockPreviewAvailable && <>
             <ToggleField name="editor-blockPreviewInForm" label={t.blockPreviewInForm} value={editor.blockPreviewInForm} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.blockPreviewInForm = v; return s })} />
             <Typography variant="pi" textColor="neutral600">{t.blockPreviewInFormHelp}</Typography>
