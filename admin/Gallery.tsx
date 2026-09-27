@@ -31,6 +31,7 @@ import {
 } from "./accordions.mjs";
 import { Wireframe } from "./wireframes";
 import { RowPreviews } from "./RowPreviews";
+import { RowActions, ZoneRowTools, useRowActions } from "./RowActions";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 
@@ -1303,9 +1304,9 @@ function useLabelAnchor(zone: any, enabled: boolean) {
   }, [zone.name, zone.label, enabled]);
   return el;
 }
-function ZoneControls({ zone, editor, contentType, userId }: any) {
+function ZoneControls({ zone, editor, contentType, userId, tools }: any) {
   const t = useMessages();
-  const shown = Boolean(zone.count && (editor.showOpenAll || editor.showCloseAll));
+  const shown = Boolean(zone.count && (editor.showOpenAll || editor.showCloseAll || tools));
   const anchor = useLabelAnchor(zone, shown);
   if (!shown || !anchor) return null;
   const apply = (open: boolean) => {
@@ -1321,6 +1322,7 @@ function ZoneControls({ zone, editor, contentType, userId }: any) {
     <Flex gap={1} data-testid={`block-accordion-controls-${zone.name}`}>
       {editor.showOpenAll && <Tool icon="expand" label={t.openAll} onClick={() => apply(true)} />}
       {editor.showCloseAll && <Tool icon="collapse" label={t.closeAll} onClick={() => apply(false)} />}
+      {tools}
     </Flex>,
     anchor,
   );
@@ -1336,6 +1338,8 @@ export function Gallery({
   ...props
 }: any) {
   useInitialAccordions({ zones, editor, docKey, contentType, userId });
+  // Row actions need a form adapter (props.form, from the version adapter); without one the rows stay native.
+  const actions = useRowActions({ zones, components: props.components, catalog, form: props.form });
   // A pending open all / close all belongs to the document it was started on.
   React.useEffect(() => stopAll, [docKey]);
   return (
@@ -1348,6 +1352,7 @@ export function Gallery({
           Modal={props.Modal}
         />
       )}
+      <RowActions zones={zones} actions={actions} Modal={props.Modal} />
       {zones.map((zone: any) => (
         <Flex key={zone.name} direction="column" alignItems="stretch" gap={2}>
           {/* Several zones: name each gallery trigger's zone. */}
@@ -1356,11 +1361,14 @@ export function Gallery({
           )}
           {/* docKey ends with the content locale (both versions): the {locale} of blockPreviewUrl. */}
           {!zone.full && <ZoneGallery zone={zone} contentType={contentType} locale={String(docKey || "").split(":").pop()} {...props} />}
+          {/* An empty zone has no label row to hold the tools: its Paste sits under the gallery button. */}
+          {zone.count === 0 && actions?.clip && <Flex><ZoneRowTools zone={zone} actions={actions} /></Flex>}
           <ZoneControls
             zone={zone}
             editor={editor}
             contentType={contentType}
             userId={userId}
+            tools={actions && actions.editor.clipboard !== false && <ZoneRowTools zone={zone} actions={actions} />}
           />
         </Flex>
       ))}

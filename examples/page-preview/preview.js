@@ -14,7 +14,7 @@
   // Example renderer: title (inline plain text, explicitly mapped), body (rich, opens the admin editor), image (Media Library).
   // Groups (only when the admin sends a `groups` map, OPEN uid -> CLOSE uid): an OPEN row … its CLOSE,
   // rendered as a nested box with move/remove controls. A stray CLOSE stays visible as an ordinary block.
-  let groups = null
+  let groups = null, clipboard = 0
   const groupOf = (blocks) => {
     const out = []; let i = 0
     while (i < blocks.length) {
@@ -36,7 +36,7 @@
     const page = document.getElementById('page')
     page.innerHTML = blocks.length ? '' : '<p class="status">No blocks in the zone yet.</p>'
     // Insertion gaps: before the first block, between blocks and after the last one.
-    const gap = (after, label, inner = false) => { const g = document.createElement('div'); g.className = 'bp-gap'; g.dataset.testid = `bp-gap-${after ?? 'start'}`; const opener = groups && Object.keys(groups)[0]; g.innerHTML = `<button type="button" class="bp-insert" data-after="${esc(after ?? '')}" aria-label="${esc(label)}">+ Insert block</button>${opener && !inner ? `<button type="button" class="bp-insert bp-insert--group" data-insert-group="${esc(opener)}" data-after="${esc(after ?? '')}" aria-label="Add group: ${esc(label)}">+ Group</button>` : ''}`; return g }
+    const gap = (after, label, inner = false) => { const g = document.createElement('div'); g.className = 'bp-gap'; g.dataset.testid = `bp-gap-${after ?? 'start'}`; const opener = groups && Object.keys(groups)[0]; g.innerHTML = `<button type="button" class="bp-insert" data-after="${esc(after ?? '')}" aria-label="${esc(label)}">+ Insert block</button>${opener && !inner ? `<button type="button" class="bp-insert bp-insert--group" data-insert-group="${esc(opener)}" data-after="${esc(after ?? '')}" aria-label="Add group: ${esc(label)}">+ Group</button>` : ''}${clipboard ? `<button type="button" class="bp-insert bp-insert--paste" data-paste data-after="${esc(after ?? '')}" aria-label="Paste ${clipboard} copied blocks: ${esc(label)}">Paste (${clipboard})</button>` : ''}`; return g }
     page.appendChild(gap(null, blocks.length ? 'Insert block at the start' : 'Insert the first block'))
     const renderBlock = (block, parent) => {
       const section = document.createElement('section')
@@ -46,6 +46,8 @@
       const options = (block.fields || []).map(f => `<option value="${esc(f.name)}">${esc(f.label)}</option>`).join('')
       const mediaTools = Object.entries(block.media || {}).map(([field, meta]) => `<button type="button" data-media="${esc(field)}">${meta.present ? 'Replace image' : 'Add image'}</button>${meta.present && !meta.required ? `<button type="button" data-media-remove="${esc(field)}">Remove image</button>` : ''}`).join('')
       section.innerHTML = `<div class="bp-tools"><span class="bp-label">${esc(block.label)}</span>${mediaTools}${options ? `<select aria-label="Edit field" data-fields><option value="">Edit field…</option>${options}</select>` : ''}</div>`
+      // Hidden on the site (the admin sends `hidden: true`): a real page would skip it; the preview dims it.
+      if (block.hidden) { section.dataset.hidden = ''; section.insertAdjacentHTML('afterbegin', '<span class="bp-hidden">Hidden</span>') }
       if ('title' in d) section.insertAdjacentHTML('beforeend', `<h2 data-block-field="title" contenteditable="plaintext-only" aria-label="Edit title">${esc(d.title)}</h2>`)
       if ('body' in d) section.insertAdjacentHTML('beforeend', `<div data-block-field="body" data-field-kind="rich" role="button" tabindex="0" aria-label="Edit text">${d.body ? esc(d.body).replace(/\n/g, '<br>') : '<em>Empty text. Click to edit.</em>'}</div>`)
       if (d.image?.url) section.insertAdjacentHTML('beforeend', `<img src="${esc(d.image.url)}" alt="${esc(d.image.alternativeText)}" data-media-field="image">`)
@@ -80,6 +82,8 @@
   document.addEventListener('click', (event) => {
     const insertGroup = event.target.closest('[data-insert-group]')
     if (insertGroup) { post({ type: 'insert-group', after: insertGroup.dataset.after || null, uid: insertGroup.dataset.insertGroup }); return }
+    const paste = event.target.closest('[data-paste]')
+    if (paste) { post({ type: 'paste', after: paste.dataset.after || null }); return }
     const insert = event.target.closest('.bp-insert')
     if (insert) { post({ type: 'insert', after: insert.dataset.after || null }); return }
     const move = event.target.closest('[data-move]')
@@ -102,7 +106,7 @@
   document.addEventListener('keydown', (event) => { const rich = event.target.closest?.('[data-field-kind="rich"]'); if (rich && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); post({ type: 'focus', key: rich.closest('[data-block-key]').dataset.blockKey, field: rich.dataset.blockField }) } })
   window.addEventListener('message', (event) => {
     if (ok(event, 'ping')) post({ type: 'ready' })
-    if (ok(event, 'update-page') && Array.isArray(event.data.blocks)) { clearInterval(retry); groups = event.data.groups || null; if (editing) pending = event.data.blocks; else render(event.data.blocks) }
+    if (ok(event, 'update-page') && Array.isArray(event.data.blocks)) { clearInterval(retry); groups = event.data.groups || null; clipboard = Number(event.data.clipboard) || 0; if (editing) pending = event.data.blocks; else render(event.data.blocks) }
     if (ok(event, 'hover') && (event.data.key === null || typeof event.data.key === 'string')) { marked = event.data.key; mark() }
     if (ok(event, 'highlight') && typeof event.data.key === 'string') { selected = event.data.key; document.querySelectorAll('[data-block-key]').forEach(s => { if (s.dataset.blockKey === selected) s.dataset.selected = ''; else delete s.dataset.selected }); document.querySelector(`[data-block-key="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'center' }) }
   })

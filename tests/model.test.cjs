@@ -468,3 +468,93 @@ test('rich-text preview sanitizer drops scripts, frames, handlers, script URLs a
   assert.deepEqual(attrs(root), ['P.class=x', 'A.title=t', 'A.href=https://ok.test/', 'IMG.src=https://cdn.test/a.png', 'H2.style=text-align: center; color: #e30613; font-size: 32px'],
     'text formatting kept; positioning and url() values dropped')
 })
+
+test('hidden blocks: attribute injected into zone components only, strip removes hidden rows through components and relations', () => {
+  const { hiddenName, injectHidden, stripHidden } = require('../server/hidden.js')
+  assert.equal(hiddenName(undefined), 'bsHidden'); assert.equal(hiddenName(false), false); assert.equal(hiddenName('isHidden'), 'isHidden')
+  for (const bad of ['1x', 'a-b', '', 42, true, 'x'.repeat(41)]) assert.equal(hiddenName(bad), null, String(bad))
+  const components = { 'b.hero': { attributes: { title: { type: 'string' } } }, 'b.text': { attributes: { bsHidden: { type: 'string' } } }, 'b.item': { attributes: {} } }
+  const contentTypes = { 'api::page.page': { attributes: { blocks: { type: 'dynamiczone', components: ['b.hero', 'b.text'] }, other: { type: 'component', component: 'b.item' } } } }
+  assert.deepEqual(injectHidden(components, contentTypes, 'bsHidden'), { added: ['b.hero'], skipped: ['b.text'] })
+  assert.deepEqual(components['b.hero'].attributes.bsHidden, { type: 'boolean', default: false, visible: false, configurable: false })
+  assert.equal(components['b.item'].attributes.bsHidden, undefined, 'components outside a zone are untouched')
+  const schemas = { 'api::page.page': { attributes: { blocks: { type: 'dynamiczone' }, seo: { type: 'component', component: 'shared.seo' }, related: { type: 'relation', target: 'api::page.page' } } },
+    'shared.seo': { attributes: { zone: { type: 'dynamiczone' } } }, 'b.hero': { attributes: { items: { type: 'component', component: 'b.item', repeatable: true } } }, 'b.item': { attributes: {} } }
+  const page = { title: 'x', blocks: [{ __component: 'b.hero', bsHidden: true }, { __component: 'b.hero', bsHidden: false, items: [{ bsHidden: true }] }, { __component: 'b.hero' }],
+    seo: { zone: [{ __component: 'b.item', bsHidden: true }, { __component: 'b.item' }] },
+    related: [{ blocks: [{ __component: 'b.hero', bsHidden: true }, { __component: 'b.hero', bsHidden: null }] }] }
+  const out = stripHidden([page], schemas['api::page.page'], uid => schemas[uid], 'bsHidden')[0]
+  assert.equal(out.blocks.length, 2); assert.equal(out.blocks[0].items.length, 1, 'only Dynamic Zone rows are removed')
+  assert.equal(out.seo.zone.length, 1); assert.equal(out.related[0].blocks.length, 1, 'populated relations are stripped too')
+  assert.equal(stripHidden(null, schemas['api::page.page'], uid => schemas[uid], 'bsHidden'), null)
+})
+
+test('row clone: ids stripped from the row and nested components, media and relation targets kept, relations to connect', async () => {
+  const { cloneRow, relationSlots, currentRelations, toConnect } = await import('../admin/rows.mjs')
+  const components = { 'b.hero': { attributes: { title: { type: 'string' }, image: { type: 'media' }, items: { type: 'component', component: 'b.item', repeatable: true },
+    link: { type: 'relation', relation: 'oneToMany', target: 'api::page.page' } } }, 'b.item': { attributes: { label: { type: 'string' }, page: { type: 'relation', target: 'api::page.page' } } } }
+  const row = { id: 7, documentId: 'x', __component: 'b.hero', __temp_key__: 'a0', title: 'T', bsHidden: true, image: { id: 3, url: '/u.png' },
+    items: [{ id: 11, __temp_key__: 'a0', label: 'L', page: { connect: [], disconnect: [] } }, { __temp_key__: 'a1', label: 'M', page: { connect: [{ id: 9, apiData: { id: 9, documentId: 'd9', locale: null } }], disconnect: [] } }],
+    link: { connect: [{ id: 5, apiData: { id: 5, documentId: 'd5', locale: 'en' } }], disconnect: [{ id: 2, apiData: { id: 2, documentId: 'd2' } }] } }
+  const plain = cloneRow(row, components)
+  assert.equal(plain.id, undefined); assert.equal(plain.documentId, undefined); assert.equal(plain.items[0].id, undefined)
+  assert.equal(plain.image.id, 3, 'media keeps its id'); assert.equal(plain.bsHidden, true); assert.equal(plain.items[1].__temp_key__, 'a1')
+  plain.items[0].label = 'changed'; assert.equal(row.items[0].label, 'L', 'deep copy')
+  assert.deepEqual(relationSlots(row, components).map(s => `${s.path}@${s.uid}#${s.id}`), ['items.0.page@b.item#11', 'link@b.hero#7'])
+  const server = { link: [{ id: 1, documentId: 'd1', locale: 'en' }, { id: 2, documentId: 'd2', locale: 'en' }], 'items.0.page': [{ id: 4, documentId: 'd4' }] }
+  const out = cloneRow(row, components, { relation: (value, attr, path) => toConnect(currentRelations(server[path.join('.')] || [], value), attr.target) })
+  assert.deepEqual(out.link.connect.map(r => r.apiData.documentId), ['d1', 'd5'], 'server minus disconnected plus connected')
+  assert.equal(out.link.connect[0].apiData.isTemporary, true); assert.deepEqual(out.link.disconnect, [])
+  assert.equal(out.link.connect[0].href, '../collection-types/api::page.page/d1?plugins[i18n][locale]=en')
+  assert.deepEqual(out.items.map(i => i.page.connect.map(r => r.id)), [[4], [9]])
+})
+
+test('row actions: group ranges, keys, hide range, clipboard storage and all-or-nothing paste validation', async () => {
+  const { actionRange, expandSelection, canAct, fractionalKeys, integerKeys, insertRows, setHidden, readClip, writeClip, pasteProblem, CLIPBOARD_KEY } = await import('../admin/rows.mjs')
+  const g = { 'w.open': 'w.close' }
+  const rows = [{ __component: 'b.text', __temp_key__: 'a0' }, { __component: 'w.open', __temp_key__: 'a1' }, { __component: 'b.text', __temp_key__: 'a2' }, { __component: 'w.close', __temp_key__: 'a3' }]
+  assert.deepEqual(actionRange(rows, 1, g), [1, 3]); assert.deepEqual(actionRange(rows, 2, g), [2, 2]); assert.deepEqual(actionRange(rows, 1, null), [1, 1])
+  assert.deepEqual(expandSelection(rows, [2, 1, -1], g), [1, 2, 3])
+  assert.equal(canAct(rows[3], g), false); assert.equal(canAct(rows[3], null), true)
+  const keys = fractionalKeys(rows, 2, 2); assert.ok(keys[0] > 'a1' && keys[1] < 'a2' && keys[0] < keys[1])
+  assert.equal(fractionalKeys([{ __temp_key__: 'a5' }, { __temp_key__: 'a0' }], 1, 1)[0] > 'a5', true, 'unordered neighbours: after the largest')
+  assert.deepEqual(integerKeys([{ __temp_key__: 3 }, { __temp_key__: 1 }], 2), [4, 5])
+  assert.deepEqual(insertRows(rows, 1, [{ __component: 'x' }], ['k']).map(r => r.__temp_key__), ['a0', 'k', 'a1', 'a2', 'a3'])
+  assert.deepEqual(setHidden(rows, 1, g, 'bsHidden', true).map(r => Boolean(r.bsHidden)), [false, true, true, true])
+  assert.equal(rows[1].bsHidden, undefined, 'no mutation')
+  const store = new Map(); const storage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }
+  assert.equal(readClip(storage), null)
+  assert.equal(writeClip(storage, { rows: rows.slice(1), model: 'api::page.page', locale: 'en', zone: 'blocks' }), true)
+  const clip = readClip(storage); assert.equal(clip.v, 1); assert.equal(clip.rows.length, 3); assert.equal(clip.model, 'api::page.page')
+  assert.equal(writeClip({ setItem() { throw new Error('quota') } }, { rows: [rows[0]] }), false)
+  store.set(CLIPBOARD_KEY, '{"v":2,"rows":[{"__component":"b.text"}]}'); assert.equal(readClip(storage), null, 'other versions ignored')
+  store.set(CLIPBOARD_KEY, 'not json'); assert.equal(readClip(storage), null)
+  const components = { 'b.text': {}, 'w.open': {}, 'w.close': {} }
+  const zone = { components: ['b.text', 'w.open', 'w.close'], max: 7 }
+  assert.equal(pasteProblem(clip, zone, rows, components, g), null)
+  assert.deepEqual(pasteProblem(clip, { ...zone, components: ['b.text'] }, rows, components, g), { code: 'notAllowed', uid: 'w.open' })
+  assert.deepEqual(pasteProblem(clip, { ...zone, max: 6 }, rows, components, g), { code: 'full' })
+  assert.deepEqual(pasteProblem({ rows: rows.slice(2) }, zone, [], components, g), { code: 'unbalanced' })
+  assert.equal(pasteProblem({ rows: rows.slice(2) }, zone, [], components, null), null, 'no groups config: markers are ordinary blocks')
+  assert.deepEqual(pasteProblem(null, zone, [], components, g), { code: 'empty' })
+  assert.deepEqual(pasteProblem({ rows: [{ __component: 'b.gone' }] }, { components: ['b.gone'] }, [], components, g), { code: 'notAllowed', uid: 'b.gone' })
+})
+
+test('row action options: strict validation, lenient read, defaults on', () => {
+  const { validateSettings, mergeSaved, DEFAULTS } = require('../server/settings.js')
+  assert.deepEqual([DEFAULTS.editor.confirmDelete, DEFAULTS.editor.hiddenBlocks, DEFAULTS.editor.duplicate, DEFAULTS.editor.clipboard], [true, 'strip', true, true])
+  const ok = validateSettings({ editor: { confirmDelete: false, hiddenBlocks: 'flag', duplicate: false, clipboard: false } }, [])
+  assert.deepEqual([ok.editor.confirmDelete, ok.editor.hiddenBlocks, ok.editor.duplicate, ok.editor.clipboard], [false, 'flag', false, false])
+  for (const bad of [{ hiddenBlocks: 'hide' }, { hiddenBlocks: true }, { confirmDelete: 'yes' }, { duplicate: 1 }, { clipboard: null }])
+    assert.throws(() => validateSettings({ editor: bad }, []), /editor option/, JSON.stringify(bad))
+  const read = mergeSaved({ editor: { hiddenBlocks: 'hide', clipboard: 'no', duplicate: false } }, [])
+  assert.deepEqual([read.editor.hiddenBlocks, read.editor.clipboard, read.editor.duplicate], ['strip', true, false])
+})
+
+test('page projection marks hidden rows only when the attribute is given', async () => {
+  const { projectPage } = await import('../admin/preview.mjs')
+  const components = { 'b.text': { attributes: { body: { type: 'text' } } } }
+  const rows = [{ __component: 'b.text', __temp_key__: 'a0', body: 'x', bsHidden: true }, { __component: 'b.text', __temp_key__: 'a1', body: 'y' }]
+  assert.deepEqual(projectPage(rows, components, 'http://cms.test', 'bsHidden').map(b => b.hidden), [true, undefined])
+  assert.equal(projectPage(rows, components, 'http://cms.test')[0].hidden, undefined)
+})

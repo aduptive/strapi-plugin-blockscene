@@ -233,7 +233,8 @@ try {
     await putSettings({ editor: { initialState: 'open', showCloseAll: false } })
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await waitState('true')
     assert.equal(await page.getByRole('button', { name: 'Close all blocks' }).count(), 0)
-    await putSettings({ editor: { showOpenAll: false, showCloseAll: false } })
+    // The zone label also holds the row selection/paste tools (editor.clipboard): off too, so the label stays native.
+    await putSettings({ editor: { showOpenAll: false, showCloseAll: false, clipboard: false } })
     await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor(); await waitState('false')
     assert.equal(await page.getByTestId('block-accordion-controls-blocks').count(), 0)
     await firstHeader().click() // native header still works
@@ -560,6 +561,120 @@ try {
     await page.getByText('Defaults restored.', { exact: true }).waitFor()
     const after = (await api('GET', '/blockscene/settings')).data
     assert.deepEqual(after.settings.contentTypes, {}); assert.equal(after.projectDefaults, null)
+  })
+  await step(`row actions${major === 5 ? ' (with undo, relations and the page preview)' : ''}: confirm delete, hide on the site (REST strip / flag), duplicate, copy two blocks and paste them on another page`, async () => {
+    const shots = process.env.SHOTS || 'artifacts', suffix = major === 5 ? '' : '-4'
+    const create = async (title, blocks) => { const res = await api('POST', '/content-manager/collection-types/api::page.page', { title, blocks }); assert.ok([200, 201].includes(res.status), JSON.stringify(res.data)); return res.data.data || res.data }
+    const idOf = d => major === 4 ? d.id : d.documentId
+    const target = major === 5 ? await create(`Related ${Date.now()}`, []) : null
+    const source = await create(`Rows ${Date.now()}`, [{ __component: 'blocks.text', body: 'First text', ...(target && { pages: { connect: [{ documentId: target.documentId }] } }) }, { __component: 'blocks.text', body: 'Second text' }])
+    const other = await create(`Paste target ${Date.now()}`, [{ __component: 'blocks.hero', title: 'Target hero', items: [{ label: 'a' }, { label: 'b' }] }])
+    // Read-only content API token (lab only), removed at the end.
+    const token = await api('POST', '/admin/api-tokens', { name: `smoke ${Date.now()}`, type: 'read-only', lifespan: null, permissions: [] }); assert.equal(token.status, 201)
+    const rest = async (title, extra = '') => {
+      const res = await fetch(`${baseURL}/api/pages?filters[title][$eq]=${encodeURIComponent(title)}&${major === 5 ? 'status=draft' : 'publicationState=preview'}&populate${major === 5 ? '[blocks][on][blocks.text][populate]=pages&populate[blocks][on][blocks.hero][populate]=items' : '=blocks'}${extra}`, { headers: { Authorization: `Bearer ${token.data.data.accessKey}` } })
+      const body = await res.json(); assert.equal(res.status, 200, JSON.stringify(body)); const entry = body.data[0]; return (major === 5 ? entry : entry.attributes).blocks
+    }
+    const zoneRows = () => page.locator('ol[aria-describedby]').first().locator(':scope > li')
+    const trash = i => zoneRows().nth(i).locator('button[aria-expanded]').first().locator('xpath=following-sibling::*[1]').getByRole('button', { name: /^Delete/ }).first()
+    const saveDoc = async () => {
+      const done = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && ['PUT', 'POST'].includes(res.request().method()))
+      await page.getByRole('button', { name: 'Save', exact: true }).first().click(); const res = await done; assert.ok(res.ok(), await res.text())
+    }
+    try {
+      await putSettings({})
+      await page.goto(`/admin/content-manager/collection-types/api::page.page/${idOf(source)}`)
+      await page.getByTestId('row-actions-blocks-1').waitFor()
+      assert.equal(await page.getByTestId('row-actions-blocks-0').getByRole('button').count(), 3, 'eye, duplicate, copy')
+      await zoneRows().first().locator('h3, [data-strapi-accordion-toggle]').first().locator('xpath=..').screenshot({ path: `${shots}/row-actions${suffix}.png`, animations: 'disabled' })
+      // Confirm delete: Cancel keeps the row, Delete runs the native removal.
+      await trash(1).click()
+      const dialog = page.getByTestId('row-confirm-delete'); await dialog.waitFor()
+      assert.match(await dialog.innerText(), /Delete block .*Second text\?|Delete block Text\?/)
+      await page.getByRole('dialog').screenshot({ path: `${shots}/confirm-delete${suffix}.png`, animations: 'disabled' })
+      await page.getByTestId('row-confirm-cancel').click(); await dialog.waitFor({ state: 'detached' })
+      assert.equal(await zoneRows().count(), 2, 'cancel keeps the row')
+      await trash(1).click(); await page.getByTestId('row-confirm-ok').click()
+      await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 1)
+      if (major === 5) { // the removal went through the form: undo brings it back
+        await page.getByTestId('blockscene-history').first().getByRole('button', { name: /^Undo/ }).click()
+        await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 2)
+      } else await page.reload()
+      await page.getByTestId('row-actions-blocks-1').waitFor()
+      // Hide on the site: dimmed row with a badge; the content API drops it (strip) or flags it (flag).
+      await page.getByTestId('row-hide-blocks-1').click()
+      await page.getByTestId('row-hidden-blocks-1').waitFor()
+      assert.equal(await zoneRows().nth(1).getAttribute('data-blockscene-hidden'), '')
+      assert.equal(await page.getByTestId('row-hide-blocks-1').getAttribute('aria-pressed'), 'true')
+      await zoneRows().nth(1).locator('button[aria-expanded]').first().locator('xpath=..').screenshot({ path: `${shots}/row-hidden${suffix}.png`, animations: 'disabled' })
+      await saveDoc()
+      assert.deepEqual((await rest(source.title)).map(b => b.body), ['First text'], 'strip: the hidden block is not in the REST response')
+      await putSettings({ editor: { hiddenBlocks: 'flag' } })
+      assert.deepEqual((await rest(source.title)).map(b => [b.body, b.bsHidden]), [['First text', false], ['Second text', true]], 'flag: sent with the attribute')
+      const admin = (await api('GET', `/content-manager/collection-types/api::page.page/${idOf(source)}`)).data
+      assert.equal((admin.data || admin).blocks.length, 2, 'admin reads keep hidden rows')
+      if (major === 5) {
+        await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
+        await page.reload(); await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Fields + page' }).click()
+        const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
+        await frame.locator('[data-block-key][data-hidden] .bp-hidden').waitFor()
+        assert.equal(await frame.locator('[data-block-key][data-hidden]').count(), 1, 'the preview dims the hidden block')
+        await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+      }
+      await putSettings({ editor: { hiddenBlocks: 'off' } })
+      await page.reload(); await page.getByTestId('row-actions-blocks-1').waitFor()
+      assert.equal(await page.getByTestId('row-hide-blocks-1').count(), 0, 'off: no eye icon')
+      assert.equal((await rest(source.title)).length, 2, 'off: nothing stripped')
+      await putSettings({})
+      await page.reload(); await page.getByTestId('row-hide-blocks-1').waitFor()
+      await page.getByTestId('row-hide-blocks-1').click(); await page.getByTestId('row-hidden-blocks-1').waitFor({ state: 'detached' })
+      // Duplicate: an identical row right below (relations kept on Strapi 5), saved as a new component.
+      await page.getByTestId('row-duplicate-blocks-0').click()
+      await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
+      const names = await zoneRows().evaluateAll(l => l.map(li => li.querySelector('button[aria-expanded]').textContent.trim()))
+      assert.equal(names[1], names[0], `duplicate right below: ${names.join(' | ')}`)
+      await saveDoc()
+      const saved = await rest(source.title)
+      assert.deepEqual(saved.map(b => b.body), ['First text', 'First text', 'Second text'])
+      assert.notEqual(saved[0].id, saved[1].id, 'a new component, not the same row')
+      if (major === 5) assert.deepEqual(saved.map(b => (b.pages || []).map(p => p.documentId)), [[target.documentId], [target.documentId], []], 'relations kept')
+      // Copy / paste: selection mode from the zone label, two blocks, pasted on another page; a zone that cannot take them refuses.
+      await page.getByTestId('zone-select-blocks').click()
+      await page.getByTestId('row-select-blocks-0').check(); await page.getByTestId('row-select-blocks-2').check()
+      await page.getByTestId('zone-copy-blocks').click()
+      await page.getByText('2 blocks copied', { exact: false }).first().waitFor()
+      assert.equal(await page.getByTestId('row-select-blocks-0').count(), 0, 'selection mode ends after copying')
+      const clip = await page.evaluate(() => JSON.parse(localStorage.getItem('blockscene:clipboard:v1')))
+      assert.equal(clip.v, 1); assert.deepEqual(clip.rows.map(r => r.body), ['First text', 'Second text']); assert.ok(clip.rows.every(r => r.id === undefined))
+      await page.goto(`/admin/content-manager/collection-types/api::page.page/${idOf(other)}`)
+      const paste = page.getByTestId('zone-paste-blocks'); await paste.waitFor()
+      assert.match(await paste.innerText(), /Paste 2 blocks/)
+      await page.getByTestId('block-accordion-controls-blocks').locator('xpath=../..').screenshot({ path: `${shots}/paste${suffix}.png`, animations: 'disabled' })
+      await page.getByTestId('zone-paste-sidebar').click() // sidebar: max 1, the two blocks do not fit
+      await page.getByText('Nothing was pasted', { exact: false }).first().waitFor()
+      assert.equal(await page.locator('ol[aria-describedby]').count(), 1, 'refused: the sidebar stays empty')
+      await paste.click()
+      await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
+      await saveDoc()
+      const pasted = await rest(other.title)
+      assert.deepEqual(pasted.map(b => b.__component), ['blocks.hero', 'blocks.text', 'blocks.text']); assert.deepEqual(pasted.slice(1).map(b => b.body), ['First text', 'Second text'])
+      if (major === 5) {
+        assert.deepEqual(pasted[1].pages.map(p => p.documentId), [target.documentId], 'relations travel with the clipboard')
+        // The page preview offers Paste in its seams while the clipboard holds blocks; the same all-or-nothing rules apply.
+        await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
+        await page.reload(); await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Fields + page' }).click()
+        const start = page.getByTestId('page-preview-pane').frameLocator('iframe').locator('[data-testid="bp-gap-start"]')
+        await start.hover(); await start.locator('[data-paste]').click()
+        await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 5)
+        assert.deepEqual((await zoneRows().evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))).slice(0, 3).map(n => n.replace(/ - .*$/, '')), ['Text', 'Text', 'Hero'], 'pasted at the start')
+        await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+      }
+    } finally {
+      await api('DELETE', `/admin/api-tokens/${token.data.data.id}`)
+      for (const doc of [source, other, target].filter(Boolean)) await api('DELETE', `/content-manager/collection-types/api::page.page/${idOf(doc)}`)
+      await page.evaluate(() => localStorage.removeItem('blockscene:clipboard:v1'))
+      await putSettings({})
+    }
   })
   const GROUPS_MODE = process.env.BLOCK_PICKER_GROUPS || '1'
   await step(`layout groups, ${GROUPS_MODE === '1' ? 'configured pair' : 'no config'}: gallery insertion, server publish guard (single, bulk), balanced documents publish${major === 5 ? ', preview group tools and diagnostics' : ''}`, async () => {

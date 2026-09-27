@@ -15,6 +15,7 @@ import {
   useStrapiApp,
   useAuth,
   useForm,
+  useNotification,
 } from "@strapi/strapi/admin";
 import {
   unstable_useContentManagerContext as useContext,
@@ -24,17 +25,18 @@ import { Gallery } from "./Gallery";
 import { PagePreview } from "./PagePreview";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults } from "./model.mjs";
+import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
 import { Guard } from "./Guard";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
 import { setLazyConfig, wrapCustomFields } from "./LazyInput";
 
-function Modal({ open, onOpenChange, trigger, title, children }: any) {
+function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   // Controlled callers (row previews, insertion gaps) pass no trigger: Dialog.Trigger requires a single element child.
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <Dialog.Trigger>{trigger}</Dialog.Trigger>}
-      <Dialog.Content style={{ width: "80vw", maxWidth: "80vw" }}>
+      <Dialog.Content style={{ width, maxWidth: "92vw" }}>
         <Dialog.Header>
           <Dialog.Title>{title}</Dialog.Title>
         </Dialog.Header>
@@ -42,6 +44,43 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
       </Dialog.Content>
     </Dialog.Root>
   );
+}
+// Relations of a saved component, read the way the relation input reads them (newest first, so reversed).
+async function relationsOf(get: any, { uid, id, field }: any, locale?: string) {
+  const out: any[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const query = new URLSearchParams({ page: String(page), pageSize: "100", ...(locale ? { locale } : {}) });
+    const { data }: any = await get(`/content-manager/relations/${uid}/${id}/${field}?${query}`);
+    out.push(...(data?.results || []));
+    if (page >= (data?.pagination?.pageCount || 1)) break;
+  }
+  return out.reverse();
+}
+// Row actions write whole zone arrays through the form (undo/redo sees them); new rows get fractional keys and their
+// relations as the `connect` list a new row holds (what the server has for the source row, plus its unsaved changes).
+function useRowForm(c: any, values: any, get: any) {
+  const onChange = useForm("Blockscene", (state: any) => state.onChange);
+  const { toggleNotification } = useNotification();
+  const latest = React.useRef(values);
+  latest.current = values;
+  const locale = c.form?.initialValues?.locale || undefined;
+  if (typeof onChange !== "function") return null;
+  return {
+    model: c.model,
+    locale,
+    rows: (zone: string) => (Array.isArray(latest.current?.[zone]) ? latest.current[zone] : []),
+    setRows: (zone: string, rows: any[]) => onChange(zone, rows),
+    keys: fractionalKeys,
+    notify: (type: string, message: string) => toggleNotification({ type, message }),
+    prepare: (rows: any[]) =>
+      Promise.all(rows.map(async (row) => {
+        const server = new Map<string, any[]>();
+        for (const slot of relationSlots(row, c.components)) server.set(slot.path, await relationsOf(get, slot, locale));
+        return cloneRow(row, c.components, {
+          relation: (value: any, attr: any, path: any[]) => toConnect(currentRelations(server.get(path.join(".")) || [], value), attr.targetModel || attr.target),
+        });
+      })),
+  };
 }
 function Panel() {
   const c: any = useContext();
@@ -51,6 +90,7 @@ function Panel() {
   // Live form values: the context's `form.values` snapshot can lag behind edits made through the preview, which misplaces insertions.
   const formValues: any = useForm("Blockscene", (state: any) => state.values);
   const catalog = useCatalog(get);
+  const form = useRowForm(c, formValues ?? c.form?.values, get);
   const creating =
     !c.id && !c.form?.initialValues?.id && !c.form?.initialValues?.documentId;
   const allowed =
@@ -121,11 +161,14 @@ function Panel() {
           docKey={docKey}
           contentType={c.model}
           userId={user?.id}
+          form={form}
         />
         <PagePreview
           editor={{ ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
             sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left" }}
           groups={catalog.groups || null}
+          hiddenAttribute={catalog.editor.hiddenBlocks !== "off" ? catalog.hiddenAttribute : null}
+          form={form}
           Modal={Modal}
           Toggle={ToggleField}
         />

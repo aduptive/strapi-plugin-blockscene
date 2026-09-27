@@ -102,8 +102,8 @@ export function setAll(list, open, batch = (run) => run()) {
 // every locale. An empty zone renders nothing but this button, so the zone is identified by the name only; Dynamic
 // Zones cannot nest, so a button inside a block row is never one.
 export function isNativeAddButton(button, zone) {
-  // Our own controls ("Open all blocks", the gallery trigger, the preview toolbar) also end with the zone name.
-  if (!button || button.getAttribute('aria-expanded') || button.closest('ol[aria-describedby] > li, [role="dialog"], [data-testid^="open-gallery-"], [data-testid^="block-"], [data-testid^="page-preview"], [data-testid^="bp-"]')) return false
+  // Our own controls ("Open all blocks", "Paste 2 blocks", the gallery trigger, the preview toolbar) also end with the zone name.
+  if (!button || button.getAttribute('aria-expanded') || button.closest('ol[aria-describedby] > li, [role="dialog"], [data-testid^="open-gallery-"], [data-testid^="block-"], [data-testid^="page-preview"], [data-testid^="bp-"], [data-testid^="zone-"], [data-blockscene-row-actions]')) return false
   const text = (button.textContent || '').trim()
   return Boolean(text) && new RegExp(`(^|\\s)${String(zone.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`).test(text)
 }

@@ -134,6 +134,53 @@ Strapi's own header through the DOM (no Content Manager patch) and is
 restored when Strapi re-renders the list. Turn it off with the editor option
 `showRowThumbnails: false`.
 
+## Row actions
+
+Each block header gets a few icons right before Strapi's own delete button
+(inserted through the DOM, like the thumbnails; read-only rows get none):
+
+- **Hide on the site** (eye). The block stays in the document and in the
+  admin, dimmed with a "Hidden" badge (also in the page preview, which receives
+  `hidden: true` for it). What the content API does is the editor option
+  `hiddenBlocks`: `strip` (default) removes hidden rows from Dynamic Zones in
+  content-API reads (REST and GraphQL, including zones of populated relations
+  and components; admin and Content Manager reads always return every row),
+  `flag` sends them with the attribute so the frontend decides, `off` removes
+  the eye and strips nothing. On a configured group OPEN the eye hides the
+  whole group.
+- **Duplicate**. A deep copy right below: ids removed from the row and its
+  nested components, new row key, media kept, relations kept (Strapi 5 reads
+  the source row's relations from the server and adds its unsaved changes).
+  A group OPEN duplicates with its whole range. Option `duplicate`.
+- **Copy / Paste** across pages. The copy icon copies one block; the select
+  icon in the zone label shows a checkbox per row, then "Copy selected". The
+  blocks are stored in this browser's localStorage (`blockscene:clipboard:v1`,
+  with the source content type and locale). "Paste" appears in the zone label
+  (under the gallery button for an empty zone) and in the page preview seams.
+  Paste is all or nothing: every block must be allowed in the target zone, fit
+  its maximum, and groups must be whole; otherwise a notice explains why and the
+  form is not changed. Media and relations are kept by id/documentId, so paste
+  within the same install. Option `clipboard`.
+- **Confirm delete**. The native delete asks "Delete block …?" first;
+  confirming runs Strapi's own removal. On a group marker the dialog says only
+  the marker is removed. Option `confirmDelete`.
+
+Everything goes through the form: nothing is saved until Save, and undo/redo
+(Strapi 5) covers every action. Strapi 4 supports the same actions; relations
+are copied as the form holds them there (the loaded relations of an opened
+block).
+
+**The hidden attribute is a database column.** At register time the plugin adds
+a boolean attribute (like i18n adds `locale`) to every component used in a
+Dynamic Zone: `{ type: 'boolean', default: false, visible: false,
+configurable: false }`, so Strapi's schema sync creates a `bs_hidden` column in
+each of those component tables on the next start (existing rows read as not
+hidden). It is hidden from the edit view. Rename it with the plugin config
+`hiddenAttribute: 'myName'`, or set `hiddenAttribute: false` to add nothing (no
+eye, nothing stripped). A component that already has an attribute of that name
+with another type is skipped with a warning. Removing the plugin (or setting
+`false`) leaves the column in place with its data; drop it yourself if you want.
+
 ## Thumbnail priority
 
 Each card tries these sources in order and moves on when one fails to load.
@@ -233,6 +280,10 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Preview route base URL (Strapi 5) | full URL or empty | empty: native Preview origin |
 | Block preview URL | http(s) URL with placeholders, up to 500 characters, or empty | empty: page preview route, else image |
 | Initial preview mode (Strapi 5) | form / side by side / preview | form |
+| Confirm before deleting a block (`confirmDelete`) | yes/no | yes |
+| Duplicate on each block (`duplicate`) | yes/no | yes |
+| Copy and Paste (`clipboard`) | yes/no | yes |
+| Blocks hidden on the site (`hiddenBlocks`) | `strip` / `flag` / `off` | `strip` |
 
 Every edit view opens in its content type's mode, else the initial preview
 mode. Editors can switch while they edit; the switch is not remembered.
@@ -321,6 +372,11 @@ Minimal configuration:
    key, or `null` off blocks) when it changes, and marks the block of the
    admin's `{ type: 'hover', key }` without scrolling. A page that ignores it
    keeps working.
+   Row actions: a block hidden on the site arrives with `hidden: true` (the
+   example dims it), and `update-page` carries `clipboard` (the number of copied
+   blocks, 0 when none or not editable); while it is positive the page may show
+   a Paste button in its seams that sends `{ type: 'paste', after }` (a block
+   key, or `null` for the start). Both are optional.
    Keep the origin check (`admin` query parameter or your own constant).
 2. Allow the admin origin to embed it (`Content-Security-Policy: frame-ancestors`)
    and allow the page origin in the Strapi admin CSP (`frame-src`).
@@ -516,7 +572,8 @@ installs without overrides, not a promise for every minor in between. Strapi
   open all and from 1.6 s to 0.14 s on close all.
 - No screenshot server, no hourly job, no in-editor rendered preview.
 - Removing the plugin leaves native content intact; remove its config entry and
-  rebuild. No plugin data migration is needed.
+  rebuild. No plugin data migration is needed. The "hide on the site" column
+  (see Row actions) stays in the component tables until you drop it.
 
 Configuration edits require a server restart. Backend URL/prefix deployments
 should set `previewBaseUrl` explicitly. HTTP(S) image hosts must also be allowed

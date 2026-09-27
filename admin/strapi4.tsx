@@ -15,22 +15,24 @@ import {
   useFetchClient,
   useLibrary,
   useRBAC,
+  useNotification,
   auth,
 } from "@strapi/helper-plugin";
 import { Gallery } from "./Gallery";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert } from "./model.mjs";
+import { cloneRow, integerKeys } from "./rows.mjs";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
 
-function Modal({ open, onOpenChange, trigger, title, children }: any) {
+function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   const id = React.useId();
   return (
     <>
       {trigger}
       {open && (
-        <ModalLayout onClose={() => onOpenChange(false)} labelledBy={id} width="80vw">
+        <ModalLayout onClose={() => onOpenChange(false)} labelledBy={id} width={width}>
           <ModalHeader>
             <Typography id={id} variant="beta">
               {title}
@@ -42,11 +44,29 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
     </>
   );
 }
+// Row actions write whole zone arrays through the edit view reducer (ON_CHANGE); new rows get integer keys. Relations
+// are copied as the form holds them (the loaded pages of each relation list).
+function useRowForm(c: any, components: any) {
+  const toggleNotification = useNotification();
+  const latest = React.useRef(c.modifiedData);
+  latest.current = c.modifiedData;
+  if (typeof c.onChange !== "function") return null;
+  return {
+    model: c.slug,
+    locale: c.initialData?.locale || undefined,
+    rows: (zone: string) => (Array.isArray(latest.current?.[zone]) ? latest.current[zone] : []),
+    setRows: (zone: string, rows: any[]) => c.onChange({ target: { name: zone, value: rows } }),
+    keys: (rows: any[], _at: number, n: number) => integerKeys(rows, n),
+    notify: (type: string, message: string) => toggleNotification({ type, message }),
+    prepare: async (rows: any[]) => rows.map((row) => cloneRow(row, components)),
+  };
+}
 function Picker() {
   const c: any = useCMEditViewDataManager();
   const { get, put } = useFetchClient();
   const catalog = useCatalog(get);
   const components = c.allLayoutData?.components || {};
+  const form = useRowForm(c, components);
   const schema = c.layout || c.allLayoutData?.contentType;
   const allowed =
     (c.isCreatingEntry
@@ -103,6 +123,7 @@ function Picker() {
       docKey={docKey}
       contentType={c.slug}
       userId={auth.getUserInfo?.()?.id}
+      form={form}
     />
   );
 }

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Row actions in each block header, before the native delete (Strapi 5 and 4):
+  hide on the site (eye), duplicate (deep copy right below, groups whole,
+  relations and media kept), copy one block or a selection and paste it on any
+  page (localStorage `blockscene:clipboard:v1`, all-or-nothing validation
+  against the target zone, also from the page preview seams), and a
+  confirmation before the native delete. Everything goes through the form, so
+  undo/redo covers it. New editor options `confirmDelete`, `duplicate`,
+  `clipboard` (default on) and `hiddenBlocks` (`strip` default, `flag`, `off`),
+  in Settings and code config.
+- Hidden blocks: the plugin adds a boolean attribute (plugin config
+  `hiddenAttribute`, default `bsHidden`, `false` to disable) to every Dynamic
+  Zone component at register time, hidden from the edit view. This creates a
+  column in each of those component tables. In `strip` mode content-API reads
+  (Strapi 5 document service middleware, Strapi 4 entity service) drop hidden
+  rows; admin reads never do. Page preview blocks carry `hidden: true`; the
+  bridge's `update-page` carries `clipboard` and the page may send `paste`.
+
 - Lazy rich-text editors (Strapi 5): fields listed in the new editor option
   `lazyFields` (default `["plugin::ckeditor5.CKEditor"]`, up to 20 custom field
   uids) render a sanitized read-only preview and mount the real editor on click,

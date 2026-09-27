@@ -2,6 +2,7 @@
 
 const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
+const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
 // Settings saved by the plugin under its previous id ("block-picker", alphas before the rename) are copied once.
@@ -123,8 +124,19 @@ module.exports = {
       // Empty/absent: every Dynamic Zone component is an ordinary block. See README "Layout groups".
       groups: null,
       // Project defaults from code: same shape as the stored settings, e.g. require('./blockscene.json'). See README "Settings page".
-      settings: null },
+      settings: null,
+      // "Hide on the site": boolean attribute added to every Dynamic Zone component (a DB column); false adds nothing.
+      hiddenAttribute: 'bsHidden' },
     validator: catalog,
+  },
+  // Before the database schema sync, so the column exists. A name the host already uses with another type is skipped.
+  register({ strapi }) {
+    const plugin = strapi.plugin(PLUGIN)
+    const name = hiddenName(plugin.config('hiddenAttribute'))
+    if (name === null) strapi.log.warn(`[${PLUGIN}] "hiddenAttribute" config ignored: expected a name like "bsHidden" or false. Hiding blocks is off.`)
+    if (!name) return
+    const { skipped } = injectHidden(strapi.components, strapi.contentTypes, name)
+    if (skipped.length) strapi.log.warn(`[${PLUGIN}] "${name}" already exists with another type on ${skipped.join(', ')}; those blocks cannot be hidden.`)
   },
   async bootstrap({ strapi }) {
     await strapi.admin.services.permission.actionProvider.registerMany([
@@ -133,6 +145,7 @@ module.exports = {
     ])
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
     registerPublishGuard(strapi)
+    registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
   },
   services: { settings: ({ strapi }) => {
     // Code settings (plugin config `settings`): validated once, strictly; invalid ones are ignored with a warning.
@@ -177,8 +190,9 @@ module.exports = {
           base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template,
             ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }) }
         }
-        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes,
-          editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled } }
+        const hidden = hiddenName(plugin.config('hiddenAttribute')) || null
+        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden,
+          editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),
     settings: ({ strapi }) => ({
@@ -191,7 +205,7 @@ module.exports = {
         const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
           attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
         ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES, typologies: TYPOLOGIES,
-          disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS,
+          disabled: strapi.plugin(PLUGIN).config('disabled') === true, hiddenAttribute: hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')) || null, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS,
           projectDefaults: strapi.plugin(PLUGIN).service('settings').projectDefaults() }
       },
       async update(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').set(ctx.request?.body) },

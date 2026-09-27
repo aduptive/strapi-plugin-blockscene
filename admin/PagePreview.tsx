@@ -38,6 +38,7 @@ import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from 
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
+import { pasteInto, useClipboard } from "./RowActions";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
 // (split) or over (preview) the native form, which stays mounted. Works with
@@ -446,11 +447,15 @@ const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
 export function PagePreview({
   editor,
   groups = null,
+  hiddenAttribute = null,
+  form = null,
   Modal,
   Toggle,
 }: {
   editor: any;
   groups?: Record<string, string> | null;
+  hiddenAttribute?: string | null;
+  form?: any;
   Modal: React.ComponentType<any>;
   Toggle?: React.ComponentType<any>;
 }) {
@@ -592,6 +597,9 @@ export function PagePreview({
   const resizable = mode === "split" && !narrow;
   const active = mode !== "form" && Boolean(url) && Boolean(zone);
   const rows: any[] = zone && Array.isArray(values?.[zone]) ? values[zone] : [];
+  // Copied blocks: the page shows a Paste button in its seams while the clipboard holds some (editor.clipboard).
+  const clip = useClipboard();
+  const clipCount = editor?.clipboard !== false && form && canEdit ? clip?.rows?.length || 0 : 0;
   const latest = React.useRef(rows);
   latest.current = rows;
   // Append then move: Strapi < 5.8.1 addFieldRow(field, value, index) overwrites the row at index instead of inserting.
@@ -609,6 +617,8 @@ export function PagePreview({
     components: c.components,
     setMode,
     onChange,
+    clip,
+    clipCount,
   });
   live.current = {
     mode,
@@ -617,6 +627,8 @@ export function PagePreview({
     components: c.components,
     setMode,
     onChange,
+    clip,
+    clipCount,
   };
 
   const send = React.useCallback(() => {
@@ -629,14 +641,16 @@ export function PagePreview({
           latest.current,
           live.current.components,
           window.location.origin,
+          hiddenAttribute,
         ),
         groups,
         locale: t.locale,
         mode: live.current.mode,
+        clipboard: live.current.clipCount,
       },
       origin,
     );
-  }, [channel, origin]);
+  }, [channel, origin, hiddenAttribute]);
   const indexOf = (key: string) =>
     latest.current.findIndex((row) => blockKey(row) === key);
   const path = (key: string, field: string) =>
@@ -843,6 +857,14 @@ export function PagePreview({
         setInserting({ after });
         return;
       }
+      if (is("paste") && canEdit && live.current.clipCount && form) {
+        // Same rules as the zone label Paste: every block allowed, room for all, groups whole; else a notice, no change.
+        const after = event.data.after === null || event.data.after === undefined ? null : String(event.data.after);
+        const index = insertIndex(latest.current, after);
+        if (index < 0) return;
+        pasteInto(form, { name: zone, components: zoneAttr?.components || [], max: zoneAttr?.max }, live.current.clip, components, groups, t, index);
+        return;
+      }
       if (is("move-group") && canEdit && groups) {
         // The whole OPEN…CLOSE range swaps with its top-level neighbour: same rows, same keys, unsaved values kept.
         const next = moveGroup(
@@ -964,7 +986,7 @@ export function PagePreview({
     if (!ready || !active) return;
     const timer = setTimeout(send, 120);
     return () => clearTimeout(timer);
-  }, [values, c.components, ready, active, send, mode]); // mode travels with the update
+  }, [values, c.components, ready, active, send, mode, clipCount]); // mode and the clipboard travel with the update
   // Form -> page hover: the zone row under the pointer (open or closed), sent only when it changes.
   React.useEffect(() => {
     if (!active || !ready) return;

@@ -5,6 +5,7 @@ const PLUGIN = 'blockscene'
 const TEMPLATES = ['generic', 'banner', 'cards', 'imageText', 'faq', 'none']
 const INITIAL_STATES = ['closed', 'open', 'remember']
 const PREVIEW_MODES = ['form', 'split', 'preview']
+const HIDDEN_MODES = ['strip', 'flag', 'off']
 const DEFAULTS = {
   palette: { background: '#F6F6F9', surface: '#DCDCE4', text: '#32324D', accent: '#4945FF' },
   components: {},
@@ -14,7 +15,10 @@ const DEFAULTS = {
   // `blockPreview: true`) show and honour it; the page preview is the editor.
   editor: { enabled: true, showOpenAll: true, showCloseAll: true, showRowThumbnails: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewUrl: '', blockPreviewInForm: false,
     // Strapi 5: rich-text custom fields render a read-only preview until clicked (see admin/LazyInput.tsx).
-    lazyEditors: true, lazyFields: ['plugin::ckeditor5.CKEditor'] },
+    lazyEditors: true, lazyFields: ['plugin::ckeditor5.CKEditor'],
+    // Row actions in each block header (see README "Row actions"). hiddenBlocks: what the content API does with rows
+    // hidden on the site: 'strip' removes them, 'flag' sends them with the attribute, 'off' hides the eye icon.
+    confirmDelete: true, hiddenBlocks: 'strip', duplicate: true, clipboard: true },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -138,6 +142,7 @@ function validateSettings(input, componentUids, contentTypeUids = []) {
   for (const [key, value] of Object.entries(input.editor || {})) {
     if (!(key in DEFAULTS.editor)) fail(`Unknown editor option "${key}"`)
     const valid = key === 'initialState' ? INITIAL_STATES.includes(value) : key === 'previewMode' ? PREVIEW_MODES.includes(value)
+      : key === 'hiddenBlocks' ? HIDDEN_MODES.includes(value)
       : key === 'previewUrl' ? value === '' || (typeof value === 'string' && PREVIEW_URL.test(value))
       : key === 'blockPreviewUrl' ? blockPreviewUrl(value) : key === 'lazyFields' ? lazyFields(value) : typeof value === 'boolean'
     if (!valid) fail(`Invalid value for editor option "${key}"`)
@@ -183,6 +188,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     if (value === undefined || typeof value !== typeof DEFAULTS.editor[key]) continue
     if (key === 'initialState' && !INITIAL_STATES.includes(value)) continue
     if (key === 'previewMode' && !PREVIEW_MODES.includes(value)) continue
+    if (key === 'hiddenBlocks' && !HIDDEN_MODES.includes(value)) continue
     if (key === 'previewUrl' && value && !PREVIEW_URL.test(value)) continue
     if (key === 'blockPreviewUrl' && !blockPreviewUrl(value)) continue
     // A list with a bad uid keeps its valid ones.
@@ -240,4 +246,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, safeUrl, fail }

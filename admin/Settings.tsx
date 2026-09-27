@@ -280,6 +280,15 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           </>}
         </> : <Typography variant="pi" textColor="neutral600">{t.previewV4}</Typography>}
       </Flex></Box>
+      <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="row-actions-settings">
+        <Typography variant="beta" tag="h2">{t.rowActionsTitle}</Typography>
+        <ToggleField name="editor-confirmDelete" label={t.confirmDeleteOption} value={editor.confirmDelete !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.confirmDelete = v; return s })} />
+        <ToggleField name="editor-duplicate" label={t.duplicateOption} value={editor.duplicate !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.duplicate = v; return s })} />
+        <ToggleField name="editor-clipboard" label={t.clipboardOption} value={editor.clipboard !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.clipboard = v; return s })} />
+        <SelectField name="editor-hiddenBlocks" label={t.hiddenBlocks} value={editor.hiddenBlocks || 'strip'} disabled={!canUpdate || saving || !data.hiddenAttribute}
+          options={['strip', 'flag', 'off'].map(value => ({ value, label: t.hiddenModes[value] }))} onChange={(v: string) => update(s => { s.editor.hiddenBlocks = v; return s })} />
+        <Typography variant="pi" textColor="neutral600">{data.hiddenAttribute ? t.hiddenBlocksHelp : t.hiddenAttributeOff}</Typography>
+      </Flex></Box>
       {(data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
         <Typography variant="beta" tag="h2">{t.contentTypes}</Typography>
         <Typography variant="pi" textColor="neutral600">{t.contentTypesHelp}</Typography>

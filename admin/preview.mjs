@@ -78,14 +78,15 @@ export function mediaFields(uid, row, components) {
   }
   return media
 }
-export function projectPage(rows, components, cmsOrigin) {
+// `hidden`: the "hide on the site" attribute name; a row with it set is sent with `hidden: true` (dimmed by the page).
+export function projectPage(rows, components, cmsOrigin, hidden = null) {
   return (Array.isArray(rows) ? rows : []).slice(0, 200).flatMap((row, index) => {
     const uid = row?.__component
     const key = blockKey(row)
     const schema = components?.[uid]
     if (!uid || key == null || !schema) return []
     return [{ key, index, uid, label: schema.info?.displayName || uid, data: projectRow(row, schema, components, cmsOrigin),
-      fields: editableFields(uid, row, components), media: mediaFields(uid, row, components) }]
+      fields: editableFields(uid, row, components), media: mediaFields(uid, row, components), ...(hidden && row[hidden] === true && { hidden: true }) }]
   })
 }
 export const validateFocus = (uid, field, components) => { const attr = resolveField(uid, field, components); return attr && EDITABLE_TYPES.includes(attr.type) ? attr : null }

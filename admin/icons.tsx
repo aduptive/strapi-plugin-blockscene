@@ -40,6 +40,12 @@ const PATHS: Record<string, string> = {
   cards: 'M3 5h8v14H3zM13 5h8v14h-8z',
   form: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h4',
   layout: 'M3 4h18v16H3zM3 10h18M12 10v10',
+  // Row actions.
+  eyeOff: 'M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.1 4M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.5M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  duplicate: 'M8 8h12v12H8zM4 16V4h12',
+  clipboard: 'M9 3h6v3H9zM7 4.5H5v16h14v-16h-2',
+  paste: 'M9 3h6v3H9zM7 4.5H5v16h14v-16h-2M12 10v7M9 14l3 3 3-3',
+  select: 'M4 4h16v16H4zM8 12l3 3 5-6',
 }
 export function Icon({ name, size = 18, filled }: { name: string; size?: number; filled?: boolean }) {
   const d = PATHS[name]
