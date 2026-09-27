@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Block dialog (visual editor): the block's own accordion header and the zone's
+  connector line are hidden while it is open; the dialog bar names the block.
+
 - Undo and redo of the whole edit view (Strapi 5): buttons in the Blockscene
   panel and the pane toolbar, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y outside
   text fields. Steps coalesce within 400 ms, up to 100; the history starts over

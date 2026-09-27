@@ -177,7 +177,8 @@ body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${B
   width: min(96rem, 92vw); max-height: calc(88vh - 5.6rem); overflow: auto; z-index: 1001; margin: 0 !important;
   background: ${background}; border-radius: 0 0 8px 8px; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
-body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }`;
+body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }
+body.bp-block-modal [data-bp-modal-hide] { display: none !important; }`;
 // Sidebar item: the native form column itself, lifted as a modal or a drawer with every other field hidden.
 const DRAWER_WIDTH = 640;
 type Box = { top: number; left: number; width: number; height: number };
@@ -751,6 +752,10 @@ export function PagePreview({
     const header = toggles(item.parentElement as HTMLElement)[blockModal.index];
     if (header?.getAttribute("aria-expanded") === "false") header.click();
     item.setAttribute("data-bp-block-modal", "");
+    // The dialog bar already names the block: its accordion header (whose click would collapse the form) and the
+    // zone's connector line are hidden while it is lifted. Nested accordions of repeatables keep theirs.
+    const chrome = [header?.closest("h3"), ...[...item.children].filter((child) => header && !child.contains(header))].filter(Boolean) as HTMLElement[];
+    chrome.forEach((el) => el.setAttribute("data-bp-modal-hide", ""));
     document.body.classList.add("bp-block-modal");
     // Focus leaves the iframe either way, so Escape reaches this document. Deferred: the page still owns focus while
     // its click finishes (a site adapter may place the caret there), and would take it back from an immediate focus().
@@ -765,6 +770,7 @@ export function PagePreview({
     return () => {
       clearTimeout(later);
       item.removeAttribute("data-bp-block-modal");
+      chrome.forEach((el) => el.removeAttribute("data-bp-modal-hide"));
       document.body.classList.remove("bp-block-modal");
       document.removeEventListener("keydown", onKey);
     };
