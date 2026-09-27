@@ -311,8 +311,9 @@ Limits: the history lives in the open edit view and starts over when the
 document, the locale or its loaded values change, so a Save clears it. Shortcuts
 pressed inside the preview page are not seen (it is another origin); use the
 buttons there. A custom field that reads its value only once on mount keeps
-showing the old text after an undo until the view reloads (CKEditor has not
-been verified in the lab).
+showing the old text after an undo until the view reloads; the CKEditor 5
+custom field (@_sh/strapi-plugin-ckeditor) follows the restored value (checked
+on Strapi 5.31).
 
 ## Layout groups (optional)
 
