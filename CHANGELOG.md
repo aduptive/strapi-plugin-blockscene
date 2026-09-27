@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preview canvas: near black with a faint 24 px grid behind the page (whole-page
+  pane and the gallery's magnified block).
+- Sidebar drawer/modal: the edit view's cards around the shown fields lose their
+  border and padding; the drawer is the frame.
+
 - Gallery: the detail pane became a magnified block. A click grows the card
   into a large panel over the grid (FLIP, ~250 ms, none with reduced motion)
   with a live preview at Fit/Mobile/Tablet/Desktop widths over the instant

@@ -33,7 +33,7 @@ import {
   validateEdit,
   validateFocus,
 } from "./preview.mjs";
-import { DEVICES, type Device, frameStyle, useStageSize } from "./devices";
+import { DEVICES, type Device, frameStyle, useStageSize, STAGE_BACKGROUND } from "./devices";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
@@ -165,6 +165,7 @@ type Box = { top: number; left: number; width: number; height: number };
 const fieldsStyle = (background: string, drawer: Box | null) => `
 body.bp-fields [data-bp-hide] { display: none !important; }
 body.bp-fields [data-bp-show] { grid-column: 1 / -1 !important; }
+body.bp-fields [data-bp-flat] { border: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; }
 body.bp-fields [data-bp-fields] { position: fixed !important; z-index: 1001; overflow: auto; margin: 0 !important;
   padding: 1.6rem 2.4rem; background: ${background}; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-fields [data-bp-fields="modal"] { top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%); width: min(96rem, 92vw);
@@ -695,7 +696,8 @@ export function PagePreview({
     const walk = (el: HTMLElement) => {
       for (const child of [...el.children] as HTMLElement[]) {
         if (shown.includes(child)) { child.setAttribute("data-bp-show", ""); marked.push(child); }
-        else if (shown.some((item) => child.contains(item))) walk(child);
+        // The edit view's cards around the shown fields lose their frame: the drawer or modal is the frame now.
+        else if (shown.some((item) => child.contains(item))) { child.setAttribute("data-bp-flat", ""); marked.push(child); walk(child); }
         else { child.setAttribute("data-bp-hide", ""); marked.push(child); }
       }
     };
@@ -710,7 +712,7 @@ export function PagePreview({
     document.addEventListener("keydown", onKey);
     return () => {
       clearTimeout(later);
-      for (const el of marked) { el.removeAttribute("data-bp-show"); el.removeAttribute("data-bp-hide"); }
+      for (const el of marked) { el.removeAttribute("data-bp-show"); el.removeAttribute("data-bp-hide"); el.removeAttribute("data-bp-flat"); }
       column.removeAttribute("data-bp-fields");
       document.body.classList.remove("bp-fields");
       document.removeEventListener("keydown", onKey);
@@ -1132,7 +1134,7 @@ export function PagePreview({
               </div>
             )}
             <div ref={setStage} data-testid="page-preview-stage" data-device={device}
-              style={{ position: "relative", flex: 1, overflow: "hidden", background: device === "fit" ? undefined : "#eaeaef" }}>
+              style={{ position: "relative", flex: 1, overflow: "hidden", ...STAGE_BACKGROUND }}>
               <Frame
                 key={attempt}
                 ref={iframe}

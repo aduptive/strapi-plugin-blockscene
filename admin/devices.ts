@@ -22,3 +22,11 @@ export const frameStyle = (device: Device, stage: { width: number; height: numbe
   const scale = Math.min(1, stage.width / width);
   return { left: Math.max(0, (stage.width - width * scale) / 2), width, height: stage.height / scale, transform: `scale(${scale})` };
 };
+
+// Canvas behind the previewed page (whole-page pane and the gallery's magnified block): near black with a faint
+// 24 px grid, so the page's own edges read clearly at every width. Not themed: it frames the site, not the admin.
+export const STAGE_BACKGROUND = {
+  backgroundColor: "#0d0d12",
+  backgroundImage: "linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)",
+  backgroundSize: "24px 24px",
+};
