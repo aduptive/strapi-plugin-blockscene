@@ -33,6 +33,7 @@ import {
   validateEdit,
   validateFocus,
 } from "./preview.mjs";
+import { DEVICES, type Device, frameStyle, useStageSize } from "./devices";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
@@ -44,9 +45,6 @@ import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
 type Mode = "form" | "split" | "preview";
 const RATIO_KEY = "blockscene:page-split-ratio",
   DEVICE_KEY = "blockscene:page-device";
-// Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
-const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
-type Device = keyof typeof DEVICES;
 const MODE_ICONS: Record<Mode, string> = { form: "list", split: "split", preview: "eye" };
 const MIN_PANE = 360,
   MIN_FORM = 520,
@@ -138,6 +136,7 @@ const Handle = styled.div`
     outline: none;
   }
 `;
+// The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
 const Frame = styled.iframe`
   position: absolute;
   top: 0;
@@ -145,25 +144,6 @@ const Frame = styled.iframe`
   background: white;
   transform-origin: top left;
 `;
-// The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
-function useStageSize(el: HTMLDivElement | null) {
-  const [size, setSize] = React.useState({ width: 0, height: 0 });
-  React.useEffect(() => {
-    if (!el) return;
-    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
-    measure();
-    const observer = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
-    observer?.observe(el);
-    return () => observer?.disconnect();
-  }, [el]);
-  return size;
-}
-const frameStyle = (device: Device, stage: { width: number; height: number }) => {
-  const width = DEVICES[device];
-  if (!width || !stage.width) return { left: 0, width: "100%", height: "100%" };
-  const scale = Math.min(1, stage.width / width);
-  return { left: Math.max(0, (stage.width - width * scale) / 2), width, height: stage.height / scale, transform: `scale(${scale})` };
-};
 const SPLIT_STYLE = `
 body.bp-split #main-content { padding-right: calc(var(--bp-pane, 50vw) + 1.6rem) !important; }
 body.bp-split [data-bp-grid] { display: flex !important; flex-direction: column-reverse; gap: 1.6rem; }
@@ -1182,6 +1162,8 @@ export function PagePreview({
           Toggle={Toggle}
           get={get}
           put={put}
+          contentType={c.model}
+          locale={c.form?.initialValues?.locale}
           open
           onOpenChange={(open: boolean) => {
             if (!open) setInserting(null);

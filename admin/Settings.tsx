@@ -149,7 +149,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   }, [get, canRead, isLoading])
   const update = (patch: (current: any) => any) => { setSettings((current: any) => patch(structuredClone(current))); setDirty(true); setStatus('') }
   const badColor = settings && (Object.values(settings.palette).some((value: any) => !COLOR.test(value)) ||
-    (settings.editor.previewUrl && !/^https?:\/\/\S+$/.test(settings.editor.previewUrl)))
+    [settings.editor.previewUrl, settings.editor.blockPreviewUrl].some((url: string) => url && !/^https?:\/\/\S+$/.test(url)))
   const badSidebar = settings && Object.values(settings.contentTypes || {}).some((entry: any) => (entry.sidebar || []).some(badItem))
   const invalid = badColor || badSidebar
   const save = async () => {
@@ -246,6 +246,9 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <SelectField name="editor-initialState" label={t.initialState} value={editor.initialState} disabled={!canUpdate || saving}
           options={['closed', 'open', 'remember'].map(value => ({ value, label: t.states[value] }))} onChange={(v: string) => update(s => { s.editor.initialState = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{t.rememberHelp}</Typography>
+        <TextField name="editor-blockPreviewUrl" label={t.blockPreviewUrl} value={editor.blockPreviewUrl || ''} disabled={!canUpdate || saving}
+          placeholder="http://localhost:3000/block-preview/{name}/{variant}" onChange={(v: string) => update(s => { s.editor.blockPreviewUrl = v.trim(); return s })} />
+        <Typography variant="pi" textColor="neutral600">{t.blockPreviewUrlHelp}</Typography>
         {previewSupported ? <>
           <TextField name="editor-previewUrl" label={t.previewUrl} value={editor.previewUrl || ''} disabled={!canUpdate || saving} placeholder="https://site.test/block-preview/page"
             onChange={(v: string) => update(s => { s.editor.previewUrl = v.trim(); return s })} />

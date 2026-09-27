@@ -77,6 +77,20 @@ export function candidatesFor(uid, meta = {}, config = {}) {
   ].filter(Boolean);
 }
 
+// editor.blockPreviewUrl: a plain page per block. Placeholders are URL-encoded; null unless the result is http(s).
+export function blockPreviewSrc(template, uid, { variant = "default", locale = "" } = {}) {
+  if (!template || !uid) return null;
+  const dot = uid.indexOf(".");
+  const values = { uid, name: uid.slice(dot + 1), category: dot < 0 ? "" : uid.slice(0, dot), variant, locale };
+  try {
+    const url = new URL(template.replace(/\{(uid|name|category|variant|locale)\}/g, (_, key) => encodeURIComponent(values[key] || "")));
+    url.pathname = url.pathname.replace(/\/{2,}/g, "/"); // an empty {locale} leaves no empty segment
+    return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 // Strapi-managed attributes the editor never fills; CKEditor custom fields are rich text under the hood.
 const SYSTEM_FIELDS = [
   "id",

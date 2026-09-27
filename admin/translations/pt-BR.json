@@ -192,5 +192,9 @@
  "resetAll": "Restaurar padrões",
  "restoreProjectConfirm": "Descartar todas as configurações salvas nesta página e voltar aos padrões do projeto definidos no código?",
  "resetAllConfirm": "Descartar todas as configurações salvas nesta página e voltar aos padrões?",
- "restored": "Padrões restaurados."
+ "restored": "Padrões restaurados.",
+ "blockPreview": "Preview ao vivo do bloco",
+ "livePreviewFailed": "Preview ao vivo indisponível, mostrando a imagem.",
+ "blockPreviewUrl": "URL de preview do bloco",
+ "blockPreviewUrlHelp": "Opcional. Uma página do seu frontend que renderiza um bloco sozinho, mostrada em tamanho grande ao clicar num card da galeria, por exemplo http://localhost:3026/pt-BR/block-preview/'{name}'/'{variant}'. Marcadores: '{uid}', '{name}' (depois do ponto), '{category}' (antes do ponto), '{variant}' (default), '{locale}'. Vazio usa a rota de preview de página quando existir, senão a imagem."
 }

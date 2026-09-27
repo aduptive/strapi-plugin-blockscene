@@ -12,7 +12,7 @@ const DEFAULTS = {
   // blockPreviewInForm: compact read-only preview above a block's fields in form
   // mode. Only installations that ship the accordion integration (server config
   // `blockPreview: true`) show and honour it; the page preview is the editor.
-  editor: { enabled: true, showOpenAll: true, showCloseAll: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewInForm: false },
+  editor: { enabled: true, showOpenAll: true, showCloseAll: true, initialState: 'closed', previewMode: 'form', previewUrl: '', blockPreviewUrl: '', blockPreviewInForm: false },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -38,6 +38,9 @@ const TYPE_KEYS = {
 // contentTypes: an array of uids, or { uid: [attribute names] } to also check sidebar fields.
 const typeMap = (types) => Array.isArray(types) ? Object.fromEntries(types.map(uid => [uid, null])) : (types || {})
 const PREVIEW_URL = /^https?:\/\/[^\s"'<>]{1,500}$/
+// blockPreviewUrl: an http(s) URL whose braces are only the known placeholders ({uid}, {name}, {category}, {variant}, {locale}).
+const blockPreviewUrl = value => typeof value === 'string' && (value === '' || (PREVIEW_URL.test(value) &&
+  !/[{}]/.test(value.replace(/\{(uid|name|category|variant|locale)\}/g, '')) && URL.canParse?.(value.replace(/[{}]/g, '')) !== false))
 const COLOR = /^#[0-9A-Fa-f]{6}$/
 const UID = /^[a-z0-9-]+\.[a-z0-9-]+$/
 
@@ -131,7 +134,8 @@ function validateSettings(input, componentUids, contentTypeUids = []) {
   for (const [key, value] of Object.entries(input.editor || {})) {
     if (!(key in DEFAULTS.editor)) fail(`Unknown editor option "${key}"`)
     const valid = key === 'initialState' ? INITIAL_STATES.includes(value) : key === 'previewMode' ? PREVIEW_MODES.includes(value)
-      : key === 'previewUrl' ? value === '' || (typeof value === 'string' && PREVIEW_URL.test(value)) : typeof value === 'boolean'
+      : key === 'previewUrl' ? value === '' || (typeof value === 'string' && PREVIEW_URL.test(value))
+      : key === 'blockPreviewUrl' ? blockPreviewUrl(value) : typeof value === 'boolean'
     if (!valid) fail(`Invalid value for editor option "${key}"`)
     out.editor[key] = key === 'previewUrl' && value ? String(new URL(value).href).replace(/\/$/, '') : value
   }
@@ -176,6 +180,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     if (key === 'initialState' && !INITIAL_STATES.includes(value)) continue
     if (key === 'previewMode' && !PREVIEW_MODES.includes(value)) continue
     if (key === 'previewUrl' && value && !PREVIEW_URL.test(value)) continue
+    if (key === 'blockPreviewUrl' && !blockPreviewUrl(value)) continue
     out.editor[key] = value
   }
   for (const [uid, entry] of Object.entries(saved.components || {})) {

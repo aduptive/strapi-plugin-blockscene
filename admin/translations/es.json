@@ -192,5 +192,9 @@
  "resetAll": "Restablecer valores predeterminados",
  "restoreProjectConfirm": "¿Descartar todos los ajustes guardados en esta página y volver a los valores del proyecto definidos en el código?",
  "resetAllConfirm": "¿Descartar todos los ajustes guardados en esta página y volver a los valores predeterminados?",
- "restored": "Valores restablecidos."
+ "restored": "Valores restablecidos.",
+ "blockPreview": "Vista previa en vivo del bloque",
+ "livePreviewFailed": "Vista previa en vivo no disponible, se muestra la imagen.",
+ "blockPreviewUrl": "URL de vista previa del bloque",
+ "blockPreviewUrlHelp": "Opcional. Una página de su frontend que renderiza un solo bloque, mostrada en grande al hacer clic en una tarjeta de la galería, p. ej. http://localhost:3026/es/block-preview/'{name}'/'{variant}'. Marcadores: '{uid}', '{name}' (tras el punto), '{category}' (antes del punto), '{variant}' (default), '{locale}'. Vacía usa la ruta de vista previa de página si existe; si no, la imagen."
 }

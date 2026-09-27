@@ -192,5 +192,9 @@
  "resetAll": "Ripristina i valori predefiniti",
  "restoreProjectConfirm": "Scartare tutte le impostazioni salvate in questa pagina e tornare ai valori del progetto definiti nel codice?",
  "resetAllConfirm": "Scartare tutte le impostazioni salvate in questa pagina e tornare ai valori predefiniti?",
- "restored": "Valori ripristinati."
+ "restored": "Valori ripristinati.",
+ "blockPreview": "Anteprima dal vivo del blocco",
+ "livePreviewFailed": "Anteprima dal vivo non disponibile, viene mostrata l'immagine.",
+ "blockPreviewUrl": "URL di anteprima del blocco",
+ "blockPreviewUrlHelp": "Facoltativo. Una pagina del tuo frontend che renderizza un singolo blocco, mostrata in grande quando si clicca una scheda della galleria, ad es. http://localhost:3026/it/block-preview/'{name}'/'{variant}'. Segnaposto: '{uid}', '{name}' (dopo il punto), '{category}' (prima del punto), '{variant}' (default), '{locale}'. Vuoto usa la route di anteprima pagina se esiste, altrimenti l'immagine."
 }

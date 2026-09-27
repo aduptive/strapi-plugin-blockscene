@@ -102,6 +102,24 @@ test('settings validation rejects invalid colors, templates, UIDs, media and unk
   assert.equal(merged.editor.previewMode, 'form'); assert.equal(merged.editor.previewUrl, '')
 })
 
+test('blockPreviewUrl: placeholders validated on save, expanded and encoded in the admin', async () => {
+  const { validateSettings, mergeSaved } = require('../server/settings')
+  const { blockPreviewSrc } = await import('../admin/model.mjs')
+  const uids = ['blocks.hero']
+  const url = 'http://localhost:3026/{locale}/block-preview/{name}/{variant}?c={category}&u={uid}'
+  assert.equal(validateSettings({ editor: { blockPreviewUrl: url } }, uids).editor.blockPreviewUrl, url, 'stored as typed (braces kept)')
+  assert.equal(validateSettings({}, uids).editor.blockPreviewUrl, '', 'off by default')
+  for (const bad of ['javascript:alert(1)', '/block-preview/{name}', 'https://site.test/{nope}', 'https://site.test/{name', 'https://x.test/' + 'a'.repeat(500), 'https://site.test/"{name}"', 3])
+    assert.throws(() => validateSettings({ editor: { blockPreviewUrl: bad } }, uids), { name: 'ValidationError' }, `rejects ${String(bad).slice(0, 40)}`)
+  assert.equal(mergeSaved({ editor: { blockPreviewUrl: 'ftp://x/{uid}' } }, uids).editor.blockPreviewUrl, '')
+  assert.equal(mergeSaved({ editor: { blockPreviewUrl: url } }, uids).editor.blockPreviewUrl, url)
+  assert.equal(blockPreviewSrc(url, 'blocks.hero', { locale: 'pt-BR' }), 'http://localhost:3026/pt-BR/block-preview/hero/default?c=blocks&u=blocks.hero')
+  assert.equal(blockPreviewSrc(url, 'blocks.hero', { variant: 'dark' }), 'http://localhost:3026/block-preview/hero/dark?c=blocks&u=blocks.hero', 'empty locale')
+  assert.equal(blockPreviewSrc('https://s.test/{name}', 'a.b/../c?x'), 'https://s.test/b%2F..%2Fc%3Fx', 'values cannot add path segments or queries')
+  assert.equal(blockPreviewSrc('{uid}', 'javascript:alert(1)'), null)
+  assert.equal(blockPreviewSrc('', 'blocks.hero'), null)
+})
+
 test('admin catalog only exposes declared safe metadata plus resolved overrides', async () => {
   const plugin = require('../server')
   const values = { components: { 'blocks.hero': { label: 'Hero', image: 'javascript:alert(1)', secret: 'must-not-leak' } }, previewBaseUrl: '/cms/previews', previewVersion: 'bad version!', disabled: false }

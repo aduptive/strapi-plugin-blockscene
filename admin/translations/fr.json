@@ -192,5 +192,9 @@
  "resetAll": "Rétablir les valeurs par défaut",
  "restoreProjectConfirm": "Abandonner tous les réglages enregistrés sur cette page et revenir aux valeurs du projet définies dans le code ?",
  "resetAllConfirm": "Abandonner tous les réglages enregistrés sur cette page et revenir aux valeurs par défaut ?",
- "restored": "Valeurs rétablies."
+ "restored": "Valeurs rétablies.",
+ "blockPreview": "Aperçu en direct du bloc",
+ "livePreviewFailed": "Aperçu en direct indisponible, l'image est affichée.",
+ "blockPreviewUrl": "URL d'aperçu de bloc",
+ "blockPreviewUrlHelp": "Facultatif. Une page de votre frontend qui affiche un seul bloc, montrée en grand quand on clique sur une carte de la galerie, par ex. http://localhost:3026/fr/block-preview/'{name}'/'{variant}'. Variables : '{uid}', '{name}' (après le point), '{category}' (avant le point), '{variant}' (default), '{locale}'. Vide : la route d'aperçu de page si elle existe, sinon l'image."
 }

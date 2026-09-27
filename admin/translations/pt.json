@@ -192,5 +192,9 @@
  "resetAll": "Repor predefinições",
  "restoreProjectConfirm": "Descartar todas as definições guardadas nesta página e voltar às predefinições do projeto definidas no código?",
  "resetAllConfirm": "Descartar todas as definições guardadas nesta página e voltar às predefinições?",
- "restored": "Predefinições repostas."
+ "restored": "Predefinições repostas.",
+ "blockPreview": "Pré-visualização ao vivo do bloco",
+ "livePreviewFailed": "Pré-visualização ao vivo indisponível, a mostrar a imagem.",
+ "blockPreviewUrl": "URL de pré-visualização do bloco",
+ "blockPreviewUrlHelp": "Opcional. Uma página do seu frontend que renderiza um bloco isolado, mostrada em grande ao clicar num cartão da galeria, por exemplo http://localhost:3026/pt-PT/block-preview/'{name}'/'{variant}'. Marcadores: '{uid}', '{name}' (depois do ponto), '{category}' (antes do ponto), '{variant}' (default), '{locale}'. Vazio usa a rota de pré-visualização de página quando existir, caso contrário a imagem."
 }

@@ -17,7 +17,11 @@ import {
   readMemory,
   writeMemory,
   initialState,
+  blockPreviewSrc,
+  componentDefaults,
 } from "./model.mjs";
+import { PROTOCOL, isPreviewMessage, projectPage } from "./preview.mjs";
+import { DEVICES, type Device, frameStyle, useStageSize } from "./devices";
 import {
   findZoneList,
   setAll,
@@ -186,7 +190,7 @@ export function Thumb({
   );
 }
 
-// Browser layout: sidebar (views and typologies) · grid · detail pane. Only the grid and the detail scroll.
+// Browser layout: sidebar (views and typologies) · grid. Only the grid scrolls; the magnified block covers it.
 const Layout = styled.div`
   display: flex;
   height: min(70vh, 720px);
@@ -237,16 +241,6 @@ const NavItem = styled.button<{ $active?: boolean; $collapsed?: boolean }>`
 const Main = styled.div`
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`;
-const Detail = styled.aside`
-  flex: 0 0 min(340px, 38%);
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid ${({ theme }) => theme.colors.neutral150};
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -448,8 +442,8 @@ function Badges({ entry, t, tags }: any) {
   );
 }
 
-// Click shows the details; double click, Enter or the "+" inserts at once. A single click waits out the
-// double click window, so the detail pane never reflows the grid between the two clicks.
+// Click magnifies the block; double click, Enter or the "+" inserts at once. A single click waits out the
+// double click window, so a double click never starts the magnify animation.
 function Card({ entry, palette, showFields, starred, active, onOpen, onInsert, onStar }: any) {
   const t = useMessages();
   const timer = React.useRef<any>(null);
@@ -527,63 +521,287 @@ function Card({ entry, palette, showFields, starred, active, onOpen, onInsert, o
   );
 }
 
-function DetailPane({ entry, palette, starred, onStar, onInsert, onClose }: any) {
+// Magnified block: a panel over the grid area (sidebar and toolbar stay usable), the grid dimmed underneath.
+const Scrim = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  opacity: 0.35;
+  background: ${({ theme }) => theme.colors.neutral800};
+`;
+const Panel = styled.section`
+  position: absolute;
+  inset: 16px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.neutral0};
+  box-shadow: ${({ theme }) => theme.shadows?.popupShadow || "0 8px 32px rgba(33, 33, 52, 0.3)"};
+  transform-origin: top left;
+`;
+const Stage = styled.div<{ $device: boolean }>`
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: ${({ theme, $device }) => ($device ? theme.colors.neutral150 : theme.colors.neutral100)};
+`;
+// The card's own thumbnail, contained: it shows at once and stays when the live source fails.
+const Still = styled.div<{ $covered: boolean }>`
+  position: absolute;
+  inset: 0;
+  /* Hidden once the live page has faded in over it (device widths would show it in the gutters). */
+  visibility: ${({ $covered }) => ($covered ? "hidden" : "visible")};
+  transition: visibility 0s linear ${({ $covered }) => ($covered ? "200ms" : "0s")};
+  > [data-thumb] {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    background: transparent;
+  }
+  img,
+  svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+`;
+const Live = styled.iframe<{ $shown: boolean }>`
+  position: absolute;
+  top: 0;
+  border: 0;
+  background: white;
+  transform-origin: top left;
+  opacity: ${({ $shown }) => ($shown ? 1 : 0)};
+  transition: opacity 200ms ease-out;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`;
+const Strip = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.neutral150};
+`;
+const FieldsButton = styled.button`
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.primary600};
+`;
+const reducedMotion = () => {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+};
+// FLIP: the panel is laid out once at its final place; only transform/opacity animate from (or back to) the card.
+const flip = (panel: HTMLElement | null, scrim: HTMLElement | null, card: Element | null, back: boolean) => {
+  if (!panel?.animate || reducedMotion()) return null;
+  const to = panel.getBoundingClientRect();
+  const from = card?.getBoundingClientRect();
+  const timing = { duration: 250, easing: "cubic-bezier(0.2, 0, 0, 1)", fill: back ? "forwards" : "none" } as const;
+  const frames = [
+    from?.width && to.width
+      ? { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`, opacity: 0.6 }
+      : { transform: "scale(0.96)", opacity: 0 },
+    { transform: "none", opacity: 1 },
+  ];
+  const dim = [{ opacity: 0 }, { opacity: 0.35 }];
+  scrim?.animate(back ? dim.reverse() : dim, timing);
+  return panel.animate(back ? frames.reverse() : frames, timing);
+};
+const newChannel = () => (crypto as any).randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+// Live source: editor.blockPreviewUrl (plain page per block), else the page preview route with the bridge
+// (one block of schema defaults, read-only), else none (the image stays).
+function useLiveSource(entry: any, config: any, components: any, get: any, contentType?: string, locale?: string) {
+  const editor = config?.editor || {};
+  const [native, setNative] = React.useState<string | null>(null);
+  const plain = editor.blockPreviewUrl ? blockPreviewSrc(editor.blockPreviewUrl, entry.uid, { locale: locale || "" }) : null;
+  React.useEffect(() => {
+    if (editor.blockPreviewUrl || editor.previewUrl || !contentType || !get) return;
+    let active = true;
+    // Strapi 5 native Preview only; elsewhere the request fails and the image stays.
+    get(`/content-manager/preview/url/${contentType}?${new URLSearchParams({ status: "draft", ...(locale ? { locale } : {}) })}`)
+      .then(({ data }: any) => {
+        if (active && typeof data?.data?.url === "string") setNative(`${new URL(data.data.url).origin}/block-preview/page`);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [editor.blockPreviewUrl, editor.previewUrl, contentType, locale, get]);
+  const channel = React.useMemo(newChannel, []);
+  if (editor.blockPreviewUrl) return plain ? { kind: "plain", src: plain, origin: "", channel } : null;
+  const base = editor.previewUrl || native;
+  if (!base) return null;
+  try {
+    const url = new URL(base);
+    url.searchParams.set("channel", channel);
+    return { kind: "bridge", src: url.href, origin: url.origin, channel };
+  } catch {
+    return null;
+  }
+}
+const LIVE_TIMEOUT = 8000;
+function Magnify({ entry, palette, config, components, get, contentType, locale, starred, onStar, onInsert, onClose, cardOf }: any) {
   const t = useMessages();
+  const panel = React.useRef<HTMLElement>(null);
+  const scrim = React.useRef<HTMLDivElement>(null);
+  const closeButton = React.useRef<HTMLDivElement>(null);
+  const frame = React.useRef<HTMLIFrameElement>(null);
+  const closing = React.useRef(false);
+  const [stageEl, setStageEl] = React.useState<HTMLDivElement | null>(null);
+  const stage = useStageSize(stageEl);
+  const [device, setDevice] = React.useState<Device>("fit");
+  const [fields, setFields] = React.useState(false);
+  const [state, setState] = React.useState<"loading" | "ready" | "failed">("loading");
+  const live = useLiveSource(entry, config, components, get, contentType, locale);
+  React.useLayoutEffect(() => {
+    flip(panel.current, scrim.current, cardOf(entry.uid), false);
+    closeButton.current?.querySelector("button")?.focus({ preventScroll: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    const card = cardOf(entry.uid);
+    const done = () => {
+      onClose();
+      card?.querySelector("button")?.focus({ preventScroll: true });
+    };
+    const animation = flip(panel.current, scrim.current, card, true);
+    if (animation) animation.onfinish = done;
+    else done();
+  };
+  const closeRef = React.useRef(close);
+  closeRef.current = close;
+  // Window capture runs before the modal's own Escape handler: Escape closes the magnified block, not the gallery.
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      event.preventDefault();
+      closeRef.current();
+    };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  }, []);
+  const src = live?.src;
+  React.useEffect(() => {
+    if (!live) return;
+    setState("loading");
+    const timer = setTimeout(() => setState((s) => (s === "ready" ? s : "failed")), LIVE_TIMEOUT);
+    // Read-only: of everything the bridge page may send, only "ready" is read (answered with the block).
+    const receive = (event: MessageEvent) => {
+      if (live.kind !== "bridge" || !isPreviewMessage(event, live.origin, frame.current?.contentWindow, live.channel, "ready")) return;
+      clearTimeout(timer);
+      setState("ready");
+      let blocks: any[] = [];
+      try {
+        const row = { ...componentDefaults(components[entry.uid], components), __component: entry.uid, __temp_key__: "blockscene-magnify" };
+        blocks = projectPage([row], components, window.location.origin);
+      } catch {
+        /* recursive defaults: the page renders nothing */
+      }
+      frame.current?.contentWindow?.postMessage(
+        { protocol: PROTOCOL, channel: live.channel, type: "update-page", blocks, groups: null, locale: t.locale, mode: "preview" },
+        live.origin,
+      );
+    };
+    window.addEventListener("message", receive);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("message", receive);
+    };
+  }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onLoad = () => {
+    if (live?.kind === "plain") setState("ready");
+    else frame.current?.contentWindow?.postMessage({ protocol: PROTOCOL, channel: live!.channel, type: "ping" }, live!.origin);
+  };
   return (
-    <Detail data-testid="gallery-detail" aria-label={entry.label}>
-      <Flex gap={2} alignItems="center" justifyContent="space-between">
-        <Typography variant="delta" tag="h3" ellipsis>
-          {entry.label}
-        </Typography>
-        <Tool icon="close" label={t.closeDetail} onClick={onClose} />
-      </Flex>
-      <Thumb
-        candidates={entry.candidates}
-        template={entry.template}
-        palette={palette}
-        noPreview={t.noPreview}
-        eager
-      />
-      <Mono>{entry.uid}</Mono>
-      {entry.description && (
-        <Typography variant="omega" textColor="neutral700">
-          {entry.description}
-        </Typography>
-      )}
-      <Flex gap={1} wrap="wrap">
-        <Badge>{t.typologies[entry.typology] || entry.typology}</Badge>
-        <Badges entry={entry} t={t} tags />
-      </Flex>
-      {entry.fields.length > 0 && (
-        <Flex direction="column" alignItems="stretch" gap={1} data-testid="gallery-detail-fields">
-          <Typography variant="sigma" textColor="neutral600">
-            {t.showFields}
-          </Typography>
-          {entry.fields.map((field: any) => (
-            <Flex key={field.name} gap={2} justifyContent="space-between">
-              <Typography variant="pi" textColor="neutral800">
-                {field.name}
-              </Typography>
-              <Mono>{field.type}</Mono>
-            </Flex>
-          ))}
+    <>
+      <Scrim ref={scrim} onClick={close} data-testid="gallery-magnify-scrim" />
+      <Panel ref={panel as any} aria-label={entry.label} data-testid="gallery-detail" data-live={live ? state : "none"}>
+        <Flex gap={2} padding={2} alignItems="center" justifyContent="space-between">
+          <Flex gap={1} role="group" aria-label={t.deviceGroup} data-testid="gallery-magnify-devices">
+            {(Object.keys(DEVICES) as Device[]).map((value) => (
+              <Tool key={value} icon={value} label={DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]}
+                active={device === value} onClick={() => setDevice(value)} />
+            ))}
+          </Flex>
+          {live && state === "failed" && (
+            <Typography variant="pi" textColor="neutral600" data-testid="gallery-magnify-note">
+              {t.livePreviewFailed}
+            </Typography>
+          )}
+          <div ref={closeButton}>
+            <Tool icon="close" label={t.closeDetail} onClick={close} />
+          </div>
         </Flex>
-      )}
-      <Flex gap={2} style={{ marginTop: "auto" }}>
-        <Tool
-          icon="star"
-          label={starred ? t.unstar : t.star}
-          active={starred}
-          onClick={onStar}
-          data-testid="gallery-detail-star"
-        />
-        <Box style={{ flex: 1 }}>
-          <Button fullWidth onClick={onInsert} data-testid="gallery-insert">
-            {t.insert}
-          </Button>
-        </Box>
-      </Flex>
-    </Detail>
+        <Stage ref={setStageEl} $device={device !== "fit"} data-device={device}>
+          <Still $covered={Boolean(live) && state === "ready"}>
+            <Thumb candidates={entry.candidates} template={entry.template} palette={palette} noPreview={t.noPreview} eager />
+          </Still>
+          {live && (
+            <Live
+              ref={frame}
+              key={live.src}
+              title={t.blockPreview}
+              src={live.src}
+              sandbox="allow-scripts allow-same-origin"
+              referrerPolicy="no-referrer"
+              onLoad={onLoad}
+              $shown={state === "ready"}
+              style={frameStyle(device, stage)}
+              data-testid="gallery-magnify-frame"
+            />
+          )}
+        </Stage>
+        <Strip>
+          <Flex gap={2} alignItems="center" wrap="wrap">
+            <Typography variant="omega" fontWeight="bold" tag="h3" ellipsis>
+              {entry.label}
+            </Typography>
+            <Mono>{entry.uid}</Mono>
+            <Badge>{t.typologies[entry.typology] || entry.typology}</Badge>
+            <Badges entry={entry} t={t} tags />
+            <Flex gap={2} alignItems="center" style={{ marginLeft: "auto" }}>
+              {entry.fields.length > 0 && (
+                <FieldsButton type="button" aria-expanded={fields} onClick={() => setFields(!fields)} data-testid="gallery-detail-fields-toggle">
+                  {`${t.showFields} (${entry.fields.length})`}
+                </FieldsButton>
+              )}
+              <Tool icon="star" label={starred ? t.unstar : t.star} active={starred} onClick={onStar} data-testid="gallery-detail-star" />
+              <Button onClick={onInsert} data-testid="gallery-insert">
+                {t.insert}
+              </Button>
+            </Flex>
+          </Flex>
+          {entry.description && (
+            <Clamp variant="pi" textColor="neutral700">
+              {entry.description}
+            </Clamp>
+          )}
+          {fields && (
+            <Flex gap={3} wrap="wrap" data-testid="gallery-detail-fields">
+              {entry.fields.map((field: any) => (
+                <Typography key={field.name} variant="pi" textColor="neutral800">
+                  <span>{field.name}</span> <Mono>{field.type}</Mono>
+                </Typography>
+              ))}
+            </Flex>
+          )}
+        </Strip>
+      </Panel>
+    </>
   );
 }
 
@@ -598,6 +816,8 @@ export function PickerModal({
   Toggle,
   get,
   put,
+  contentType,
+  locale,
 }: any) {
   return (
     <ZoneGallery
@@ -607,6 +827,8 @@ export function PickerModal({
       Toggle={Toggle}
       get={get}
       put={put}
+      contentType={contentType}
+      locale={locale}
       controlled={{ open, onOpenChange, onSelect }}
     />
   );
@@ -622,8 +844,12 @@ function ZoneGallery({
   get,
   put,
   controlled,
+  contentType,
+  locale,
 }: any) {
   const t = useMessages();
+  const grid = React.useRef<HTMLDivElement>(null);
+  const cardOf = (uid: string) => grid.current?.querySelector(`[data-testid="blockscene-${CSS.escape(uid)}"]`) || null;
   const [ownOpen, setOwnOpen] = React.useState(false);
   const open = controlled ? controlled.open : ownOpen;
   const setOpen = controlled ? controlled.onOpenChange : setOwnOpen;
@@ -885,6 +1111,7 @@ function ZoneGallery({
           ) : !config ? (
             <Typography>{t.loading}</Typography>
           ) : entries.length ? (
+            <div ref={grid} style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Flex
               direction="column"
               alignItems="stretch"
@@ -917,6 +1144,24 @@ function ZoneGallery({
                 ),
               )}
             </Flex>
+            {chosen && (
+              <Magnify
+                key={chosen.uid}
+                entry={chosen}
+                palette={config.palette}
+                config={config}
+                components={components}
+                get={get}
+                contentType={contentType}
+                locale={locale}
+                cardOf={cardOf}
+                starred={prefs.starred.includes(chosen.uid)}
+                onStar={() => star(chosen.uid)}
+                onInsert={() => select(chosen.uid)}
+                onClose={() => setDetail(null)}
+              />
+            )}
+            </div>
           ) : (
             <Flex gap={3} alignItems="center">
               <Typography>{t.empty}</Typography>
@@ -928,16 +1173,6 @@ function ZoneGallery({
             </Flex>
           )}
         </Main>
-        {chosen && (
-          <DetailPane
-            entry={chosen}
-            palette={config.palette}
-            starred={prefs.starred.includes(chosen.uid)}
-            onStar={() => star(chosen.uid)}
-            onInsert={() => select(chosen.uid)}
-            onClose={() => setDetail(null)}
-          />
-        )}
       </Layout>
     </Modal>
   );
@@ -1076,7 +1311,8 @@ export function Gallery({
           {zones.length > 1 && (zone.count > 0 || !zone.full) && (
             <Typography variant="sigma" textColor="neutral600" tag="h3">{zone.label}</Typography>
           )}
-          {!zone.full && <ZoneGallery zone={zone} {...props} />}
+          {/* docKey ends with the content locale (both versions): the {locale} of blockPreviewUrl. */}
+          {!zone.full && <ZoneGallery zone={zone} contentType={contentType} locale={String(docKey || "").split(":").pop()} {...props} />}
           <ZoneControls
             zone={zone}
             editor={editor}

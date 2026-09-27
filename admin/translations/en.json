@@ -192,5 +192,9 @@
  "resetAll": "Reset to defaults",
  "restoreProjectConfirm": "Discard every setting saved on this page and go back to the project defaults from the code?",
  "resetAllConfirm": "Discard every setting saved on this page and go back to the defaults?",
- "restored": "Defaults restored."
+ "restored": "Defaults restored.",
+ "blockPreview": "Live block preview",
+ "livePreviewFailed": "Live preview unavailable, showing the image.",
+ "blockPreviewUrl": "Block preview URL",
+ "blockPreviewUrlHelp": "Optional. A page of your frontend that renders one block on its own, shown large when a gallery card is clicked, e.g. http://localhost:3026/pt-BR/block-preview/'{name}'/'{variant}'. Placeholders: '{uid}', '{name}' (after the dot), '{category}' (before the dot), '{variant}' (default), '{locale}'. Empty uses the page preview route when there is one, else the image."
 }

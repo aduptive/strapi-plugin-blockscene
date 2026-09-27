@@ -73,6 +73,8 @@ try {
     assert.equal(await page.getByText(/Pick one component/i).count(), 0, 'native category picker stays closed')
     await page.keyboard.press('Escape'); await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' })
   })
+  // Strapi 5 lab: the magnified block loads a plain page per block (the lab's static page stands in for a fixtures route).
+  if (major === 5) await putSettings({ editor: { blockPreviewUrl: `${baseURL}/block-preview/index.html` } })
   await page.getByTestId('open-gallery-blocks').click()
   await page.getByTestId('blockscene-blocks.hero').waitFor()
   await step('configured image is used and the missing automatic image falls back to a wireframe', async () => {
@@ -93,7 +95,7 @@ try {
     await slider.fill('1'); assert.equal(await page.locator('[data-testid^="block-group-"] + div').first().evaluate(el => getComputedStyle(el).columnCount), '1')
     await slider.fill('3')
   })
-  await step('gallery browser: sidebar typology, filter menu with chips, search, star, collapsed sidebar, detail pane', async () => {
+  await step('gallery browser: sidebar typology, filter menu with chips, search, star, collapsed sidebar, magnified block', async () => {
     const count = page.getByTestId('block-count-blocks')
     const hero = page.getByTestId('blockscene-blocks.hero'), text = page.getByTestId('blockscene-blocks.text')
     // Sidebar: All, Recently used, Starred, then only the typologies present in the zone (the configured CLOSE is not offered).
@@ -134,13 +136,22 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem('blockscene:gallery-sidebar')), 'collapsed')
     await page.getByRole('dialog').screenshot({ path: `artifacts/strapi${major}-gallery-collapsed.png`, animations: 'disabled' })
     await page.getByTestId('gallery-sidebar-toggle').click(); await page.locator('[data-testid="gallery-sidebar-blocks"][data-collapsed="false"]').waitFor()
-    // Detail pane: a single click shows the block; Insert is its primary action.
+    // Magnify: a single click lifts the card into a large panel over the grid (sidebar and toolbar stay visible); Insert is its primary action.
     await hero.locator('button').first().click()
     const detail = page.getByTestId('gallery-detail'); await detail.waitFor()
+    await page.getByTestId('gallery-magnify-scrim').waitFor()
+    assert.ok(await page.getByTestId('gallery-sidebar-blocks').isVisible() && await page.locator('input[name="block-search-blocks"]').isVisible(), 'sidebar and toolbar stay visible')
+    await detail.locator('[data-thumb="0"] img').waitFor()
+    await detail.getByTestId('gallery-detail-fields-toggle').click()
     await detail.getByTestId('gallery-detail-fields').getByText('title', { exact: true }).waitFor()
     await detail.getByTestId('gallery-insert').waitFor()
+    if (major === 5) {
+      await page.locator('[data-testid="gallery-detail"][data-live="ready"]').waitFor()
+      assert.equal(await detail.getByTestId('gallery-magnify-frame').getAttribute('src'), `${baseURL}/block-preview/index.html`)
+    } else assert.equal(await detail.getAttribute('data-live'), 'none', 'no live source: the image stays')
     await page.getByRole('dialog').screenshot({ path: `artifacts/strapi${major}-gallery-detail.png`, animations: 'disabled' })
-    await detail.getByRole('button', { name: 'Close details' }).click(); await detail.waitFor({ state: 'detached' })
+    await page.keyboard.press('Escape'); await detail.waitFor({ state: 'detached' })
+    assert.ok(await page.getByRole('dialog').isVisible(), 'Escape closes the magnified block, not the gallery')
   })
   await page.locator('input[name="block-search-blocks"]').fill('not-a-real-block')
   await page.getByText('No blocks found.', { exact: true }).waitFor()

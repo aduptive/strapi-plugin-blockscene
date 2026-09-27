@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Gallery: the detail pane became a magnified block. A click grows the card
+  into a large panel over the grid (FLIP, ~250 ms, none with reduced motion)
+  with a live preview at Fit/Mobile/Tablet/Desktop widths over the instant
+  thumbnail, and a compact strip with Insert. Live source: the new
+  `editor.blockPreviewUrl` (plain page per block, placeholders `{uid}`,
+  `{name}`, `{category}`, `{variant}`, `{locale}`), else the page preview
+  route through the bridge (one block of schema defaults, read-only), else the
+  image. 8 s timeout keeps the image with a note. `DEVICES`/`frameStyle` moved
+  to `admin/devices.ts`, shared with the page preview.
+
 - Block dialog (visual editor): the block's own accordion header and the zone's
   connector line are hidden while it is open; the dialog bar names the block.
 

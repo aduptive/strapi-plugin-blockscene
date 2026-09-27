@@ -8,6 +8,7 @@ import {
   Flex,
   SingleSelect,
   SingleSelectOption,
+  TextInput,
 } from "@strapi/design-system";
 import {
   useCMEditViewDataManager,
@@ -117,6 +118,9 @@ const ToggleField = ({ name, label, value, onChange, disabled }: any) => (
     <Typography>{label}</Typography>
   </Flex>
 );
+const TextField = ({ name, label, value, onChange, disabled, placeholder }: any) => (
+  <TextInput name={name} label={label} value={value} disabled={disabled} placeholder={placeholder} onChange={(e: any) => onChange(e.target.value)} />
+);
 const SelectField = ({
   name,
   label,
@@ -170,6 +174,7 @@ const SettingsPage = () => (
     MediaPicker={MediaPicker}
     ToggleField={ToggleField}
     SelectField={SelectField}
+    TextField={TextField}
     previewSupported={false}
   />
   </Guard>

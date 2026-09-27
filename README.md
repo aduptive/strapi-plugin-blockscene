@@ -62,9 +62,35 @@ The modal is a block browser (80vw wide):
   all"; the empty state offers a reset.
 - **Cards**, grouped by typology: facet badges (IMAGE, VIDEO, GALLERY, RICH
   TEXT, LIST, DYNAMIC, FORM), a star and a hover "+" that inserts at once.
-- A click opens the **detail pane** (large preview, description, badges,
-  fields with their types, star, Insert). Double click, "+" or Enter on a
-  focused card inserts without it.
+- A click **magnifies** the block: the card grows into a large panel over the
+  grid (sidebar and top bar stay usable, the grid dims underneath) and shrinks
+  back into its card on close (close button, Esc or a click on the dimmed
+  grid). The animation is transform/opacity only, about 250 ms, and is skipped
+  under `prefers-reduced-motion: reduce`. The panel shows a large live preview
+  with Fit / Mobile / Tablet / Desktop widths (scaled to fit, as in the page
+  preview) and a compact strip: label, uid, description, badges, fields (on
+  demand), star and Insert. Double click, "+" or Enter on a focused card
+  inserts without it.
+
+The magnified preview shows the card's thumbnail at once and fades the live
+page in over it once it has loaded. Live source, first match wins:
+
+1. **Block preview URL** (`editor.blockPreviewUrl`, Settings, both versions):
+   a plain page per block in a plain iframe, no bridge. Placeholders, URL
+   encoded: `{uid}`, `{name}` (after the dot), `{category}` (before the dot),
+   `{variant}` (`default`) and `{locale}` (the entry's locale, empty when the
+   type is not localized). Example:
+   `http://localhost:3026/{locale}/block-preview/{name}/{variant}`. Such a
+   fixtures route is usually dev-only: leave the option empty on production.
+2. **Page preview route** (Strapi 5: the preview route base URL, else the
+   native Preview origin + `/block-preview/page`): the same bridge as the
+   whole-page preview, sent one block made from the schema defaults, mode
+   `preview`. Read-only: every message except `ready` is ignored.
+3. Otherwise the image only.
+
+If the live page neither loads nor says `ready` within 8 s, the image stays
+with a short note. The iframe uses the page preview's sandbox
+(`allow-scripts allow-same-origin`) and `referrerpolicy="no-referrer"`.
 
 Stars and recently used blocks are stored per admin user on the server
 (`GET`/`PUT /blockscene/me/prefs`, `{ starred, recent }`, at most 200 and 20
@@ -200,6 +226,7 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Show "Close all blocks" | yes/no | yes |
 | Initial accordion state | all closed / all open / remember | all closed |
 | Preview route base URL (Strapi 5) | full URL or empty | empty: native Preview origin |
+| Block preview URL | http(s) URL with placeholders, up to 500 characters, or empty | empty: page preview route, else image |
 | Initial preview mode (Strapi 5) | form / side by side / preview | form |
 
 Every edit view opens in its content type's mode, else the initial preview
