@@ -17,11 +17,11 @@ import {
   writeClip,
 } from "./rows.mjs";
 import { useMessages } from "./messages";
-import { Icon, Tool } from "./icons";
+import { Icon } from "./icons";
 
 // Row actions in each native block header, right before Strapi's own delete button: hide on the site, duplicate,
-// copy (plus checkboxes in selection mode), and a confirmation in front of the native delete. The same DOM approach
-// as the row thumbnails: one inert <span> per header, React portals into it. Every change goes through the form.
+// copy, and a confirmation in front of the native delete; in selection mode a checkbox opens the header. The same DOM
+// approach as the row thumbnails: inert <span>s in the header, React portals into them. Every change goes through the form.
 // ponytail: DOM injection; drop it if Strapi ever exposes a row actions slot.
 export type RowForm = {
   rows: (zone: string) => any[];
@@ -34,6 +34,7 @@ export type RowForm = {
   locale?: string;
 };
 const ATTR = "data-blockscene-row-actions";
+const SELECT_ATTR = "data-blockscene-row-select";
 const HIDDEN_ATTR = "data-blockscene-hidden";
 const CLIP_EVENT = "blockscene:clipboard";
 const storage = () => {
@@ -83,16 +84,17 @@ export function pasteInto(form: RowForm, zone: any, clip: any, components: any, 
 const actionsOf = (toggle: HTMLElement) => toggle.nextElementSibling as HTMLElement | null;
 const trashOf = (toggle: HTMLElement) =>
   [...(actionsOf(toggle)?.querySelectorAll<HTMLElement>("button") || [])].find((b) => !b.closest(`[${ATTR}]`)) || null;
-type Anchor = { el: HTMLElement; zone: string; index: number };
-function useAnchors(zones: any[], enabled: boolean) {
+// In selection mode each row of that zone also gets a checkbox holder at the start of its header, before the toggle.
+type Anchor = { el: HTMLElement; select: HTMLElement | null; zone: string; index: number };
+function useAnchors(zones: any[], enabled: boolean, selecting: string | null) {
   const [anchors, setAnchors] = React.useState<Anchor[]>([]);
-  const latest = React.useRef(zones);
-  latest.current = zones;
+  const latest = React.useRef({ zones, selecting });
+  latest.current = { zones, selecting };
   const sync = React.useRef(() => {});
   sync.current = () => {
     const next: Anchor[] = [];
     if (enabled)
-      for (const zone of latest.current) {
+      for (const zone of latest.current.zones) {
         const list = zone.count ? findZoneList(zone.label) : null;
         if (!list) continue;
         toggles(list).forEach((toggle: HTMLElement, index: number) => {
@@ -107,12 +109,23 @@ function useAnchors(zones: any[], enabled: boolean) {
             el.style.cssText = "display:inline-flex;align-items:center";
             holder.parentElement?.insertBefore(el, holder);
           }
-          next.push({ el, zone: zone.name, index });
+          let select: HTMLElement | null = null;
+          if (latest.current.selecting === zone.name && toggle.parentElement) {
+            select = toggle.parentElement.querySelector(`:scope > [${SELECT_ATTR}]`);
+            if (!select) {
+              select = document.createElement("span");
+              select.setAttribute(SELECT_ATTR, "");
+              select.style.cssText = "display:inline-flex;align-items:center;padding-left:12px";
+              toggle.parentElement.insertBefore(select, toggle);
+            }
+          }
+          next.push({ el, select, zone: zone.name, index });
         });
       }
-    for (const el of document.querySelectorAll<HTMLElement>(`[${ATTR}]`)) if (!next.some((a) => a.el === el)) el.remove();
+    for (const attr of [ATTR, SELECT_ATTR])
+      for (const el of document.querySelectorAll<HTMLElement>(`[${attr}]`)) if (!next.some((a) => a.el === el || a.select === el)) el.remove();
     setAnchors((prev) =>
-      prev.length === next.length && prev.every((a, i) => a.el === next[i].el && a.zone === next[i].zone && a.index === next[i].index) ? prev : next,
+      prev.length === next.length && prev.every((a, i) => a.el === next[i].el && a.select === next[i].select && a.zone === next[i].zone && a.index === next[i].index) ? prev : next,
     );
   };
   React.useEffect(() => {
@@ -127,7 +140,7 @@ function useAnchors(zones: any[], enabled: boolean) {
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
-      for (const el of document.querySelectorAll(`[${ATTR}]`)) el.remove();
+      for (const el of document.querySelectorAll(`[${ATTR}], [${SELECT_ATTR}]`)) el.remove();
       for (const el of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) el.removeAttribute(HIDDEN_ATTR);
     };
   }, []);
@@ -140,6 +153,15 @@ export function useRowActions({ zones, components, catalog, form }: any) {
   const clip = useClipboard();
   const [selection, setSelection] = React.useState<{ zone: string; keys: string[] } | null>(null);
   const [busy, setBusy] = React.useState(false);
+  // Escape leaves selection mode (a dialog open over the form keeps its own Escape).
+  React.useEffect(() => {
+    if (!selection) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector('[role="dialog"]')) setSelection(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [Boolean(selection)]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!form) return null;
   const editor = catalog?.editor || {};
   const groups = catalog?.groups || null;
@@ -185,7 +207,10 @@ export function useRowActions({ zones, components, catalog, form }: any) {
     if (hiddenName) form.setRows(zoneName, setHidden(rows, index, groups, hiddenName, rows[index]?.[hiddenName] !== true));
   };
   const paste = (zoneName: string, at?: number) => pasteInto(form, zoneOf(zoneName), clip, components, groups, t, at);
-  return { t, editor, groups, hiddenName, clip, selection, setSelection, busy, form, labelOf, duplicate, copy, toggleHidden, paste, isMarker: (row: any) => isGroupMarker(row, groups) };
+  // Paste is offered where the copied components are allowed; room and group balance are still checked on click, with feedback.
+  const pastable = (zoneName: string) => !["empty", "notAllowed"].includes(pasteProblem(clip, zoneOf(zoneName), form.rows(zoneName), components, groups)?.code);
+  const selectable = (zoneName: string): string[] => form.rows(zoneName).filter((row: any) => canAct(row, groups)).map((row: any) => blockKey(row)).filter(Boolean);
+  return { t, editor, groups, hiddenName, clip, selection, setSelection, busy, form, labelOf, duplicate, copy, toggleHidden, paste, pastable, selectable, isMarker: (row: any) => isGroupMarker(row, groups) };
 }
 
 const RowButton = styled.button<{ $on?: boolean }>`
@@ -205,7 +230,7 @@ const HiddenBadge = styled.span`
 export function RowActions({ zones, actions, Modal }: any) {
   const a = actions;
   const e = a?.editor || {};
-  const anchors = useAnchors(zones, Boolean(a) && Boolean(a.hiddenName || e.duplicate !== false || e.clipboard !== false || a.selection));
+  const anchors = useAnchors(zones, Boolean(a) && Boolean(a.hiddenName || e.duplicate !== false || e.clipboard !== false || a.selection), a?.selection?.zone || null);
   const [confirm, setConfirm] = React.useState<{ button: HTMLElement; label: string; marker: boolean } | null>(null);
   const bypass = React.useRef(false);
   const latest = React.useRef({ zones, a });
@@ -257,6 +282,19 @@ export function RowActions({ zones, actions, Modal }: any) {
   return (
     <>
       <style>{`li[${HIDDEN_ATTR}] button[aria-expanded] { opacity: 0.5; }`}</style>
+      {anchors.map(({ select, zone, index }) => {
+        const row = a.form.rows(zone)[index];
+        const key = blockKey(row) || "";
+        if (!select || !row || !canAct(row, a.groups) || a.selection?.zone !== zone) return null;
+        const label = a.labelOf(row);
+        return createPortal(
+          <input type="checkbox" aria-label={t.f("selectBlock", { label })} data-testid={`row-select-${zone}-${index}`} style={{ margin: 0, width: 16, height: 16, cursor: "pointer" }}
+            checked={a.selection.keys.includes(key)}
+            onChange={(event) => a.setSelection({ zone, keys: event.target.checked ? [...a.selection.keys, key] : a.selection.keys.filter((k: string) => k !== key) })} />,
+          select,
+          `select:${zone}:${index}`,
+        );
+      })}
       {anchors.map(({ el, zone, index }) => {
         const row = a.form.rows(zone)[index];
         if (!row) return null;
@@ -264,14 +302,8 @@ export function RowActions({ zones, actions, Modal }: any) {
         const acts = canAct(row, a.groups);
         const hidden = Boolean(a.hiddenName) && row[a.hiddenName] === true;
         const key = blockKey(row) || "";
-        const selecting = a.selection?.zone === zone;
         return createPortal(
           <Flex gap={0} alignItems="center" data-testid={`row-actions-${zone}-${index}`} role="group" aria-label={t.f("rowActions", { label })}>
-            {selecting && acts && (
-              <input type="checkbox" aria-label={t.f("selectBlock", { label })} data-testid={`row-select-${zone}-${index}`} style={{ margin: "0 8px", width: 16, height: 16 }}
-                checked={a.selection.keys.includes(key)}
-                onChange={(event) => a.setSelection({ zone, keys: event.target.checked ? [...a.selection.keys, key] : a.selection.keys.filter((k: string) => k !== key) })} />
-            )}
             {hidden && <HiddenBadge data-testid={`row-hidden-${zone}-${index}`}>{t.hiddenBadge}</HiddenBadge>}
             {a.hiddenName && (acts || hidden) && (
               <RowButton type="button" $on={hidden} aria-pressed={hidden} title={t.f(hidden ? "showBlock" : "hideBlock", { label })}
@@ -312,28 +344,46 @@ export function RowActions({ zones, actions, Modal }: any) {
   );
 }
 
-// Zone label tools: selection mode (checkboxes in the headers), copy the selection, paste at the end of the zone.
-export function ZoneRowTools({ zone, actions: a }: any) {
-  if (!a || a.editor.clipboard === false) return null;
+// The zone's "…" menu entries: select mode (for copying) and Paste at the end of the zone. None: no menu.
+export function zoneMenuItems(zone: any, a: any) {
+  if (!a || a.editor.clipboard === false) return [];
   const { t } = a;
-  const selecting = a.selection?.zone === zone.name;
-  const count = selecting ? a.selection.keys.length : 0;
+  return [
+    zone.count > 0 && { label: t.selectBlocks, icon: "select", testid: `zone-select-${zone.name}`, onSelect: () => a.setSelection({ zone: zone.name, keys: [] }) },
+    a.clip && !zone.full && a.pastable(zone.name) &&
+      { label: t.f("paste", { count: a.clip.rows.length }), icon: "paste", testid: `zone-paste-${zone.name}`, onSelect: () => a.paste(zone.name) },
+  ].filter(Boolean);
+}
+
+// Selection mode swaps the zone bar for this one: select all or none (indeterminate while some are), the count, Copy
+// and Done. Escape leaves too (useRowActions).
+export function SelectionBar({ zone, actions: a }: any) {
+  const { t } = a;
+  const box = React.useRef<HTMLInputElement>(null);
+  const keys: string[] = a.selectable(zone.name);
+  const chosen = a.selection.keys.filter((key: string) => keys.includes(key));
+  const all = keys.length > 0 && chosen.length === keys.length;
+  React.useEffect(() => {
+    if (box.current) box.current.indeterminate = chosen.length > 0 && !all;
+  });
+  const reason = chosen.length ? undefined : t.copyNothing;
   return (
-    <>
-      {zone.count > 0 && (
-        <Tool icon="select" label={t.selectMode} active={selecting} data-testid={`zone-select-${zone.name}`}
-          onClick={() => a.setSelection(selecting ? null : { zone: zone.name, keys: [] })} />
-      )}
-      {selecting && (
-        <Button size="S" variant="secondary" disabled={!count || a.busy} onClick={() => a.copy(zone.name, a.selection.keys)} data-testid={`zone-copy-${zone.name}`}>
-          {t.f("copySelected", { count })}
+    <Flex gap={2} alignItems="center" data-testid={`zone-selection-${zone.name}`}>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+        <input ref={box} type="checkbox" checked={all} aria-label={chosen.length ? t.selectNone : t.selectAll} data-testid={`zone-select-all-${zone.name}`}
+          style={{ margin: 0, width: 16, height: 16, cursor: "pointer" }}
+          onChange={() => a.setSelection({ zone: zone.name, keys: chosen.length ? [] : keys })} />
+        <Typography variant="pi" fontWeight="bold" aria-live="polite" data-testid={`zone-selected-${zone.name}`}>
+          {chosen.length ? t.f("selectedCount", { count: chosen.length }) : t.selectAll}
+        </Typography>
+      </label>
+      <span title={reason}>
+        <Button size="S" variant="secondary" startIcon={<Icon name="clipboard" size={14} />} disabled={!chosen.length || a.busy} aria-description={reason}
+          onClick={() => a.copy(zone.name, chosen)} data-testid={`zone-copy-${zone.name}`}>
+          {t.copy}
         </Button>
-      )}
-      {a.clip && !zone.full && (
-        <Button size="S" variant="secondary" startIcon={<Icon name="paste" size={14} />} onClick={() => a.paste(zone.name)} data-testid={`zone-paste-${zone.name}`}>
-          {t.f("paste", { count: a.clip.rows.length })}
-        </Button>
-      )}
-    </>
+      </span>
+      <Button size="S" variant="tertiary" onClick={() => a.setSelection(null)} data-testid={`zone-select-done-${zone.name}`}>{t.selectDone}</Button>
+    </Flex>
   );
 }

@@ -279,6 +279,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <Typography variant="pi" textColor="neutral600">{t.enabledHelp}</Typography>
         <ToggleField name="editor-showOpenAll" label={t.showOpenAll} value={editor.showOpenAll} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showOpenAll = v; return s })} />
         <ToggleField name="editor-showCloseAll" label={t.showCloseAll} value={editor.showCloseAll} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showCloseAll = v; return s })} />
+        <Typography variant="pi" textColor="neutral600">{t.toggleHelp}</Typography>
         <ToggleField name="editor-showRowThumbnails" label={t.showRowThumbnails} value={editor.showRowThumbnails !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showRowThumbnails = v; return s })} />
         <ToggleField name="editor-friendlyLabels" label={t.friendlyLabels} value={editor.friendlyLabels !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.friendlyLabels = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{t.friendlyLabelsHelp}</Typography>
@@ -292,6 +293,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <TextField name="editor-previewUrl" label={t.previewUrl} value={editor.previewUrl || ''} disabled={!canUpdate || saving} placeholder="https://site.test/block-preview/page"
             onChange={(v: string) => update(s => { s.editor.previewUrl = v.trim(); return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewUrlHelp}</Typography>
+          {/* Editors get no hint in the edit view: the missing route is explained here, where it can be set. */}
+          {!editor.previewUrl && <Typography variant="pi" textColor="warning700" data-testid="preview-url-empty">{t.previewUrlEmpty}</Typography>}
           <SelectField name="editor-previewMode" label={t.previewMode} value={editor.previewMode || 'form'} disabled={!canUpdate || saving}
             options={['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))} onChange={(v: string) => update(s => { s.editor.previewMode = v; return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewModeHelp}</Typography>

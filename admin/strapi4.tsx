@@ -1,5 +1,7 @@
 import * as React from "react";
 import {
+  MenuItem,
+  SimpleMenu,
   ModalLayout,
   ModalHeader,
   ModalBody,
@@ -26,6 +28,7 @@ import { cloneRow, integerKeys } from "./rows.mjs";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
+import { Icon } from "./icons";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   const id = React.useId();
@@ -45,6 +48,18 @@ function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }:
     </>
   );
 }
+// "…" menus of the zone bars (Design System 1: items act on click, the caret is dropped).
+const Menu = ({ label, testid, items }: any) => (
+  <div data-testid={testid}>
+    <SimpleMenu variant="tertiary" size="S" aria-label={label} title={label} endIcon={null} label={<Icon name="more" size={16} />}>
+      {items.map((item: any) => (
+        <MenuItem key={item.testid} onClick={item.onSelect} data-testid={item.testid}>
+          <Flex as="span" gap={2} alignItems="center"><Icon name={item.icon} size={16} />{item.label}</Flex>
+        </MenuItem>
+      ))}
+    </SimpleMenu>
+  </div>
+);
 // Row actions write whole zone arrays through the edit view reducer (ON_CHANGE); new rows get integer keys. Relations
 // are copied as the form holds them (the loaded pages of each relation list).
 function useRowForm(c: any, components: any) {
@@ -112,7 +127,9 @@ function Picker() {
   // Bypass: no catalog (server flag, error) or enhancements off renders nothing, leaving the native editor.
   if (!catalog?.editor?.enabled || catalog.contentTypes?.[c.slug]?.enabled === false) return null;
   const docKey = `${c.slug}:${c.isCreatingEntry ? "new" : c.initialData?.id}:${c.initialData?.locale || ""}`;
+  // Nothing shows here: the zone bars and row tools are portalled into the form, the gallery opens from the native add button.
   return (
+    <div hidden data-blockscene-editor="">
     <Gallery
       zones={zones}
       components={components}
@@ -127,7 +144,9 @@ function Picker() {
       contentType={c.slug}
       userId={auth.getUserInfo?.()?.id}
       form={form}
+      Menu={Menu}
     />
+    </div>
   );
 }
 const ToggleField = ({ name, label, value, onChange, disabled }: any) => (

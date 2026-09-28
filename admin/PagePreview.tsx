@@ -27,7 +27,6 @@ import {
   mediaAttribute,
   moveGroup,
   removeGroup,
-  validateGroups,
   groupRange,
   getIn,
   hoverKey,
@@ -459,9 +458,146 @@ function useFormHistory(docKey: string, enabled: boolean) {
   };
 }
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+const UNDO_KEYS = MAC ? "⌘Z" : "Ctrl+Z",
+  REDO_KEYS = MAC ? "⇧⌘Z" : "Ctrl+Y";
 
+// One state per edit view: the zone bar, the pane toolbar and the keyboard shortcuts share this mode, undo history
+// and preview route. Mounted once the catalog is known, so the configured mode is the first one.
+export function useEditorState(editor: any) {
+  const c: any = useContext();
+  const history = useFormHistory(`${c.model}:${c.id || "new"}:${c.form?.initialValues?.locale || ""}`, !c.form?.disabled);
+  // Every edit view opens in the configured mode (per content type, else global); a switch lasts for this view only.
+  const [mode, setMode] = React.useState<Mode>(() => editor?.previewMode || "form");
+  const preview = usePreviewBase(editor?.previewUrl || "", c.model, c.isCreatingEntry ? undefined : c.id, c.form?.initialValues?.locale);
+  return { history, mode, setMode, preview, disabled: Boolean(c.form?.disabled) };
+}
+export type EditorState = ReturnType<typeof useEditorState>;
+
+// The zone the page renders: the first Dynamic Zone the user may read (create: any), never a conditional one; editing
+// it additionally needs the update/create permission on the field and an enabled, non-disabled form.
+export function usePreviewZone() {
+  const c: any = useContext();
+  const rbac: any = useDocumentRBAC("BlockscenePagePreview", (state: any) => state);
+  const values = useForm("BlockscenePagePreview", (state: any) => state.values);
+  const addFieldRow = useForm("BlockscenePagePreview", (state: any) => state.addFieldRow);
+  const moveFieldRow = useForm("BlockscenePagePreview", (state: any) => state.moveFieldRow);
+  const fields = c.layout?.edit?.layout?.flat(3) || [];
+  const readable = (name: string) => c.isCreatingEntry || (rbac.canReadFields || []).includes(name);
+  const zone: string | undefined = React.useMemo(
+    () => editableZones(c.contentType, values, readable, c.isLoading)[0]?.name,
+    [c.contentType, values, c.isLoading, rbac.canReadFields, c.isCreatingEntry],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
+  const field = fields.find((f: any) => f.name === zone);
+  const canEdit = Boolean(
+    zone &&
+    ((c.isCreatingEntry ? rbac.canCreateFields : rbac.canUpdateFields) || []).includes(zone) &&
+    field?.disabled !== true &&
+    !c.form?.disabled &&
+    typeof addFieldRow === "function",
+  );
+  const rows: any[] = zone && Array.isArray(values?.[zone]) ? values[zone] : [];
+  const latest = React.useRef(rows);
+  latest.current = rows;
+  // Append then move: Strapi < 5.8.1 addFieldRow(field, value, index) overwrites the row at index instead of inserting.
+  const insertRows = (at: number, ...items: any[]) =>
+    items.forEach((item, i) => {
+      const from = latest.current.length + i;
+      addFieldRow(zone, item);
+      if (at + i < from) moveFieldRow(zone, from, at + i);
+    });
+  return { c, values, fields, zone, zoneLabel: field?.label || zone || "", canEdit, rows, latest, insertRows };
+}
+
+// Undo, Redo and the editing mode on the zone bar, after the first zone's label (the pane toolbar keeps its own set).
+export function ZoneBarTools({ state }: { state: EditorState }) {
+  const t = useMessages();
+  const { history, mode, setMode, preview } = state;
+  const modes: Array<[Mode, string]> = [["form", t.modeForm], ["split", t.modeSplit], ["preview", t.modePreview]];
+  const label = modes.find(([value]) => value === mode)?.[1] || t.modeForm;
+  return (
+    <>
+      {!state.disabled && (
+        <Flex gap={1} data-testid="blockscene-history" role="group" aria-label={t.historyGroup}>
+          <Button size="S" variant="tertiary" startIcon={<Icon name="undo" size={14} />} title={`${t.undo} (${UNDO_KEYS})`}
+            disabled={!history.canUndo} onClick={history.undo}>{t.undo}</Button>
+          <Button size="S" variant="tertiary" startIcon={<Icon name="redo" size={14} />} title={`${t.redo} (${REDO_KEYS})`}
+            disabled={!history.canRedo} onClick={history.redo}>{t.redo}</Button>
+        </Flex>
+      )}
+      {/* No preview route: no mode choice at all (Settings says why), rather than two dead entries. */}
+      {preview.base && (
+        <Box data-testid="zone-mode-menu">
+          <SimpleMenu variant="tertiary" size="S" aria-label={`${t.modeGroup}: ${label}`}
+            label={<Flex gap={2} alignItems="center"><Icon name={MODE_ICONS[mode]} size={16} />{label}</Flex>}>
+            {modes.map(([value, text]) => (
+              <MenuItem key={value} onSelect={() => setMode(value)} aria-checked={mode === value}>
+                <Flex gap={2} alignItems="center"><Icon name={MODE_ICONS[value]} size={16} />{text}</Flex>
+              </MenuItem>
+            ))}
+          </SimpleMenu>
+        </Box>
+      )}
+    </>
+  );
+}
+
+// Configured pairs are only diagnosed here (never repaired on load); the server refuses publishing while they exist.
+// Compact: one summary line always visible, details on demand, and an explicit repair action for a missing close.
+export function GroupDiagnostics({ scope, groups, problems }: { scope: ReturnType<typeof usePreviewZone>; groups: Record<string, string>; problems: any[] }) {
+  const t = useMessages();
+  const insertClose = (error: any) => {
+    const end = groupRange(scope.latest.current, error.index, groups)[1];
+    scope.insertRows(end + 1, { __component: error.expected });
+  };
+  return (
+    <Box role="alert" data-testid="page-preview-diagnostics" padding={2} background="danger100" hasRadius>
+      <details>
+        <summary style={{ cursor: "pointer" }}>
+          <Typography variant="pi" fontWeight="bold" textColor="danger700">
+            {t.f("diagSummary", { count: problems.length })}
+          </Typography>
+        </summary>
+        <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>
+          {problems.map((error: any) => (
+            <li key={`${error.code}-${error.index}`} style={{ marginBottom: 8 }}>
+              <Typography variant="pi" textColor="neutral800" tag="p">
+                {t.f(
+                  error.code === "closeBeforeOpen" ? "diagCloseBeforeOpen" : error.code === "mismatch" ? "diagMismatch" : "diagUnclosed",
+                  { n: error.index + 1, uid: error.uid, open: error.open || "", expected: error.expected || "" },
+                )}
+              </Typography>
+              {error.code === "unclosed" && scope.canEdit && (
+                <Box paddingTop={1}>
+                  <Button
+                    size="S"
+                    variant="danger-light"
+                    data-testid={`diag-insert-close-${error.index}`}
+                    onClick={() => insertClose(error)}
+                    // Long labels wrap left-aligned inside a narrow panel instead of a centred three-line block.
+                    style={{ height: "auto", minHeight: 32, whiteSpace: "normal", textAlign: "left", paddingTop: 6, paddingBottom: 6 }}
+                  >
+                    {t.f("diagInsertClose", { n: error.index + 1, expected: error.expected })}
+                  </Button>
+                </Box>
+              )}
+              {error.code === "closeBeforeOpen" && (
+                <Typography variant="pi" textColor="neutral600" tag="p" style={{ marginTop: 2 }}>
+                  {t.diagStrayHint}
+                </Typography>
+              )}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </Box>
+  );
+}
+
+// Page pane, visual editor and page seams. Nothing renders in place: the pane, the dialogs and the lifted form parts
+// are portalled; its mode, history and preview route come from useEditorState.
 export function PagePreview({
   editor,
+  state,
   groups = null,
   hiddenAttribute = null,
   form = null,
@@ -469,6 +605,7 @@ export function PagePreview({
   Toggle,
 }: {
   editor: any;
+  state: EditorState;
   groups?: Record<string, string> | null;
   hiddenAttribute?: string | null;
   form?: any;
@@ -476,12 +613,8 @@ export function PagePreview({
   Toggle?: React.ComponentType<any>;
 }) {
   const t = useMessages();
-  const c: any = useContext();
-  const rbac: any = useDocumentRBAC(
-    "BlockscenePagePreview",
-    (state: any) => state,
-  );
-  const values = useForm("BlockscenePagePreview", (state: any) => state.values);
+  const { c, values, zone, zoneLabel, canEdit, rows, latest, insertRows } = usePreviewZone();
+  const { history, mode, setMode } = state;
   const onChange = useForm(
     "BlockscenePagePreview",
     (state: any) => state.onChange,
@@ -491,40 +624,6 @@ export function PagePreview({
     (state: any) => state.components,
   );
   const MediaLibraryDialog = components?.["media-library"];
-  const addFieldRow = useForm(
-    "BlockscenePagePreview",
-    (state: any) => state.addFieldRow,
-  );
-  const moveFieldRow = useForm(
-    "BlockscenePagePreview",
-    (state: any) => state.moveFieldRow,
-  );
-  const fields = c.layout?.edit?.layout?.flat(3) || [];
-  const history = useFormHistory(
-    `${c.model}:${c.id || "new"}:${c.form?.initialValues?.locale || ""}`,
-    !c.form?.disabled,
-  );
-  // Same zone rules as the gallery panel: the first Dynamic Zone the user may read (create: any), never a conditional one;
-  // editing additionally needs the update/create permission on the field and an enabled, non-disabled form.
-  const readable = (name: string) =>
-    c.isCreatingEntry || (rbac.canReadFields || []).includes(name);
-  const zone = React.useMemo(
-    () => editableZones(c.contentType, values, readable, c.isLoading)[0]?.name,
-    [c.contentType, values, c.isLoading, rbac.canReadFields, c.isCreatingEntry],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
-  const zoneLabel =
-    fields.find((field: any) => field.name === zone)?.label || zone || "";
-  const canEdit = Boolean(
-    zone &&
-    (
-      (c.isCreatingEntry ? rbac.canCreateFields : rbac.canUpdateFields) || []
-    ).includes(zone) &&
-    fields.find((field: any) => field.name === zone)?.disabled !== true &&
-    !c.form?.disabled &&
-    typeof addFieldRow === "function",
-  );
-  // Every edit view opens in the configured mode (per content type, else global); a switch lasts for this view only.
-  const [mode, setMode] = React.useState<Mode>(() => editor?.previewMode || "form");
   const [device, setDeviceState] = React.useState<Device>(() => {
     const v = read(DEVICE_KEY);
     return v && v in DEVICES ? (v as Device) : "fit";
@@ -598,12 +697,7 @@ export function PagePreview({
   const loaded = React.useRef(false);
   const anchor = React.useRef<HTMLDivElement>(null);
   const channel = React.useMemo(() => crypto.randomUUID(), []);
-  const { base, source } = usePreviewBase(
-    editor?.previewUrl || "",
-    c.model,
-    c.isCreatingEntry ? undefined : c.id,
-    c.form?.initialValues?.locale,
-  );
+  const { base, source } = state.preview;
   // The settings URL is the full page-preview route; only the channel is appended.
   const url = base ? new URL(base) : null;
   url?.searchParams.set("channel", channel);
@@ -612,19 +706,9 @@ export function PagePreview({
   const paneWidth = clampWidth(ratio * vw, vw);
   const resizable = mode === "split" && !narrow;
   const active = mode !== "form" && Boolean(url) && Boolean(zone);
-  const rows: any[] = zone && Array.isArray(values?.[zone]) ? values[zone] : [];
   // Copied blocks: the page shows a Paste button in its seams while the clipboard holds some (editor.clipboard).
   const clip = useClipboard();
   const clipCount = editor?.clipboard !== false && form && canEdit ? clip?.rows?.length || 0 : 0;
-  const latest = React.useRef(rows);
-  latest.current = rows;
-  // Append then move: Strapi < 5.8.1 addFieldRow(field, value, index) overwrites the row at index instead of inserting.
-  const insertRows = (at: number, ...items: any[]) =>
-    items.forEach((item, i) => {
-      const from = latest.current.length + i;
-      addFieldRow(zone, item);
-      if (at + i < from) moveFieldRow(zone, from, at + i);
-    });
   // Refs keep the message listener tied to one iframe instance: mode changes and late loads never reset readiness.
   const live = React.useRef({
     mode,
@@ -1063,24 +1147,18 @@ export function PagePreview({
     ["split", t.modeSplit],
     ["preview", t.modePreview],
   ];
-  // No preview route configured: no mode buttons at all (only the hint below), rather than two dead buttons.
-  const switcher = url && (
-    <Flex
-      gap={1}
-      wrap="wrap"
-      data-testid="page-preview-modes"
-      role="group"
-      aria-label={t.modeGroup}
-    >
+  // The pane toolbar's own set; the zone bar in the form has the same actions (ZoneBarTools), on the same state.
+  const switcher = (
+    <Flex gap={1} wrap="wrap" data-testid="page-preview-modes" role="group" aria-label={t.modeGroup}>
       {modes.map(([value, label]) => (
         <Tool key={value} icon={MODE_ICONS[value]} label={label} active={mode === value} onClick={() => setMode(value)} />
       ))}
     </Flex>
   );
-  const historyTools = !c.form?.disabled && (
+  const historyTools = !state.disabled && (
     <Flex gap={1} data-testid="blockscene-history" role="group" aria-label={t.historyGroup}>
-      <Tool icon="undo" label={`${t.undo} (${MAC ? "⌘Z" : "Ctrl+Z"})`} disabled={!history.canUndo} onClick={history.undo} />
-      <Tool icon="redo" label={`${t.redo} (${MAC ? "⇧⌘Z" : "Ctrl+Y"})`} disabled={!history.canRedo} onClick={history.redo} />
+      <Tool icon="undo" label={`${t.undo} (${UNDO_KEYS})`} disabled={!history.canUndo} onClick={history.undo} />
+      <Tool icon="redo" label={`${t.redo} (${REDO_KEYS})`} disabled={!history.canRedo} onClick={history.redo} />
     </Flex>
   );
   // One menu instead of four buttons: the toolbar stays on one line in a narrow pane; the icons stay.
@@ -1109,86 +1187,9 @@ export function PagePreview({
       applyWidth(map[event.key], true);
     }
   };
-  // Configured pairs are only diagnosed here (never repaired on load); the server refuses publishing while they exist.
-  // Compact: one summary line always visible, details on demand, and an explicit repair action for a missing close.
-  const problems = groups ? validateGroups(rows, groups) : [];
-  const insertClose = (error: any) => {
-    const end = groupRange(latest.current, error.index, groups!)[1];
-    insertRows(end + 1, { __component: error.expected });
-  };
-  const diagnostics = problems.length > 0 && (
-    <Box
-      role="alert"
-      data-testid="page-preview-diagnostics"
-      padding={2}
-      background="danger100"
-      hasRadius
-    >
-      <details>
-        <summary style={{ cursor: "pointer" }}>
-          <Typography variant="pi" fontWeight="bold" textColor="danger700">
-            {t.f("diagSummary", { count: problems.length })}
-          </Typography>
-        </summary>
-        <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>
-          {problems.map((error: any) => (
-            <li
-              key={`${error.code}-${error.index}`}
-              style={{ marginBottom: 8 }}
-            >
-              <Typography variant="pi" textColor="neutral800" tag="p">
-                {t.f(
-                  error.code === "closeBeforeOpen"
-                    ? "diagCloseBeforeOpen"
-                    : error.code === "mismatch"
-                      ? "diagMismatch"
-                      : "diagUnclosed",
-                  {
-                    n: error.index + 1,
-                    uid: error.uid,
-                    open: error.open || "",
-                    expected: error.expected || "",
-                  },
-                )}
-              </Typography>
-              {error.code === "unclosed" && canEdit && (
-                <Box paddingTop={1}>
-                  <Button
-                    size="S"
-                    variant="danger-light"
-                    data-testid={`diag-insert-close-${error.index}`}
-                    onClick={() => insertClose(error)}
-                    // Long labels wrap left-aligned inside a narrow panel instead of a centred three-line block.
-                    style={{ height: "auto", minHeight: 32, whiteSpace: "normal", textAlign: "left", paddingTop: 6, paddingBottom: 6 }}
-                  >
-                    {t.f("diagInsertClose", {
-                      n: error.index + 1,
-                      expected: error.expected,
-                    })}
-                  </Button>
-                </Box>
-              )}
-              {error.code === "closeBeforeOpen" && (
-                <Typography variant="pi" textColor="neutral600" tag="p" style={{ marginTop: 2 }}>
-                  {t.diagStrayHint}
-                </Typography>
-              )}
-            </li>
-          ))}
-        </ul>
-      </details>
-    </Box>
-  );
   return (
-    <Flex direction="column" alignItems="stretch" gap={2} ref={anchor}>
-      <Flex gap={2} wrap="wrap">
-        {switcher}
-        {historyTools}
-      </Flex>
-      {diagnostics}
-      <Typography variant="pi" textColor="neutral600">
-        {url ? t.previewHelp : t.previewNoUrl}
-      </Typography>
+    // Hidden anchor in the side panels column: split mode and the sidebar items find the edit view's grid from here.
+    <div ref={anchor}>
       {active &&
         createPortal(
           <Pane
@@ -1443,6 +1444,6 @@ export function PagePreview({
         data-failed={failed}
         data-preview-source={source}
       />
-    </Flex>
+    </div>
   );
 }

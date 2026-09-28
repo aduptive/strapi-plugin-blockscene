@@ -38,6 +38,19 @@ const expanded = () => page.evaluate(states)
 const waitOpenCount = count => page.waitForFunction(count => [...document.querySelectorAll('ol[aria-describedby] > li')].map(li => li.querySelector('button[aria-expanded]')).filter(Boolean).filter(b => b.getAttribute('aria-expanded') === 'true').length === count, count)
 const firstHeader = () => page.locator('ol[aria-describedby] > li').first().locator('button[aria-expanded]').first()
 const rows = () => page.locator('ol[aria-describedby] > li')
+// The gallery opens from the zone's native "Add a component to <zone>" button once the plugin is mounted (its capture
+// listener must be in place, or Strapi's own picker opens).
+const openGallery = async (zone = 'blocks') => {
+  await page.locator('[data-blockscene-editor]').waitFor({ state: 'attached' })
+  await page.getByRole('button', { name: new RegExp(`Add a component to ${zone}`, "i") }).click()
+}
+// The zone bar: one Expand all / Collapse all toggle, the "…" menu (select, paste) and, on Strapi 5, the mode menu.
+const toggle = (zone = 'blocks') => page.getByTestId(`zone-toggle-${zone}`)
+const zoneMenu = async (zone = 'blocks') => { await page.getByTestId(`zone-more-${zone}`).getByRole('button').click() }
+const setMode = async (label) => {
+  await page.getByTestId('zone-mode-menu').getByRole('button').click()
+  await page.getByRole('menuitem', { name: label, exact: true }).click()
+}
 let uploadId = null
 try {
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -75,7 +88,7 @@ try {
   })
   // Strapi 5 lab: the magnified block loads a plain page per block (the lab's static page stands in for a fixtures route).
   if (major === 5) await putSettings({ editor: { blockPreviewUrl: `${baseURL}/block-preview/index.html` } })
-  await page.getByTestId('open-gallery-blocks').click()
+  await openGallery()
   await page.getByTestId('blockscene-blocks.hero').waitFor()
   await step('configured image is used and the missing automatic image falls back to a wireframe', async () => {
     await page.getByTestId('blockscene-blocks.hero').locator('[data-thumb="0"] img').waitFor()
@@ -159,16 +172,21 @@ try {
   await step('double click inserts at once; the detail pane Insert too, and it is recorded as recently used', async () => {
     await page.getByTestId('blockscene-blocks.hero').locator('button').first().dblclick()
     await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' })
-    await page.getByTestId('open-gallery-sidebar').click()
+    await openGallery('sidebar')
+    await page.getByTestId('blockscene-blocks.text').waitFor()
     assert.equal(await page.getByTestId('blockscene-blocks.hero').count(), 0, 'Sidebar only allows text')
     await page.getByTestId('blockscene-blocks.text').locator('button').first().click()
     const recent = page.waitForResponse(res => res.url().endsWith('/blockscene/me/prefs') && res.request().method() === 'PUT')
     await page.getByTestId('gallery-detail').getByTestId('gallery-insert').click()
-    await page.getByTestId('open-gallery-sidebar').waitFor({ state: 'detached' })
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
     assert.ok((await recent).ok())
     assert.deepEqual((await api('GET', '/blockscene/me/prefs')).data.recent.slice(0, 2), ['blocks.text', 'blocks.hero'])
   })
-  await step('accordion controls appear for a full zone too', async () => { await page.getByTestId('block-accordion-controls-sidebar').waitFor() })
+  await step('accordion controls appear for a full zone too; its native add button no longer opens the gallery', async () => {
+    await page.getByTestId('block-accordion-controls-sidebar').waitFor()
+    await page.getByRole('button', { name: /Add a component to sidebar/i }).click(); await page.waitForTimeout(500)
+    assert.equal(await page.getByTestId('gallery-sidebar-sidebar').count(), 0, 'a full zone keeps the native behaviour')
+  })
   const save = page.getByRole('button', { name: 'Save', exact: true })
   const response = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && res.request().method() === 'POST')
   await save.click()
@@ -184,10 +202,10 @@ try {
   assert.equal(document.blocks[0].items[0].label, 'Nested default')
   checks.push('gallery', 'search', 'defaults', 'nested components', 'allowed components', 'max limit', 'save')
   await page.reload()
-  await page.getByTestId('open-gallery-blocks').waitFor()
+  await page.getByTestId('block-accordion-controls-blocks').waitFor()
   const docUrl = page.url()
   // Add a second block so "open/close all" has more than one accordion in the zone.
-  await page.getByTestId('open-gallery-blocks').click()
+  await openGallery()
   await page.getByTestId('blockscene-blocks.text').hover(); await page.getByTestId('gallery-quick-blocks.text').click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
   const second = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && ['PUT', 'POST'].includes(res.request().method()) && res.ok())
@@ -200,26 +218,35 @@ try {
   await step('default initial state closes every accordion once after load', async () => {
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await waitState('false')
   })
-  await step('open all / close all drive the native accordions per zone', async () => {
+  await step('the expand / collapse toggle drives the native accordions per zone and follows their real state', async () => {
     const controls = page.getByTestId('block-accordion-controls-blocks')
     // Beside the native zone label pill ("Blocks (2)" with friendly labels), not in the side panel.
     assert.ok(await controls.evaluate(el => { const anchor = el.closest('[data-blockscene-zone-controls="blocks"]'); const list = anchor?.parentElement?.parentElement?.querySelector(':scope > ol[aria-describedby]'); return Boolean(list && /^blocks\s*\(\d+\)/i.test(anchor.parentElement.textContent.trim())) }), 'controls next to the zone label')
     await page.locator('[data-blockscene-zone-controls="blocks"]').evaluate(el => el.parentElement.parentElement.scrollIntoView({ block: 'center' }))
     await page.screenshot({ path: `artifacts/strapi${major}-zone-label-controls.png`, animations: 'disabled' })
-    await controls.getByRole('button', { name: 'Open all blocks' }).click()
+    assert.equal(await toggle().innerText(), 'Expand all'); assert.equal(await toggle().getAttribute('aria-expanded'), 'false')
+    await toggle().click()
     await waitOpenCount(2)
+    await page.waitForFunction(() => document.querySelector('[data-testid="zone-toggle-blocks"]')?.textContent === 'Collapse all')
+    assert.equal(await toggle().getAttribute('aria-expanded'), 'true')
     assert.equal((await expanded()).filter(v => v === 'false').length, 1, 'sidebar zone untouched')
     await shot('accordions-open')
     // Editing after the initial application must not re-close anything.
     await page.locator('input[name="blocks.0.title"]').fill('Edited without reapply')
     await new Promise(r => setTimeout(r, 1200))
     assert.deepEqual((await expanded()).slice(0, 2), ['true', 'true'])
-    await controls.getByRole('button', { name: 'Close all blocks' }).click()
+    // A header closed by hand turns it back into Expand all (the rows' own state, not the last click).
+    await firstHeader().click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="zone-toggle-blocks"]')?.textContent === 'Expand all')
+    await firstHeader().click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="zone-toggle-blocks"]')?.textContent === 'Collapse all')
+    await toggle().click()
     await waitState('false')
+    await page.waitForFunction(() => document.querySelector('[data-testid="zone-toggle-blocks"]')?.textContent === 'Expand all')
   })
   await step('remember mode reuses the last explicit open/close all action', async () => {
     await putSettings({ editor: { initialState: 'remember' } })
-    await page.getByTestId('block-accordion-controls-blocks').getByRole('button', { name: 'Open all blocks' }).click()
+    await toggle().click()
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor()
     await waitOpenCount(2)
     assert.equal((await expanded()).filter(v => v === 'false').length, 1, 'remembered per zone: sidebar still closed')
@@ -232,11 +259,15 @@ try {
   await step('open initial state and hidden controls', async () => {
     await putSettings({ editor: { initialState: 'open', showCloseAll: false } })
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await waitState('true')
-    assert.equal(await page.getByRole('button', { name: 'Close all blocks' }).count(), 0)
-    // The zone label also holds the row selection/paste tools (editor.clipboard): off too, so the label stays native.
+    // Only "Expand all" enabled: the toggle offers that action alone, disabled while every block is open.
+    await page.waitForFunction(() => document.querySelector('[data-testid="zone-toggle-blocks"]')?.disabled === true)
+    assert.equal(await toggle().innerText(), 'Expand all')
+    // The zone bar also holds the "…" menu (select, paste: editor.clipboard): off too, so no toggle and no menu remain
+    // (Strapi 5 keeps Undo and Redo there).
     await putSettings({ editor: { showOpenAll: false, showCloseAll: false, clipboard: false } })
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor(); await waitState('false')
-    assert.equal(await page.getByTestId('block-accordion-controls-blocks').count(), 0)
+    await page.goto(docUrl); await page.locator('[data-blockscene-editor]').waitFor({ state: 'attached' }); await waitState('false')
+    assert.equal(await toggle().count(), 0); assert.equal(await page.getByTestId('zone-more-blocks').count(), 0)
+    if (major === 4) assert.equal(await page.getByTestId('block-accordion-controls-blocks').count(), 0)
     await firstHeader().click() // native header still works
     await page.waitForFunction(() => document.querySelector('ol[aria-describedby] > li').querySelector('button[aria-expanded]').getAttribute('aria-expanded') === 'true')
   })
@@ -253,7 +284,7 @@ try {
     await putSettings({ editor: { enabled: false } })
     await page.goto(docUrl)
     await page.getByRole('button', { name: /Add a component to/i }).first().waitFor()
-    assert.equal(await page.getByTestId('open-gallery-blocks').count(), 0)
+    assert.equal(await page.locator('[data-blockscene-editor]').count(), 0)
     assert.equal(await page.getByTestId('block-accordion-controls-blocks').count(), 0)
     if (await firstHeader().getAttribute('aria-expanded') !== 'true') await firstHeader().click()
     await page.locator('input[name="blocks.0.title"]').fill('Native edit kept')
@@ -261,7 +292,7 @@ try {
     await new Promise(r => setTimeout(r, 1500))
     assert.equal(await page.locator('input[name="blocks.0.title"]').inputValue(), 'Native edit kept', 'settings change does not reload the form')
     await shot('bypass')
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor()
+    await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor()
   })
   await putSettings({})
   await step('settings page: palette preview, unsaved indicator, save and persistence', async () => {
@@ -282,11 +313,12 @@ try {
     assert.equal(await page.locator('input[name="palette-accent"]').inputValue(), '#FF0000')
     await page.getByTestId('source-blocks.text').getByText(/Wireframe/).waitFor()
     await page.getByTestId('source-blocks.hero').getByText(/Automatic image/).waitFor()
-    if (major === 5) { await page.locator('input[name="editor-previewUrl"]').waitFor() } else { await page.getByText('Strapi 5 distribution only', { exact: false }).waitFor() }
+    // No preview route: the Settings page says so (editors get no hint in the edit view).
+    if (major === 5) { await page.locator('input[name="editor-previewUrl"]').waitFor(); await page.getByTestId('preview-url-empty').waitFor() } else { await page.getByText('Strapi 5 distribution only', { exact: false }).waitFor() }
     await shot('settings')
   })
   await step('palette change reaches the gallery wireframe without rebuild', async () => {
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
+    await page.goto(docUrl); await openGallery()
     // The generic template has no accent shape; surfaces are present in every template.
     await page.getByTestId('blockscene-blocks.text').locator('svg[data-wireframe] rect[fill="#00FF00"]').first().waitFor()
     await page.keyboard.press('Escape')
@@ -315,7 +347,7 @@ try {
     await page.getByText('Settings saved.', { exact: true }).waitFor()
     const settings = (await api('GET', '/blockscene/settings')).data
     assert.equal(settings.settings.components['blocks.text'].mediaId, uploadId)
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
+    await page.goto(docUrl); await openGallery()
     const img = page.getByTestId('blockscene-blocks.text').locator('[data-thumb="0"] img')
     await img.waitFor(); assert.match(await img.getAttribute('src'), /\/uploads\//)
     await shot('manual-thumb')
@@ -325,7 +357,7 @@ try {
     await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
     assert.equal((await api('GET', '/blockscene/settings')).data.settings.components['blocks.text'], undefined)
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
+    await page.goto(docUrl); await openGallery()
     await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"]').waitFor()
     await page.keyboard.press('Escape')
   })
@@ -334,7 +366,7 @@ try {
     assert.equal((await api('DELETE', `/upload/files/${uploadId}`)).status, 200); uploadId = null
     await page.goto('/admin/settings/blockscene')
     await page.getByTestId('settings-blocks.text').getByText('The selected media no longer exists; the next source is used.').waitFor()
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
+    await page.goto(docUrl); await openGallery()
     await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="faq"]').waitFor()
     await page.keyboard.press('Escape')
   })
@@ -342,7 +374,7 @@ try {
     execFileSync(process.execPath, ['scripts/capture-previews.mjs', '--manifest', 'examples/static-preview/manifest.json', '--out', `.local/strapi${major}/public/block-previews`, '--only', 'blocks.text'], { stdio: 'inherit' })
     assert.ok(existsSync(previewFile))
     await putSettings({})
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').click()
+    await page.goto(docUrl); await openGallery()
     const img = page.getByTestId('blockscene-blocks.text').locator('[data-thumb="0"] img')
     await img.waitFor(); assert.match(await img.getAttribute('src'), /blocks\.text\.webp/)
     await shot('captured-thumb')
@@ -352,8 +384,7 @@ try {
     const previewUrl = `${baseURL}/block-preview/index.html`
     await putSettings({ editor: { previewUrl, previewMode: 'form' } })
     await page.goto(docUrl)
-    const modes = page.getByTestId('page-preview-modes').first()
-    await modes.getByRole('button', { name: 'Fields + page' }).click()
+    await setMode('Fields + page')
     const pane = page.getByTestId('page-preview-pane')
     await pane.waitFor()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
@@ -460,7 +491,7 @@ try {
     await frame.locator('main').hover({ position: { x: 40, y: 4 } })
     await page.waitForFunction(() => !document.querySelector('[data-blockscene-hover]'))
     // Out of view: the edge indicator scrolls the form to the row.
-    await page.getByTestId('block-accordion-controls-blocks').getByRole('button', { name: 'Open all blocks' }).click()
+    await toggle().click()
     await waitOpenCount(3)
     await page.setViewportSize({ width: 1440, height: 560 })
     // The edit view scrolls inside a container (not the window): back to its top, so the last row is below the fold.
@@ -488,13 +519,15 @@ try {
     await page.screenshot({ path: 'artifacts/strapi5-divider-hover.png', clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
     await putSettings({})
   })
-  if (major === 5) await step('undo / redo (Strapi 5): gallery insert and field edits, buttons and keyboard, panel and toolbar share one history', async () => {
+  if (major === 5) await step('undo / redo (Strapi 5): gallery insert and field edits, buttons and keyboard, zone bar and toolbar share one history', async () => {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'split' } })
     await page.goto(docUrl)
     const tools = page.getByTestId('blockscene-history')
     const undoButton = tools.first().getByRole('button', { name: /^Undo/ }), redoButton = tools.first().getByRole('button', { name: /^Redo/ })
     await undoButton.waitFor(); await page.getByTestId('page-preview-pane').waitFor()
-    assert.equal(await tools.count(), 2, 'side panel and preview toolbar')
+    assert.equal(await tools.count(), 2, 'zone bar and preview toolbar')
+    assert.ok(await tools.first().evaluate(el => Boolean(el.closest('[data-blockscene-zone-controls="blocks"]'))), 'Undo and Redo sit in the first zone bar')
+    assert.equal(await page.locator('aside h2').filter({ hasText: /^Blockscene$/i }).count(), 0, 'no Blockscene side panel without history or diagnostics')
     assert.ok(await undoButton.isDisabled() && await redoButton.isDisabled(), 'fresh history')
     const zoneRows = () => page.locator('ol[aria-describedby]').first().locator(':scope > li')
     const titleInput = page.locator('input[name="title"]')
@@ -502,7 +535,7 @@ try {
     const expect = async (rows, title) => {
       await page.waitForFunction(([rows, title]) => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === rows && document.querySelector('input[name="title"]')?.value === title, [rows, title])
     }
-    await page.getByTestId('open-gallery-blocks').click()
+    await openGallery()
     await page.getByTestId('blockscene-blocks.text').hover(); await page.getByTestId('gallery-quick-blocks.text').click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     await expect(count + 1, original)
@@ -521,7 +554,7 @@ try {
     assert.ok(await undoButton.isDisabled(), 'back to the loaded values')
     await page.keyboard.press('ControlOrMeta+Shift+z'); await expect(count + 1, original)
     await redoButton.click(); await expect(count + 1, 'Undo me')
-    await tools.first().locator('xpath=..').screenshot({ path: 'artifacts/strapi5-undo-panel.png', animations: 'disabled' })
+    await tools.first().locator('xpath=..').screenshot({ path: 'artifacts/strapi5-undo-zone-bar.png', animations: 'disabled' })
     await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
     await putSettings({})
   })
@@ -546,7 +579,7 @@ try {
     assert.deepEqual((await api('GET', '/blockscene/settings')).data.settings.contentTypes[uid],
       { sidebarPosition: 'right', sidebar: [{ label: 'Page title', open: 'modal', fields: ['title'], icon: 'text' }] })
     await page.goto(docUrl)
-    await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Visual editor', exact: true }).click()
+    await setMode('Visual editor')
     await page.locator('[data-testid="page-preview-sidebar"][data-position="right"]').waitFor()
     const button = page.getByTestId('sidebar-item-0')
     assert.equal(await button.getAttribute('title'), 'Page title')
@@ -620,7 +653,7 @@ try {
       assert.equal(await page.locator('[name$="bsHidden"]').count(), 0, 'no input for the hidden attribute')
       if (major === 5) {
         await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
-        await page.reload(); await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Fields + page' }).click()
+        await page.reload(); await setMode('Fields + page')
         const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
         await frame.locator('[data-block-key][data-hidden] .bp-hidden').waitFor()
         assert.equal(await frame.locator('[data-block-key][data-hidden]').count(), 1, 'the preview dims the hidden block')
@@ -643,22 +676,41 @@ try {
       assert.deepEqual(saved.map(b => b.body), ['First text', 'First text', 'Second text'])
       assert.notEqual(saved[0].id, saved[1].id, 'a new component, not the same row')
       if (major === 5) assert.deepEqual(saved.map(b => (b.pages || []).map(p => p.documentId)), [[target.documentId], [target.documentId], []], 'relations kept')
-      // Copy / paste: selection mode from the zone label, two blocks, pasted on another page; a zone that cannot take them refuses.
-      await page.getByTestId('zone-select-blocks').click()
+      // Copy / paste: selection mode from the zone bar's "…" menu, two blocks, pasted on another page; a zone that cannot take them refuses.
+      await zoneMenu(); await page.getByTestId('zone-select-blocks').click()
+      // The selection bar replaces the zone tools; each row's checkbox opens its header; Escape leaves.
+      await page.getByTestId('zone-selection-blocks').waitFor()
+      assert.equal(await toggle().count(), 0, 'selection bar instead of the zone tools')
+      assert.ok(await page.getByTestId('row-select-blocks-0').evaluate(box => box.parentElement.nextElementSibling?.matches('button[aria-expanded]')), 'checkbox before the header toggle')
+      assert.ok(await page.getByTestId('zone-copy-blocks').isDisabled(), 'Copy needs a selection')
+      await page.keyboard.press('Escape'); await page.getByTestId('zone-selection-blocks').waitFor({ state: 'detached' })
+      assert.equal(await page.getByTestId('row-select-blocks-0').count(), 0, 'Escape leaves selection mode')
+      await zoneMenu(); await page.getByTestId('zone-select-blocks').click()
+      // Select all, then none (the box is indeterminate while only some are selected).
+      const all = page.getByTestId('zone-select-all-blocks')
+      await all.check(); assert.equal(await page.getByTestId('zone-selected-blocks').innerText(), '3 selected')
+      assert.equal(await all.getAttribute('aria-label'), 'Select none')
+      await all.click(); assert.equal(await page.getByTestId('zone-selected-blocks').innerText(), 'Select all')
       await page.getByTestId('row-select-blocks-0').check(); await page.getByTestId('row-select-blocks-2').check()
+      assert.ok(await all.evaluate(box => box.indeterminate), 'some selected: indeterminate')
+      await page.getByTestId('block-accordion-controls-blocks').locator('xpath=../..').screenshot({ path: `${shots}/zone-selection${suffix}.png`, animations: 'disabled' })
       await page.getByTestId('zone-copy-blocks').click()
       await page.getByText('2 blocks copied', { exact: false }).first().waitFor()
       assert.equal(await page.getByTestId('row-select-blocks-0').count(), 0, 'selection mode ends after copying')
       const clip = await page.evaluate(() => JSON.parse(localStorage.getItem('blockscene:clipboard:v1')))
       assert.equal(clip.v, 1); assert.deepEqual(clip.rows.map(r => r.body), ['First text', 'Second text']); assert.ok(clip.rows.every(r => r.id === undefined))
       await page.goto(`/admin/content-manager/collection-types/api::page.page/${idOf(other)}`)
-      const paste = page.getByTestId('zone-paste-blocks'); await paste.waitFor()
+      const paste = page.getByTestId('zone-paste-blocks')
+      await zoneMenu(); await paste.waitFor()
       assert.match(await paste.innerText(), /Paste 2 blocks/)
-      await page.getByTestId('block-accordion-controls-blocks').locator('xpath=../..').screenshot({ path: `${shots}/paste${suffix}.png`, animations: 'disabled' })
-      await page.getByTestId('zone-paste-sidebar').click() // sidebar: max 1, the two blocks do not fit
+      await page.screenshot({ path: `${shots}/paste${suffix}.png`, animations: 'disabled' })
+      await page.keyboard.press('Escape'); await paste.waitFor({ state: 'detached' })
+      // An empty zone has no label row: its bar sits right after its native add button.
+      assert.ok(await page.getByTestId('zone-more-sidebar').evaluate(el => /Add a component to sidebar/i.test(el.closest('[data-blockscene-zone-controls="sidebar"]').previousElementSibling?.textContent.trim())), 'empty zone: after the add button')
+      await zoneMenu('sidebar'); await page.getByTestId('zone-paste-sidebar').click() // sidebar: max 1, the two blocks do not fit
       await page.getByText('Nothing was pasted', { exact: false }).first().waitFor()
       assert.equal(await page.locator('ol[aria-describedby]').count(), 1, 'refused: the sidebar stays empty')
-      await paste.click()
+      await zoneMenu(); await paste.click()
       await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
       await saveDoc()
       const pasted = await rest(other.title)
@@ -667,7 +719,7 @@ try {
         assert.deepEqual(pasted[1].pages.map(p => p.documentId), [target.documentId], 'relations travel with the clipboard')
         // The page preview offers Paste in its seams while the clipboard holds blocks; the same all-or-nothing rules apply.
         await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
-        await page.reload(); await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Fields + page' }).click()
+        await page.reload(); await setMode('Fields + page')
         const start = page.getByTestId('page-preview-pane').frameLocator('iframe').locator('[data-testid="bp-gap-start"]')
         await start.hover(); await start.locator('[data-paste]').click()
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 5)
@@ -687,9 +739,9 @@ try {
     if (GROUPS_MODE === '1') assert.deepEqual(catalogData.groups, { 'group.section': 'group.end' }, 'catalog exposes the validated map')
     else assert.equal(catalogData.groups, null, 'no config (or malformed config) means no groups')
     // Gallery, form mode: a configured OPEN brings its CLOSE in the same unsaved change; without config it is an ordinary block.
-    await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor(); await rows().first().waitFor()
+    await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await rows().first().waitFor()
     const before = await page.locator('ol[aria-describedby]').first().locator(':scope > li').count()
-    await page.getByTestId('open-gallery-blocks').click()
+    await openGallery()
     await page.getByTestId('blockscene-group.section').locator('button').first().dblclick()
     await page.waitForFunction(n => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === n, before + (GROUPS_MODE === '1' ? 2 : 1))
     // Only the `blocks` zone (the first list): the sidebar zone renders its own list on the same page.
@@ -735,7 +787,7 @@ try {
       const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
       const openSplit = async id => {
         await page.goto(`/admin/content-manager/collection-types/api::page.page/${id}`)
-        await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Fields + page' }).click()
+        await setMode('Fields + page')
         await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
       }
       const names = () => rows().evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
@@ -801,17 +853,21 @@ try {
     for (const id of [badId, goodId]) await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
   })
   await step('admin locale drives the plugin chrome: pt-BR, fr, en and an unsupported locale (ja) falls back to English', async () => {
-    const cases = [['fr', { add: 'Ajouter un bloc', openAll: 'Ouvrir tous les blocs', split: 'Champs + page', palette: 'Palette des wireframes' }],
-      ['pt-BR', { add: 'Adicionar bloco', openAll: 'Abrir todos os blocos', split: 'Campos + página', palette: 'Paleta dos wireframes' }],
-      ['ja', { add: 'Add block', openAll: 'Open all blocks', split: 'Fields + page', palette: 'Wireframe palette' }],
-      ['en', { add: 'Add block', openAll: 'Open all blocks', split: 'Fields + page', palette: 'Wireframe palette' }]]
+    const cases = [['fr', { expand: 'Tout déplier', undo: 'Annuler', split: 'Champs + page', palette: 'Palette des wireframes' }],
+      ['pt-BR', { expand: 'Expandir tudo', undo: 'Desfazer', split: 'Campos + página', palette: 'Paleta dos wireframes' }],
+      ['ja', { expand: 'Expand all', undo: 'Undo', split: 'Fields + page', palette: 'Wireframe palette' }],
+      ['en', { expand: 'Expand all', undo: 'Undo', split: 'Fields + page', palette: 'Wireframe palette' }]]
     if (major === 5) await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     for (const [locale, expect] of cases) {
       await page.evaluate(value => localStorage.setItem('strapi-admin-language', value), locale)
-      await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor()
-      assert.match(await page.getByTestId('open-gallery-blocks').innerText(), new RegExp(expect.add), `${locale}: gallery button`)
-      await page.getByRole('button', { name: expect.openAll, exact: true }).first().waitFor()
-      if (major === 5) await page.getByTestId('page-preview-modes').first().getByRole('button', { name: expect.split, exact: true }).waitFor()
+      await page.goto(docUrl); await toggle().waitFor(); await waitState('false') // the initial state closes every row
+      await page.waitForFunction(text => document.querySelector('[data-testid="zone-toggle-blocks"]')?.textContent === text, expect.expand, { timeout: 5000 }).catch(() => {})
+      assert.equal(await toggle().innerText(), expect.expand, `${locale}: zone toggle`)
+      if (major === 5) {
+        await page.getByTestId('blockscene-history').first().getByRole('button', { name: expect.undo, exact: true }).waitFor()
+        await page.getByTestId('zone-mode-menu').getByRole('button').click()
+        await page.getByRole('menuitem', { name: expect.split, exact: true }).waitFor(); await page.keyboard.press('Escape')
+      }
       await page.goto('/admin/settings/blockscene'); await page.getByTestId('save-blockscene-settings').waitFor()
       await page.getByText(expect.palette, { exact: true }).first().waitFor()
       const text = await page.locator('body').innerText()
@@ -819,8 +875,8 @@ try {
     }
     if (major === 5) {
       await putSettings({})
-      await page.goto(docUrl); await page.getByTestId('open-gallery-blocks').waitFor()
-      assert.equal(await page.getByTestId('page-preview-modes').count(), 0, 'no preview route: no dead mode buttons, only the hint')
+      await page.goto(docUrl); await toggle().waitFor()
+      assert.equal(await page.getByTestId('zone-mode-menu').count(), 0, 'no preview route: no mode menu (the Settings page explains it)')
     }
   })
   await page.goto('/admin/settings/image-pipeline')

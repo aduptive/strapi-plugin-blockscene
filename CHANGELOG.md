@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+- Zone bar: the editing tools moved from the Blockscene side panel into the
+  form, right after each zone's native label pill. One "Expand all" / "Collapse
+  all" button with text replaces the two icons; it follows the rows' real
+  `aria-expanded` state (a header toggled by hand counts) and keeps the
+  progressive open/close and the remember mode. `showOpenAll` / `showCloseAll`
+  are kept: both on, the button toggles; only one on, it offers that action
+  alone (disabled when there is nothing to do); both off, no button. On the
+  first zone (Strapi 5): Undo and Redo with text, and the editing mode (Fields,
+  Fields + page, Visual editor) as a menu with icons when a preview route
+  exists. Rarer actions sit in a "…" menu: Select blocks, and Paste N blocks,
+  listed only where the copied components are allowed (room and group balance
+  are still checked on click, with the same notices). An empty zone gets its
+  bar right after its native add button.
+- Selection mode is a contextual bar: select all / none (indeterminate while
+  some are selected) with the count, Copy (disabled with a reason until a block
+  is selected) and Done; Esc leaves. The row checkboxes moved to the start of
+  each header.
+- The "Add block" gallery button is gone (Strapi 5 and 4): the native "Add a
+  component to <zone>" button already opens the gallery. The Blockscene side
+  panel (Strapi 5) now only shows version history and layout group problems,
+  and is not shown at all when there are none. The zone bars, the gallery
+  dialogs and the page preview are mounted from the Entry panel's
+  `editView.right-links` injection zone, where they render nothing visible.
+- One undo history per edit view (Strapi 5): the zone bar, the pane toolbar
+  and the keyboard shortcuts share it, with the editing mode.
+- The "No preview URL" hint left the edit view (editors cannot act on it): the
+  Settings page explains what happens when the preview route is empty.
+- Messages: `expandAll`, `collapseAll`, `moreActions`, `selectBlocks`,
+  `selectAll`, `selectNone`, `selectedCount`, `copy`, `copyNothing`,
+  `selectDone`, `toggleHelp` and `previewUrlEmpty` added; `add`, `openAll`,
+  `closeAll`, `selectMode`, `copySelected`, `previewHelp` and `previewNoUrl`
+  removed; `showOpenAll` / `showCloseAll` reworded (8 catalogues).
+
 ## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
 
 - Page preview toolbar (Strapi 5): the document's state as the edit view header
