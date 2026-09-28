@@ -114,16 +114,16 @@ test('history: identical snapshots are stored once (hash dedupe), the event is s
 test('history: settings validation, lenient read, coverage and retention', () => {
   const { validateSettings, mergeSaved, DEFAULTS } = require('../server/settings')
   const types = ['api::page.page', 'api::post.post']
-  assert.deepEqual(DEFAULTS.history, { enabled: false, contentTypes: 'all', retentionDays: 90, maxSnapshots: 100, eventDays: 365 })
+  assert.deepEqual(DEFAULTS.history, { enabled: false, contentTypes: 'all', retentionDays: 90, maxSnapshots: 100, eventDays: 365, trashDays: 90 })
   const ok = validateSettings({ history: { enabled: true, contentTypes: ['api::post.post', 'api::post.post'], retentionDays: 30, maxSnapshots: 5, eventDays: 30 } }, [], [], types)
-  assert.deepEqual(ok.history, { enabled: true, contentTypes: ['api::post.post'], retentionDays: 30, maxSnapshots: 5, eventDays: 30 })
+  assert.deepEqual(ok.history, { enabled: true, contentTypes: ['api::post.post'], retentionDays: 30, maxSnapshots: 5, eventDays: 30, trashDays: 90 })
   for (const bad of [{ history: 'on' }, { history: [] }, { history: { enabled: 'yes' } }, { history: { extra: 1 } }, { history: { contentTypes: 'some' } },
     { history: { contentTypes: ['api::gone.gone'] } }, { history: { contentTypes: ['plugin::blockscene.event'] } }, { history: { retentionDays: 0 } },
     { history: { retentionDays: 1.5 } }, { history: { retentionDays: '90' } }, { history: { retentionDays: 3651, eventDays: 3651 } }, { history: { maxSnapshots: 1001 } },
     { history: { eventDays: 30 } }, { history: { retentionDays: 400 } }])
     assert.throws(() => validateSettings(bad, [], [], types), { name: 'ValidationError' }, `rejects ${JSON.stringify(bad)}`)
   const merged = mergeSaved({ history: { enabled: true, contentTypes: ['api::gone.gone', 'api::page.page'], retentionDays: 'x', maxSnapshots: 7, eventDays: 10 } }, [], [], types)
-  assert.deepEqual(merged.history, { enabled: true, contentTypes: ['api::page.page'], retentionDays: 90, maxSnapshots: 7, eventDays: 90 })
+  assert.deepEqual(merged.history, { enabled: true, contentTypes: ['api::page.page'], retentionDays: 90, maxSnapshots: 7, eventDays: 90, trashDays: 90 })
   assert.equal(covers({ enabled: true, contentTypes: 'all' }, 'api::page.page'), true)
   assert.equal(covers({ enabled: true, contentTypes: 'all' }, 'plugin::blockscene.event'), false, 'never the plugin\'s own types')
   assert.equal(covers({ enabled: true, contentTypes: ['api::post.post'] }, 'api::page.page'), false)

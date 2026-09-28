@@ -54,6 +54,37 @@
   action slot and keeps the i18n globe on localized fields. `description` is
   unchanged. Strapi 4 has no label action on component fields: there the help
   text follows the description under the input.
+- Trash (Strapi 5, part of the version history module, off by default;
+  ADU-388). A delete through the document service also writes one entry per
+  document to the new hidden content type `plugin::blockscene.trash`
+  (`blockscene_trash`), in the delete's transaction (a failed capture fails the
+  delete): every deleted locale, draft and published rows, and the
+  unidirectional links other documents and blocks had to it (owner, field,
+  locale, list position), captured before Strapi removes them. Restore checks
+  first and writes nothing when blocked (unique value such as a slug taken, the
+  locale exists again, single type taken, type or every locale gone), reports
+  the rest (published version existed, required fields empty, removed fields,
+  blocks, media and related documents gone, locales skipped, link owners gone or
+  pointing elsewhere), then recreates the document as a draft with its draft
+  content through the document service: every locale under one documentId,
+  default locale first, into the existing document when only a locale had been
+  deleted; links go back to their position. One transaction, idempotent (the
+  entry is claimed first). `restore` and `purge` events in the history. Delete
+  forever per entry; the nightly job deletes expired entries in batches. New
+  setting `history.trashDays` (90, validated like the others, code settings
+  too).
+- Activity page (Strapi 5; ADU-380): a main menu link "Activity and trash" with
+  two tabs. Activity: every recorded event, paginated on the server (no
+  snapshots loaded), filtered by person, content type, action, date range and
+  title, with a link to the edit view while the document exists. Trash: list,
+  type filter, read-only preview, restore with the pre-check report and a
+  confirmation, delete forever with a confirmation.
+- New permissions `activity.read`, `trash.read`, `trash.restore`, `trash.purge`;
+  every list is limited to the content types the user may read in the Content
+  Manager (restore needs create there, delete forever needs delete). Admin
+  routes `GET /activity`, `GET /trash`, `GET /trash/:id`, `GET /trash/:id/check`,
+  `POST /trash/:id/restore` (409 with the report when blocked) and
+  `DELETE /trash/:id`, with strict query validation.
 
 ## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
 

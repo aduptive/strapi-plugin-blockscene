@@ -736,7 +736,7 @@ harmless.
 ```js
 // config/plugins.js
 blockscene: { config: { settings: { history: { enabled: true, contentTypes: ['api::page.page', 'api::post.post'],
-  retentionDays: 90, maxSnapshots: 100, eventDays: 365 } } } }
+  retentionDays: 90, maxSnapshots: 100, eventDays: 365, trashDays: 90 } } } }
 ```
 
 Events live in the `blockscene_events` table (content type
@@ -744,6 +744,100 @@ Events live in the `blockscene_events` table (content type
 Builder). Removing the plugin, or installing a Blockscene version older than
 the one that added history, lets Strapi drop that table and every recorded
 version on the next start: back up `blockscene_events` first if you need it.
+
+### Trash (Strapi 5)
+
+Part of the version history module: on with it, for the same content types.
+Strapi has no trash in any plan; here a delete made through the document service
+(the admin's Delete, bulk delete and "Delete locale", the APIs, plugins) also
+writes one trash entry per document, in the same transaction as the delete.
+
+**What an entry keeps.** Every deleted locale, draft and published rows (they
+can differ), as snapshots like the history's; the document's title (its Content
+Manager main field); who deleted it and when; and the links other documents and
+blocks had to it. Strapi removes those links with the document, and the
+document's own snapshot does not hold them when the relation is unidirectional
+(declared only on the other side, like a menu listing pages or a block linking
+to a page), so they are captured before the delete: owner, field, locale and the
+position in the owner's list. A delete without a locale removes the default
+locale only (Strapi's rule), `'*'` every locale; the entry has exactly what was
+deleted. If the capture fails, nothing is deleted.
+
+**Restore.** From the Trash page, which first shows what the restore would do
+and writes nothing if something blocks it:
+
+- Blocking: the content type is gone; a unique field (`unique: true` or a uid
+  field, such as a slug) is now used by another document in that locale; the
+  document has that locale again; a single type has a document again; none of
+  its locales is configured any more.
+- Reported, then restored anyway: a published version existed (see below);
+  required fields are empty under the current schema (drafts may be, Strapi
+  checks them on publish); fields the schema no longer has, blocks whose
+  component the zone no longer allows, media files and related documents that no
+  longer exist (left out); locales no longer configured (skipped); links whose
+  owner is gone or now points elsewhere.
+
+The document comes back as a **draft with its draft content**: the draft is the
+latest work, and publishing is the editor's decision (the site may have moved
+on). The published snapshot stays in the entry and in the preview. Every locale
+is restored under one documentId, the default locale first, through the
+document service (validation and the project's lifecycles run). A document that
+is gone gets a new documentId, since Strapi's create does not take one; a locale
+deleted from a document that still exists goes back into that document. The
+captured links are put back where they were (same position in the owner's
+list) when the owner still exists; links from published versions come back
+when those owners are published again after this document is. A restore is one
+transaction and is idempotent: the entry is claimed first, so a second restore
+(a double click, another editor, another instance) returns the first one's
+document. The history gets a `restore` event per locale.
+
+**Delete forever** removes one entry (recorded as a `purge` event in the
+activity). The nightly job deletes entries past their expiry, restored ones too,
+in batches; neither ever deletes media files.
+
+**Retention.** `trashDays` (90, 1 to 3650) in the same settings; each entry's
+expiry is fixed when the document is deleted, so a later change applies to later
+deletes.
+
+```js
+blockscene: { config: { settings: { history: { enabled: true, trashDays: 30 } } } }
+```
+
+Entries live in `blockscene_trash` (`plugin::blockscene.trash`, hidden from the
+Content Manager and the Content-Type Builder); the same backup note as for
+`blockscene_events` applies.
+
+### Activity and Trash pages (Strapi 5)
+
+A main menu link, "Activity and trash", opens one page with a tab each (the
+pages are tools for editors, not configuration, so they are not under
+Settings). **Activity** lists every recorded event, newest first, 25 per page,
+filtered by person, content type, action, date range and title (documents whose
+main field contains the text now, or whose trash entry's title does); each row
+links to the document's edit view while that locale exists and shows the
+summary. **Trash** lists the entries (title, type, locales, who, when, when it
+is deleted for good), filtered by content type, with restored entries on a
+switch; Preview shows the fields and blocks of each deleted locale, read-only;
+Restore shows the pre-check report and asks to confirm; Delete forever asks
+first.
+
+**Permissions.** `Read content activity` (`activity.read`), `Read the trash`
+(`trash.read`), `Restore from the trash` (`trash.restore`), `Delete from the
+trash forever` (`trash.purge`), none granted to non-super-admin roles by
+default. On top of them, every list shows only content types the user may read
+in the Content Manager (an entry of another type answers 404), restoring needs
+create there and deleting forever needs delete. Admin API: `GET /blockscene/activity`
+(`actor`, `contentType`, `action`, `from`, `to` as ISO dates, `q`, `page`,
+`pageSize` up to 100), `GET /blockscene/trash` (`contentType`, `status`
+trashed or restored, `page`, `pageSize`), `GET /blockscene/trash/:id` (the
+preview), `GET /blockscene/trash/:id/check` (the pre-check),
+`POST /blockscene/trash/:id/restore` (409 with the report when blocked) and
+`DELETE /blockscene/trash/:id`. Lists never load snapshots.
+
+**Coverage boundary**, the same as the history's: the document service only.
+A raw `strapi.db.query` delete, SQL or a database restore leaves no trash
+entry; deleting a content type (Content-Type Builder) drops its data without
+one. The trash is a safety net for editors, not a backup: keep database backups.
 
 ## Languages
 

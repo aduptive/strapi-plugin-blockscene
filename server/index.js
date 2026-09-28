@@ -4,6 +4,7 @@ const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, vali
 const { safeGroups, validateGroups } = require('./groups')
 const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
+const { trashContentType, trashService, trashController } = require('./trash')
 // Set at build time for the Strapi 4 package; from source (tests) it is Strapi 5. Version history is Strapi 5 only.
 const STRAPI5 = process.env.BLOCKSCENE_STRAPI_MAJOR !== '4'
 
@@ -149,7 +150,8 @@ module.exports = {
     await strapi.admin.services.permission.actionProvider.registerMany([
       { section: 'plugins', displayName: 'Read gallery settings', uid: 'settings.read', pluginName: PLUGIN },
       { section: 'plugins', displayName: 'Change gallery settings', uid: 'settings.update', pluginName: PLUGIN },
-      ...(STRAPI5 ? [{ section: 'plugins', displayName: 'Read version history', uid: 'history.read', pluginName: PLUGIN }] : []),
+      ...(STRAPI5 ? [['history.read', 'Read version history'], ['activity.read', 'Read content activity'], ['trash.read', 'Read the trash'],
+        ['trash.restore', 'Restore from the trash'], ['trash.purge', 'Delete from the trash forever']].map(([uid, displayName]) => ({ section: 'plugins', displayName, uid, pluginName: PLUGIN })) : []),
     ])
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
     strapi.plugin(PLUGIN).service('settings').fields()
@@ -158,8 +160,8 @@ module.exports = {
     if (STRAPI5) { registerHistory(strapi); registerPurge(strapi) }
   },
   destroy({ strapi }) { if (STRAPI5) strapi.cron?.remove?.(CRON) },
-  // Version history events (Strapi 5): hidden from the Content Manager and the Content-Type Builder.
-  contentTypes: STRAPI5 ? { event: eventContentType } : {},
+  // Version history events and the trash (Strapi 5): hidden from the Content Manager and the Content-Type Builder.
+  contentTypes: STRAPI5 ? { event: eventContentType, trash: trashContentType } : {},
   services: { settings: ({ strapi }) => {
     // Code settings (plugin config `settings`): validated once, strictly; invalid ones are ignored with a warning.
     let project
@@ -200,7 +202,7 @@ module.exports = {
         return get()
       },
     }
-  }, ...(STRAPI5 && { history: historyService }) },
+  }, ...(STRAPI5 && { history: historyService, trash: trashService }) },
   controllers: {
     catalog: ({ strapi }) => ({
       async find(ctx) {
@@ -254,7 +256,7 @@ module.exports = {
         ctx.body = value
       },
     }),
-    ...(STRAPI5 && { history: historyController }),
+    ...(STRAPI5 && { history: historyController, trash: trashController }),
   },
   routes: { admin: { type: 'admin', routes: [
     { method: 'GET', path: '/catalog', handler: 'catalog.find', config: { policies: ['admin::isAuthenticatedAdmin'] } },
@@ -262,7 +264,10 @@ module.exports = {
     ...[['GET', 'find', 'read'], ['PUT', 'update', 'update'], ['DELETE', 'reset', 'update']].map(([method, handler, action]) => ({ method, path: '/settings', handler: `settings.${handler}`,
       config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions',
         config: { actions: [`plugin::${PLUGIN}.settings.${action}`] } }] } })),
-    ...(STRAPI5 ? [['/history/:uid/:documentId', 'list'], ['/history-events/:id', 'find']].map(([path, handler]) => ({ method: 'GET', path, handler: `history.${handler}`,
-      config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: [`plugin::${PLUGIN}.history.read`] } }] } })) : []),
+    ...(STRAPI5 ? [['GET', '/history/:uid/:documentId', 'history.list', 'history.read'], ['GET', '/history-events/:id', 'history.find', 'history.read'],
+      ['GET', '/activity', 'history.activity', 'activity.read'], ['GET', '/trash', 'trash.list', 'trash.read'], ['GET', '/trash/:id', 'trash.find', 'trash.read'],
+      ['GET', '/trash/:id/check', 'trash.check', 'trash.restore'], ['POST', '/trash/:id/restore', 'trash.restore', 'trash.restore'], ['DELETE', '/trash/:id', 'trash.remove', 'trash.purge'],
+    ].map(([method, path, handler, action]) => ({ method, path, handler,
+      config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: [`plugin::${PLUGIN}.${action}`] } }] } })) : []),
   ] } },
 }

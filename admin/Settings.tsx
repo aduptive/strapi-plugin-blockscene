@@ -137,11 +137,11 @@ function PaneEditor({ id, toolbar, devices, set, t, disabled, TextField }: any) 
 
 // Version history (Strapi 5), same rules as server/settings.js (HISTORY_KEYS).
 const DAYS = (n: any) => Number.isInteger(n) && n >= 1 && n <= 3650
-const badRetention = (h: any) => !h || !DAYS(h.retentionDays) || !DAYS(h.eventDays) || h.eventDays < h.retentionDays || !(Number.isInteger(h.maxSnapshots) && h.maxSnapshots >= 1 && h.maxSnapshots <= 1000)
+const badRetention = (h: any) => !h || !DAYS(h.retentionDays) || !DAYS(h.eventDays) || !DAYS(h.trashDays) || h.eventDays < h.retentionDays || !(Number.isInteger(h.maxSnapshots) && h.maxSnapshots >= 1 && h.maxSnapshots <= 1000)
 function HistorySettings({ types, history, set, t, disabled, ToggleField, TextField }: any) {
   const all = history.contentTypes === 'all'
   const list: string[] = all ? [] : history.contentTypes
-  const number = (key: string) => <Box style={{ minWidth: 200 }}><TextField name={`history-${key}`} label={t[{ retentionDays: 'historyRetention', maxSnapshots: 'historyMax', eventDays: 'historyEventDays' }[key] as string]}
+  const number = (key: string) => <Box style={{ minWidth: 200 }}><TextField name={`history-${key}`} label={t[{ retentionDays: 'historyRetention', maxSnapshots: 'historyMax', eventDays: 'historyEventDays', trashDays: 'trashDays' }[key] as string]}
     value={Number.isFinite(history[key]) ? String(history[key]) : ''} disabled={disabled} onChange={(v: string) => set(key, /^\d{1,5}$/.test(v.trim()) ? Number(v.trim()) : NaN)} /></Box>
   return <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="history-settings">
     <Typography variant="beta" tag="h2">{t.historySettings}</Typography>
@@ -152,8 +152,8 @@ function HistorySettings({ types, history, set, t, disabled, ToggleField, TextFi
       {types.map((type: any) => <label key={type.uid}><input type="checkbox" name={`history-type-${type.uid}`} checked={list.includes(type.uid)}
         onChange={e => set('contentTypes', e.target.checked ? [...list, type.uid] : list.filter(uid => uid !== type.uid))} />{type.displayName}</label>)}
     </Checks>}
-    <Flex gap={4} wrap="wrap" alignItems="flex-end">{number('retentionDays')}{number('maxSnapshots')}{number('eventDays')}</Flex>
-    <Typography variant="pi" textColor={badRetention(history) ? 'danger600' : 'neutral600'} role={badRetention(history) ? 'alert' : undefined}>{badRetention(history) ? t.historyInvalid : t.historyRetentionHelp}</Typography>
+    <Flex gap={4} wrap="wrap" alignItems="flex-end">{number('retentionDays')}{number('maxSnapshots')}{number('eventDays')}{number('trashDays')}</Flex>
+    <Typography variant="pi" textColor={badRetention(history) ? 'danger600' : 'neutral600'} role={badRetention(history) ? 'alert' : undefined}>{badRetention(history) ? t.historyInvalid : `${t.historyRetentionHelp} ${t.trashDaysHelp}`}</Typography>
   </Flex></Box>
 }
 

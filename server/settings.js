@@ -27,8 +27,9 @@ const DEFAULTS = {
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
   // Version history (Strapi 5, see README "Version history"): off until turned on. contentTypes: 'all' (every api:: type)
-  // or a list of uids. Snapshots are kept retentionDays and at most maxSnapshots per document; events eventDays.
-  history: { enabled: false, contentTypes: 'all', retentionDays: 90, maxSnapshots: 100, eventDays: 365 },
+  // or a list of uids. Snapshots are kept retentionDays and at most maxSnapshots per document; events eventDays; deleted
+  // documents stay in the trash trashDays (fixed per document when it is deleted).
+  history: { enabled: false, contentTypes: 'all', retentionDays: 90, maxSnapshots: 100, eventDays: 365, trashDays: 90 },
 }
 // Visual editor sidebar: each item opens some of the document's own fields (its native inputs) in a modal or drawer.
 const ICONS = ['text', 'tag', 'seo', 'settings', 'image', 'link', 'palette', 'list', 'globe', 'info']
@@ -82,6 +83,7 @@ const HISTORY_KEYS = {
   retentionDays: days,
   maxSnapshots: value => Number.isInteger(value) && value >= 1 && value <= 1000,
   eventDays: days,
+  trashDays: days,
 }
 
 // Gallery taxonomy. Facets are read from the schema; the typology is guessed from the name unless overridden.
