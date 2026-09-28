@@ -1,8 +1,8 @@
 # Blockscene for Strapi
 
 A visual gallery for the components already allowed in a native Dynamic Zone,
-with configurable thumbnails, SVG wireframes, editor preferences and, on
-Strapi 5, a whole-page preview that edits the form through your own frontend.
+with configurable thumbnails, SVG wireframes, editor preferences and a
+whole-page preview that edits the form through your own frontend.
 No renderer, framework or content migration is required.
 
 **Alpha.** Published as pre-releases; APIs, settings and the preview bridge may
@@ -64,7 +64,7 @@ Right beside the native zone label ("blocks (3)") each zone gets a short bar:
   both off there is no button.
 - **Undo and Redo** (Strapi 5, first zone only): icon and text, the shortcut in
   the tooltip. See [Undo and redo](#undo-and-redo).
-- **Editing mode** (Strapi 5, first zone only, when a preview route exists): a
+- **Editing mode** (first zone only, when a preview route exists): a
   menu with Fields, Fields + page and Visual editor. Without a preview route the
   menu is not shown; Settings, Blockscene says why.
 - **"…" (More actions)**: Select blocks, and "Paste N blocks" while the
@@ -117,7 +117,7 @@ page in over it once it has loaded. Live source, first match wins:
    type is not localized). Example:
    `http://localhost:3026/{locale}/block-preview/{name}/{variant}`. Such a
    fixtures route is usually dev-only: leave the option empty on production.
-2. **Page preview route** (Strapi 5: the preview route base URL, else the
+2. **Page preview route** (the preview route base URL, else on Strapi 5 the
    native Preview origin + `/block-preview/page`): the same bridge as the
    whole-page preview, sent one block made from the schema defaults, mode
    `preview`. Read-only: every message except `ready` is ignored.
@@ -259,7 +259,7 @@ needed for the gallery to pick them up. Reading requires the
 - Version history (Strapi 5): module switch, covered content types, retention
   (see "Version history").
 - Content types: every project type with a Dynamic Zone, each with on/off
-  (off leaves its edit view fully native) and, on Strapi 5, the mode its edit
+  (off leaves its edit view fully native), the mode its edit
   views open in ("Default" follows the global preview mode), its visual
   editor sidebar and optionally its own page preview toolbar (see below).
 - "Restore project defaults" (or "Reset to defaults" when the project has no
@@ -322,16 +322,16 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Initial accordion state | all closed / all open / remember | all closed |
 | Load rich-text editors on demand (`lazyEditors`, Strapi 5) | yes/no | yes |
 | Custom fields loaded on demand (`lazyFields`, Strapi 5) | up to 20 uids `plugin::x.y` / `global::x` | `["plugin::ckeditor5.CKEditor"]` |
-| Preview route base URL (Strapi 5) | full URL or empty | empty: native Preview origin |
+| Preview route base URL | full URL or empty | empty: native Preview origin (Strapi 5; none on Strapi 4) |
 | Block preview URL | http(s) URL with placeholders, up to 500 characters, or empty | empty: page preview route, else image |
-| Initial preview mode (Strapi 5) | form / side by side / preview | form |
+| Initial preview mode | form / side by side / preview | form |
 | Confirm before deleting a block (`confirmDelete`) | yes/no | yes |
 | Duplicate on each block (`duplicate`) | yes/no | yes |
 | Copy and Paste (`clipboard`) | yes/no | yes |
 | Blocks hidden on the site (`hiddenBlocks`) | `strip` / `flag` / `off` | `strip` |
 | Friendly field labels (`friendlyLabels`, see [Field labels](#field-labels)) | yes/no | yes |
-| Page preview toolbar (`previewToolbar`, Strapi 5, see [Pane toolbar](#pane-toolbar)) | ordered list of `modes`, `history`, `devices`, `status`, `actions` | all five |
-| Page widths (`previewDevices`, Strapi 5) | 1 to 8 of `fit`, `mobile`, `tablet`, `desktop`, `{ label, width }` | the four built-in |
+| Page preview toolbar (`previewToolbar`, see [Pane toolbar](#pane-toolbar)) | ordered list of `modes`, `history`, `devices`, `status`, `actions` | all five |
+| Page widths (`previewDevices`) | 1 to 8 of `fit`, `mobile`, `tablet`, `desktop`, `{ label, width }` | the four built-in |
 
 Every edit view opens in its content type's mode, else the initial preview
 mode. Editors can switch while they edit; the switch is not remembered.
@@ -362,9 +362,9 @@ The accordion controls drive the native Dynamic Zone accordions through their
 `aria-expanded` headers, so no Strapi source is patched. They are validated on
 the two supported versions only.
 
-## Whole-page preview (Strapi 5)
+## Whole-page preview
 
-The Strapi 5 distribution adds a page preview with three modes, chosen from the
+Both distributions add a page preview with three modes, chosen from the
 first zone's bar and from the pane toolbar: Fields (form), Fields + page (side
 by side: resizable pane, native actions moved to a bar above the form) and
 Visual editor. It posts the live values of the first Dynamic Zone to a page
@@ -455,7 +455,30 @@ page updates while you type; Done, Esc or the backdrop put the block back. Side
 by side focuses the field in the form on the left instead. Media
 fields open the native Media Library. Everything is validated against the schema
 and the zone's edit permission; a published page never receives unsaved values
-by itself. Strapi 4 does not have the page preview yet (see `docs/BACKLOG.md`).
+by itself.
+
+On Strapi 4 (run on 4.26.1; the edit view APIs it uses are the same in 4.11.0)
+the page preview is the same: the three modes, the same bridge
+(`blockscene:page-preview:v1`, so one frontend route serves both), widths,
+hover sync, the block dialog, the visual editor sidebar, custom panels,
+insertion, groups and paste from the page, and the per content type settings.
+It reads and writes the edit view's own data (`useCMEditViewDataManager`); new
+blocks use the native insertion at a position. Differences:
+
+- No undo and redo (no History buttons, no shortcuts). Strapi 4's form has no
+  way to set all values at once, and restoring each field would also undo the
+  relations it loads lazily, which Save would then disconnect.
+- No native Preview to fall back on: set the preview route base URL.
+- The toolbar's status shows Draft or Published (Strapi 4 has no Modified
+  state) and the unsaved hint; its Save and Publish (or Unpublish) click the
+  edit view header's own buttons, so their checks and dialogs are Strapi's.
+- The browser smoke covers split mode, select, inline and live edits, widths,
+  hover, the block dialog, a sidebar item, media, insertion and toolbar Save
+  on 4.26.1; group tools, paste and custom panels from the page share the
+  Strapi 5 code and are checked there only.
+- With Strapi 4's two navigation columns the content area is narrower: the
+  form keeps at least 520 px, so side by side the page gets less than half on
+  a 1440 px screen.
 
 ### Pane toolbar
 
@@ -528,8 +551,9 @@ every plugin's `register` before any `bootstrap`, then the host's `bootstrap`:
 calling `registerPanel` from either bootstrap works. An invalid panel is logged
 (`[blockscene] registerPanel: ...`) and ignored; `registerPanel` returns `true`
 or `false`. A panel that throws while rendering shows the plugin's error notice
-in its drawer; the editor keeps working. Strapi 5 only (the Strapi 4 package has
-no visual editor).
+in its drawer; the editor keeps working. On Strapi 4 the same call works (its
+`values` and `onChange` are the edit view data manager's); the lab smoke covers
+panels on Strapi 5 only.
 
 ### Undo and redo
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Page preview on Strapi 4 (ADU-387): the Strapi 4 package gets the whole-page
+  preview with the same bridge (`blockscene:page-preview:v1`), so one frontend
+  route serves both majors: Fields + page and Visual editor modes, widths, hover
+  sync, select, inline edits, the block dialog, the visual editor sidebar and
+  `registerPanel`, media, insertion and group tools from the page, and the pane
+  toolbar (status, Save and Publish delegating to the edit view header). No
+  undo/redo on Strapi 4, and no native Preview fallback (set the preview route).
+  Settings now shows the preview route, preview modes, sidebar and pane toolbar
+  options on Strapi 4 too; only the lazy editor options stay Strapi 5 only. The
+  page preview core is shared: each distribution passes a small host adapter
+  (`admin/host5.tsx`, `usePreviewHost4` in `admin/strapi4.tsx`).
+
 ## 2.0.0-alpha.7 (Strapi 5) and 1.0.0-alpha.7 (Strapi 4) — 2026-09-28
 
 - Fix: an empty `previewUrl` or `blockPreviewUrl` saved from the Settings page

@@ -63,7 +63,6 @@
  "lazyFields": "Custom fields loaded on demand",
  "lazyEditorsHelp": "Listed custom fields show a read-only preview until clicked or focused, so opening large pages stays fast. Separate uids with commas.",
  "lazyFieldsInvalid": "Use up to {max} custom field uids such as plugin::ckeditor5.CKEditor or global::my-field.",
- "previewV4": "The whole-page preview is available in the Strapi 5 distribution only; these options have no effect on Strapi 4.",
  "modeForm": "Fields",
  "modeSplit": "Fields + page",
  "modePreview": "Visual editor",

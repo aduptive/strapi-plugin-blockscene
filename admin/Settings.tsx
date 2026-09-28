@@ -75,7 +75,7 @@ function UidListField({ TextField, value, onChange, ...props }: any) {
   return <TextField {...props} value={text} onChange={(v: string) => { setText(v); onChange(parseUids(v)) }} />
 }
 
-// Visual editor sidebar (Strapi 5), same rules as server/settings.js (ICONS, sidebarItem, 12 items).
+// Visual editor sidebar, same rules as server/settings.js (ICONS, sidebarItem, 12 items).
 const SIDEBAR_ICONS = ['text', 'tag', 'seo', 'settings', 'image', 'link', 'palette', 'list', 'globe', 'info']
 const SIDEBAR_MAX = 12
 const ITEM_LABEL = /^[^<>]{1,40}$/
@@ -92,7 +92,7 @@ const Checks = styled.fieldset`
   label { display: inline-flex; align-items: center; gap: 6px; }
 `
 
-// Page preview toolbar and widths (Strapi 5), same rules as server/settings.js (previewToolbar, previewDevices).
+// Page preview toolbar and widths, same rules as server/settings.js (previewToolbar, previewDevices).
 const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
 const DEVICE_NAMES = ['fit', 'mobile', 'tablet', 'desktop']
 const DEVICE_LABEL = /^[^<>]{1,24}$/
@@ -200,7 +200,8 @@ function SidebarEditor({ type, entry, set, t, disabled, SelectField, TextField }
 
 export const permissions = { read: [{ action: 'plugin::blockscene.settings.read', subject: null }], update: [{ action: 'plugin::blockscene.settings.update', subject: null }] }
 
-export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, previewSupported = false }: any) {
+// `lazyEditors`: the distribution has lazy rich-text editors (Strapi 5); their options show only there.
+export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, lazyEditors = false }: any) {
   const t = useMessages()
   const { get, put, del } = useClient()
   const { canRead, canUpdate, isLoading } = usePermissions()
@@ -333,8 +334,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <TextField name="editor-blockPreviewUrl" label={t.blockPreviewUrl} value={editor.blockPreviewUrl || ''} disabled={!canUpdate || saving}
           placeholder="http://localhost:3000/block-preview/{name}/{variant}" onChange={(v: string) => update(s => { s.editor.blockPreviewUrl = v.trim(); return s })} />
         <Typography variant="pi" textColor="neutral600">{t.blockPreviewUrlHelp}</Typography>
-        {previewSupported ? <>
-          <TextField name="editor-previewUrl" label={t.previewUrl} value={editor.previewUrl || ''} disabled={!canUpdate || saving} placeholder="https://site.test/block-preview/page"
+        <TextField name="editor-previewUrl" label={t.previewUrl} value={editor.previewUrl || ''} disabled={!canUpdate || saving} placeholder="https://site.test/block-preview/page"
             onChange={(v: string) => update(s => { s.editor.previewUrl = v.trim(); return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewUrlHelp}</Typography>
           {/* Editors get no hint in the edit view: the missing route is explained here, where it can be set. */}
@@ -345,6 +345,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <Typography variant="delta" tag="h3">{t.paneTitle}</Typography>
           <PaneEditor id="editor" toolbar={editor.previewToolbar || TOOLBAR} devices={editor.previewDevices || DEVICE_NAMES} t={t} disabled={!canUpdate || saving} TextField={TextField}
             set={(key: string, value: unknown) => update(s => { s.editor[key] = value; return s })} />
+          {lazyEditors && <>
           <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
           <UidListField TextField={TextField} name="editor-lazyFields" label={t.lazyFields} value={editor.lazyFields || []} disabled={!canUpdate || saving || editor.lazyEditors === false}
             placeholder="plugin::ckeditor5.CKEditor" onChange={(uids: string[]) => update(s => { s.editor.lazyFields = uids; return s })} />
@@ -353,7 +354,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
             <ToggleField name="editor-blockPreviewInForm" label={t.blockPreviewInForm} value={editor.blockPreviewInForm} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.blockPreviewInForm = v; return s })} />
             <Typography variant="pi" textColor="neutral600">{t.blockPreviewInFormHelp}</Typography>
           </>}
-        </> : <Typography variant="pi" textColor="neutral600">{t.previewV4}</Typography>}
+          </>}
       </Flex></Box>
       <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="row-actions-settings">
         <Typography variant="beta" tag="h2">{t.rowActionsTitle}</Typography>
@@ -383,13 +384,13 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <Flex gap={6} alignItems="flex-end" wrap="wrap" data-testid={`content-type-${type.uid}`}>
             <Box style={{ minWidth: 220 }}><ToggleField name={`type-enabled-${type.uid}`} label={type.displayName} value={entry.enabled !== false} disabled={!canUpdate || saving}
               onChange={(v: boolean) => set('enabled', v, true)} /></Box>
-            {previewSupported && <Box style={{ minWidth: 240 }}><SelectField name={`type-mode-${type.uid}`} label={t.typeMode} value={entry.previewMode || 'default'} disabled={!canUpdate || saving || entry.enabled === false}
+            <Box style={{ minWidth: 240 }}><SelectField name={`type-mode-${type.uid}`} label={t.typeMode} value={entry.previewMode || 'default'} disabled={!canUpdate || saving || entry.enabled === false}
               options={[{ value: 'default', label: t.f('modeDefault', { mode: t.modes[editor.previewMode || 'form'] }) }, ...['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))]}
-              onChange={(v: string) => set('previewMode', v, 'default')} /></Box>}
+              onChange={(v: string) => set('previewMode', v, 'default')} /></Box>
           </Flex>
-          {previewSupported && entry.enabled !== false && <SidebarEditor type={type} entry={entry} set={set} t={t} disabled={!canUpdate || saving} SelectField={SelectField} TextField={TextField} />}
+          {entry.enabled !== false && <SidebarEditor type={type} entry={entry} set={set} t={t} disabled={!canUpdate || saving} SelectField={SelectField} TextField={TextField} />}
           {/* Own toolbar: starts as a copy of the global one; off removes both keys (the global ones apply again). */}
-          {previewSupported && entry.enabled !== false && <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4}>
+          {entry.enabled !== false && <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4}>
             <ToggleField name={`type-pane-${type.uid}`} label={t.f('paneTypeOverride', { name: type.displayName })} value={Boolean(entry.previewToolbar || entry.previewDevices)} disabled={!canUpdate || saving}
               onChange={(v: boolean) => { set('previewToolbar', v ? [...(editor.previewToolbar || TOOLBAR)] : undefined, undefined); set('previewDevices', v ? structuredClone(editor.previewDevices || DEVICE_NAMES) : undefined, undefined) }} />
             {(entry.previewToolbar || entry.previewDevices) && <PaneEditor id={`type-${type.uid}`} toolbar={entry.previewToolbar || editor.previewToolbar || TOOLBAR} devices={entry.previewDevices || editor.previewDevices || DEVICE_NAMES}

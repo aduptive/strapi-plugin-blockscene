@@ -6,7 +6,8 @@ import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 const major = Number(process.argv[2])
 assert.ok([4, 5].includes(major), 'Pass 4 or 5')
-const baseURL = `http://127.0.0.1:${major === 4 ? 1444 : 1445}`
+// SMOKE_PORT: a lab copy served on another port (for example next to a lab another checkout is already running).
+const baseURL = `http://127.0.0.1:${process.env.SMOKE_PORT || (major === 4 ? 1444 : 1445)}`
 const access = JSON.parse(readFileSync(`.local/strapi${major}/lab-access.json`))
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1000 } })
@@ -49,8 +50,11 @@ const toggle = (zone = 'blocks') => page.getByTestId(`zone-toggle-${zone}`)
 const zoneMenu = async (zone = 'blocks') => { await page.getByTestId(`zone-more-${zone}`).getByRole('button').click() }
 const setMode = async (label) => {
   await page.getByTestId('zone-mode-menu').getByRole('button').click()
-  await page.getByRole('menuitem', { name: label, exact: true }).click()
+  // Design System 1 (Strapi 4) marks both the list item and its button as menu items.
+  await page.getByRole('menuitem', { name: label, exact: true }).first().click()
 }
+// Menu entries once each, on both design systems.
+const menuItems = () => page.locator('[role="menuitem"]:not(:has([role="menuitem"]))')
 let uploadId = null
 try {
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -314,7 +318,9 @@ try {
     await page.getByTestId('source-blocks.text').getByText(/Wireframe/).waitFor()
     await page.getByTestId('source-blocks.hero').getByText(/Automatic image/).waitFor()
     // No preview route: the Settings page says so (editors get no hint in the edit view).
-    if (major === 5) { await page.locator('input[name="editor-previewUrl"]').waitFor(); await page.getByTestId('preview-url-empty').waitFor() } else { await page.getByText('Strapi 5 distribution only', { exact: false }).waitFor() }
+    await page.locator('input[name="editor-previewUrl"]').waitFor(); await page.getByTestId('preview-url-empty').waitFor()
+    // Lazy rich-text editors exist on Strapi 5 only; the page preview options on both.
+    assert.equal(await page.locator('input[name="editor-lazyFields"]').count(), major === 5 ? 1 : 0)
     await shot('settings')
   })
   await step('palette change reaches the gallery wireframe without rebuild', async () => {
@@ -472,7 +478,90 @@ try {
     await putSettings({})
     void dialog
   })
-  if (major === 5) await step('hover sync (Strapi 5): form row -> page block, page block -> form row, edge indicator, divider reset', async () => {
+  // Strapi 4: same bridge and page, the edit view's data manager underneath. Its inputs carry the path as `id` (not
+  // `name`), its toolbar Save / Publish delegate to the header buttons, and it has no undo / redo.
+  if (major === 4) await step('page preview (Strapi 4): split mode, select, inline title, live typing, device width, visual editor block dialog, sidebar item, media, insertion, toolbar Save', async () => {
+    const previewUrl = `${baseURL}/block-preview/index.html`
+    await putSettings({ editor: { previewUrl, previewMode: 'form' }, contentTypes: { 'api::page.page': { sidebar: [{ label: 'Page title', icon: 'text', open: 'modal', fields: ['title'] }] } } })
+    await page.goto(docUrl)
+    await setMode('Fields + page')
+    const pane = page.getByTestId('page-preview-pane')
+    await pane.waitFor()
+    await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
+    assert.equal(await page.evaluate(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-preview-source')), 'custom')
+    assert.equal(await pane.getByTestId('blockscene-history').count(), 0, 'no undo / redo on Strapi 4')
+    const frame = pane.frameLocator('iframe')
+    await frame.locator('[data-block-key]').nth(1).waitFor()
+    assert.equal(await frame.locator('[data-block-key]').count(), 2, 'both zone rows rendered by the frontend page')
+    const cmWrites = []
+    page.on('request', r => { if (r.url().includes('/content-manager/') && ['POST', 'PUT', 'DELETE'].includes(r.method())) cmWrites.push(r.url()) })
+    // Select opens the accordion; the inline title (mapped by the page) reaches the form.
+    await frame.locator('[data-block-uid="blocks.text"] .bp-label').click()
+    await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li')[1]?.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded') === 'true')
+    // The block's own tools sit over the middle of the title in a narrow pane: click its start.
+    await frame.locator('[data-block-uid="blocks.hero"] [data-block-field="title"]').click({ position: { x: 8, y: 8 } })
+    await page.keyboard.press('Meta+A'); await page.keyboard.type('Inline title'); await page.keyboard.press('Enter')
+    // In a narrow form the header's middle is the row tools: open the row from its chevron.
+    if ((await expanded())[0] !== 'true') await rows().first().locator('[data-strapi-dropdown]').first().click()
+    await page.waitForFunction(() => document.getElementById('blocks.0.title')?.value === 'Inline title')
+    // Side by side: a rich "body" click focuses the native textarea on the left; typing updates the frame.
+    await frame.locator('[data-block-uid="blocks.text"] [data-block-field="body"]').click()
+    await page.waitForFunction(() => document.activeElement?.id === 'blocks.1.body')
+    assert.equal(await page.getByTestId('block-modal-bar').count(), 0, 'no block dialog in side by side')
+    await page.keyboard.press('Meta+A'); await page.keyboard.type('Body typed natively')
+    await frame.getByText('Body typed natively', { exact: true }).waitFor()
+    await page.screenshot({ path: 'artifacts/strapi4-page-preview-split.png', animations: 'disabled' })
+    // Width menu: the device renders at its own width, without reloading the page.
+    await pane.getByTestId('page-preview-devices').getByRole('button').click()
+    await page.getByTestId('page-preview-device-mobile').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-stage"]')?.getAttribute('data-device') === 'mobile')
+    assert.equal(await pane.locator('iframe').evaluate(el => el.style.width), '390px')
+    await frame.getByText('Body typed natively', { exact: true }).waitFor()
+    await pane.getByTestId('page-preview-devices').getByRole('button').click()
+    await page.getByTestId('page-preview-device-fit').click()
+    // Visual editor: a field click opens the whole block (its native form) over the page with that field focused.
+    await pane.getByRole('button', { name: 'Visual editor', exact: true }).click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'preview')
+    await frame.locator('[data-block-uid="blocks.text"] [data-block-field="body"]').click()
+    await page.getByTestId('block-modal-bar').waitFor()
+    await page.waitForFunction(() => document.activeElement?.id === 'blocks.1.body' && Boolean(document.activeElement.closest('[data-bp-block-modal]')))
+    await page.keyboard.press('Meta+A'); await page.keyboard.type('Body from the block dialog')
+    await frame.getByText('Body from the block dialog', { exact: true }).waitFor()
+    await page.screenshot({ path: 'artifacts/strapi4-page-preview-block-modal.png', animations: 'disabled' })
+    await page.getByTestId('block-modal-done').click(); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
+    assert.equal(await page.locator('[data-bp-block-modal]').count(), 0, 'block returned to the form')
+    // Sidebar item: the page title field, lifted from the native form into a modal.
+    await page.getByTestId('sidebar-item-0').click()
+    await page.getByTestId('fields-panel-bar').getByText('Page title').waitFor()
+    await page.locator('[data-bp-fields="modal"] input#title').waitFor({ state: 'visible' })
+    await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
+    await page.screenshot({ path: 'artifacts/strapi4-page-preview-visual.png', animations: 'disabled' })
+    await pane.getByRole('button', { name: 'Fields + page', exact: true }).click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'split')
+    // Media from the page opens the native Media Library; cancelling writes nothing.
+    await frame.locator('[data-block-uid="blocks.hero"]').hover()
+    await frame.locator('[data-block-uid="blocks.hero"] button[data-media="image"]').click()
+    await page.getByRole('dialog').first().waitFor()
+    await page.keyboard.press('Escape'); await page.getByRole('dialog').first().waitFor({ state: 'hidden' })
+    // Insertion gap after the first block: the gallery picker, then a native insertion exactly there.
+    const gap = frame.locator('[data-testid^="bp-gap-"]').nth(1)
+    await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
+    const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
+    await picker.getByTestId('blockscene-blocks.text').locator('button').first().dblclick(); await picker.waitFor({ state: 'hidden' })
+    await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
+    assert.match(await rows().nth(1).innerText(), /Text/, 'inserted after the first block')
+    await frame.locator('main > section').nth(2).waitFor()
+    assert.deepEqual(cmWrites, [], 'no content-manager writes')
+    // Toolbar Save delegates to the header's Save (its validation and notifications).
+    const toolbarSave = pane.getByTestId('page-preview-actions').getByRole('button', { name: 'Save', exact: true })
+    const savedByToolbar = page.waitForResponse(r => r.url().includes('/content-manager/collection-types/api::page.page') && r.request().method() === 'PUT')
+    await toolbarSave.click()
+    assert.ok((await savedByToolbar).ok(), 'toolbar Save used the native update')
+    await pane.getByTestId('page-preview-status').getByText('Draft').waitFor()
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    await putSettings({})
+  })
+  await step(`hover sync${major === 4 ? ' (Strapi 4)' : ''}: form row -> page block, page block -> form row, edge indicator, divider reset`, async () => {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'split' } })
     await page.goto(docUrl)
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
@@ -482,12 +571,12 @@ try {
     await rows().nth(1).locator('button[aria-expanded]').first().hover()
     await frame.locator('[data-block-key]').nth(1).and(frame.locator('[data-hovered]')).waitFor()
     assert.equal(await frame.locator('[data-hovered]').count(), 1)
-    await page.screenshot({ path: 'artifacts/strapi5-split-hover-form.png', animations: 'disabled' })
+    await page.screenshot({ path: `artifacts/strapi${major}-split-hover-form.png`, animations: 'disabled' })
     // Page -> form: the matching row gets the highlight attribute; the form row under the pointer is cleared on the page.
     await frame.locator('[data-block-key]').first().hover()
     await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li')[0]?.hasAttribute('data-blockscene-hover'))
     await frame.locator('[data-hovered]').waitFor({ state: 'detached' })
-    await page.screenshot({ path: 'artifacts/strapi5-split-hover-page.png', animations: 'disabled' })
+    await page.screenshot({ path: `artifacts/strapi${major}-split-hover-page.png`, animations: 'disabled' })
     await frame.locator('main').hover({ position: { x: 40, y: 4 } })
     await page.waitForFunction(() => !document.querySelector('[data-blockscene-hover]'))
     // Out of view: the edge indicator scrolls the form to the row.
@@ -510,13 +599,14 @@ try {
     const box = await resizer.boundingBox()
     await page.mouse.move(box.x + 6, box.y + 300); await page.mouse.down(); await page.mouse.move(box.x - 200, box.y + 300); await page.mouse.up()
     await resizer.dblclick()
-    const half = await page.evaluate(() => { const m = document.getElementById('main-content').getBoundingClientRect(); return Math.abs(document.querySelector('[data-testid="page-preview-pane"]').getBoundingClientRect().width - m.width / 2) <= 2 })
+    // Half of the content area, within the pane's limits (the form keeps 520 px: Strapi 4's two menus leave less room).
+    const half = await page.evaluate(() => { const m = document.getElementById('main-content').getBoundingClientRect(); return Math.abs(document.querySelector('[data-testid="page-preview-pane"]').getBoundingClientRect().width - Math.max(360, Math.min(m.width / 2, m.width - 520))) <= 2 })
     assert.ok(half, 'double click resets to 50/50')
     const at = await resizer.boundingBox()
     await page.mouse.move(at.x - 200, 300)
-    await page.screenshot({ path: 'artifacts/strapi5-divider.png', clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
+    await page.screenshot({ path: `artifacts/strapi${major}-divider.png`, clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
     await resizer.hover()
-    await page.screenshot({ path: 'artifacts/strapi5-divider-hover.png', clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
+    await page.screenshot({ path: `artifacts/strapi${major}-divider-hover.png`, clip: { x: at.x - 240, y: 0, width: 480, height: 1000 }, animations: 'disabled' })
     await putSettings({})
   })
   if (major === 5) await step('undo / redo (Strapi 5): gallery insert and field edits, buttons and keyboard, zone bar and toolbar share one history', async () => {
@@ -595,7 +685,7 @@ try {
     const after = (await api('GET', '/blockscene/settings')).data
     assert.deepEqual(after.settings.contentTypes, {}); assert.equal(after.projectDefaults, null)
   })
-  if (major === 5) await step('pane toolbar (Strapi 5): Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
+  await step('pane toolbar: Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
     const previewUrl = `${baseURL}/block-preview/index.html`
     await putSettings({ editor: { previewUrl } })
     await page.goto('/admin/settings/blockscene')
@@ -623,8 +713,8 @@ try {
     assert.equal(await pane.getByTestId('blockscene-history').count(), 0, 'no undo / redo')
     assert.equal(await pane.getByTestId('page-preview-status').count(), 0, 'no status badge')
     await pane.getByTestId('page-preview-devices').getByRole('button').click()
-    assert.equal(await page.getByRole('menuitem').count(), 2, 'only the configured widths')
-    await page.getByRole('menuitem', { name: /Laptop · 1280 px/ }).click()
+    assert.equal(await menuItems().count(), 2, 'only the configured widths')
+    await menuItems().filter({ hasText: /Laptop · 1280 px/ }).click()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-stage"]')?.getAttribute('data-device') === 'px-1280')
     assert.equal(await pane.locator('iframe').evaluate(el => el.style.width), '1280px')
     await shot('pane-toolbar-reduced')
@@ -997,27 +1087,23 @@ try {
       ['pt-BR', { expand: 'Expandir tudo', undo: 'Desfazer', split: 'Campos + página', palette: 'Paleta dos wireframes' }],
       ['ja', { expand: 'Expand all', undo: 'Undo', split: 'Fields + page', palette: 'Wireframe palette' }],
       ['en', { expand: 'Expand all', undo: 'Undo', split: 'Fields + page', palette: 'Wireframe palette' }]]
-    if (major === 5) await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     for (const [locale, expect] of cases) {
       await page.evaluate(value => localStorage.setItem('strapi-admin-language', value), locale)
       await page.goto(docUrl); await toggle().waitFor(); await waitState('false') // the initial state closes every row
       await page.waitForFunction(text => document.querySelector('[data-testid="zone-toggle-blocks"]')?.textContent === text, expect.expand, { timeout: 5000 }).catch(() => {})
       assert.equal(await toggle().innerText(), expect.expand, `${locale}: zone toggle`)
-      if (major === 5) {
-        await page.getByTestId('blockscene-history').first().getByRole('button', { name: expect.undo, exact: true }).waitFor()
-        await page.getByTestId('zone-mode-menu').getByRole('button').click()
-        await page.getByRole('menuitem', { name: expect.split, exact: true }).waitFor(); await page.keyboard.press('Escape')
-      }
+      if (major === 5) await page.getByTestId('blockscene-history').first().getByRole('button', { name: expect.undo, exact: true }).waitFor()
+      await page.getByTestId('zone-mode-menu').getByRole('button').click()
+      await menuItems().filter({ hasText: expect.split }).first().waitFor(); await page.keyboard.press('Escape')
       await page.goto('/admin/settings/blockscene'); await page.getByTestId('save-blockscene-settings').waitFor()
       await page.getByText(expect.palette, { exact: true }).first().waitFor()
       const text = await page.locator('body').innerText()
       assert.ok(!/blockscene\.[a-zA-Z]/.test(text), `${locale}: no raw message ids on the settings page`)
     }
-    if (major === 5) {
-      await putSettings({})
-      await page.goto(docUrl); await toggle().waitFor()
-      assert.equal(await page.getByTestId('zone-mode-menu').count(), 0, 'no preview route: no mode menu (the Settings page explains it)')
-    }
+    await putSettings({})
+    await page.goto(docUrl); await toggle().waitFor()
+    assert.equal(await page.getByTestId('zone-mode-menu').count(), 0, 'no preview route: no mode menu (the Settings page explains it)')
   })
   await page.goto('/admin/settings/image-pipeline')
   await page.getByTestId('save-image-settings').waitFor()

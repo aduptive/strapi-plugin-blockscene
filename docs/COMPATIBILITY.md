@@ -7,8 +7,15 @@
 
 The peer ranges say what installs without overrides; only the listed versions
 have runtime evidence (browser smoke: gallery, thumbnails, settings, accordion
-preferences, publish guard, page preview on Strapi 5). Do not read them as a
+preferences, publish guard, page preview). Do not read them as a
 claim for every 4.x / 5.x minor.
+
+The Strapi 4 page preview has run on 4.26.1 only. On 4.11.0 its edit view APIs
+were checked in the published source (`useCMEditViewDataManager` with
+`onChange`, `addComponentToDynamicZone(..., position)`, `onPublish`, the header
+Save/Publish buttons, the same `#main-content` grid and DS1 accordions), not in a
+browser. It has no undo/redo: Strapi 4's form cannot set every value at once,
+and restoring fields one by one would also roll back lazily loaded relations.
 
 Accordion preferences work through the native `aria-expanded` headers of the
 Dynamic Zone list. The whole-page preview and the native "Add a component"

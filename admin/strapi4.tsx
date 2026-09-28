@@ -1,11 +1,13 @@
 import * as React from "react";
 import {
+  Button,
   MenuItem,
   SimpleMenu,
   ModalLayout,
   ModalHeader,
   ModalBody,
   Typography,
+  Status,
   Switch,
   Flex,
   SingleSelect,
@@ -21,14 +23,18 @@ import {
   auth,
   getFetchClient,
 } from "@strapi/helper-plugin";
+import { useIntl } from "react-intl";
 import { Gallery } from "./Gallery";
+import { PagePreview, ZoneBarTools, useEditorState, type PreviewHost } from "./PagePreview";
+import { registerPanel } from "./pane.mjs";
+import { useMessages } from "./messages";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, labelEditLayout4, dropField4 } from "./model.mjs";
 import { cloneRow, errorRows, integerKeys } from "./rows.mjs";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
-import { Icon } from "./icons";
+import { Icon, ICON_NAMES } from "./icons";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   const id = React.useId();
@@ -96,12 +102,8 @@ function Picker() {
       allowed.includes(name) &&
       schema?.metadatas?.[name]?.edit?.editable !== false,
     !c.addComponentToDynamicZone,
-  ).map((zone) => ({
-    ...zone,
-    // The rendered label: the edit layout's (field labels may have rewritten it), else the stored metadata.
-    label: schema?.layouts?.edit?.flat().find((field: any) => field?.name === zone.name)?.metadatas?.label ||
-      schema?.metadatas?.[zone.name]?.edit?.label || zone.name,
-  }));
+  ).map((zone) => ({ ...zone, label: zoneLabel(schema, zone.name) }));
+
   const add = (zone: any, uid: string) => {
     const close = catalog?.groups?.[uid];
     if (
@@ -128,26 +130,150 @@ function Picker() {
   // Bypass: no catalog (server flag, error) or enhancements off renders nothing, leaving the native editor.
   if (!catalog?.editor?.enabled || catalog.contentTypes?.[c.slug]?.enabled === false) return null;
   const docKey = `${c.slug}:${c.isCreatingEntry ? "new" : c.initialData?.id}:${c.initialData?.locale || ""}`;
-  // Nothing shows here: the zone bars and row tools are portalled into the form, the gallery opens from the native add button.
+  // Nothing shows here: the zone bars and row tools are portalled into the form, the gallery opens from the native add
+  // button, the page preview into its pane. Its anchor still sits in the side column, which split mode uses to find the
+  // edit view's grid.
   return (
     <div hidden data-blockscene-editor="">
-    <Gallery
-      zones={zones}
-      components={components}
-      add={add}
-      Modal={Modal}
-      Toggle={ToggleField}
-      get={get}
-      put={put}
-      editor={catalog.editor}
-      catalog={catalog}
-      docKey={docKey}
-      contentType={c.slug}
-      userId={auth.getUserInfo?.()?.id}
-      form={form}
-      Menu={Menu}
-    />
+      <Workspace c={c} schema={schema} zones={zones} components={components} add={add} catalog={catalog} docKey={docKey} form={form} get={get} put={put} />
     </div>
+  );
+}
+// One per edit view once the catalog is known, so the configured mode is the first one.
+function Workspace({ c, schema, zones, components, add, catalog, docKey, form, get, put }: any) {
+  const typeSettings = catalog.contentTypes?.[c.slug] || {};
+  const editor = { ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
+    sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left",
+    previewToolbar: typeSettings.previewToolbar || catalog.editor.previewToolbar, previewDevices: typeSettings.previewDevices || catalog.editor.previewDevices };
+  const host = usePreviewHost4(c, schema, components, get, put);
+  const state = useEditorState(editor, host);
+  return (
+    <>
+      <Gallery
+        zones={zones}
+        components={components}
+        add={add}
+        Modal={Modal}
+        Toggle={ToggleField}
+        get={get}
+        put={put}
+        editor={catalog.editor}
+        catalog={catalog}
+        docKey={docKey}
+        contentType={c.slug}
+        userId={auth.getUserInfo?.()?.id}
+        form={form}
+        Menu={Menu}
+        // No undo here: without a preview route there is nothing to add, and a zone bar with nothing else in it goes away.
+        zoneTools={state.preview.base ? <ZoneBarTools state={state} /> : null}
+      />
+      <PagePreview
+        editor={editor}
+        state={state}
+        host={host}
+        groups={catalog.groups || null}
+        hiddenAttribute={catalog.editor.hiddenBlocks !== "off" ? catalog.hiddenAttribute : null}
+        form={form}
+        Modal={Modal}
+        Toggle={ToggleField}
+      />
+    </>
+  );
+}
+// The page preview's view of a Strapi 4 edit view: the edit view data manager (useCMEditViewDataManager). Strapi 4 has
+// no setValues, so no undo/redo here (see README); no native Preview either, so the route is the settings URL only.
+function usePreviewHost4(c: any, schema: any, components: any, get: any, put: any): PreviewHost {
+  const toggleNotification = useNotification();
+  const { components: library }: any = useLibrary();
+  const creating = Boolean(c.isCreatingEntry);
+  const readable = React.useCallback(
+    (name: string) => creating || (c.readActionAllowedFields || []).includes(name),
+    [creating, c.readActionAllowedFields],
+  );
+  return {
+    ds: 1,
+    model: c.slug,
+    documentId: creating ? undefined : c.initialData?.id,
+    locale: c.initialData?.locale || undefined,
+    creating,
+    loading: false,
+    disabled: false,
+    contentType: schema,
+    components,
+    values: c.modifiedData,
+    history: null,
+    readable,
+    editable: (name: string) =>
+      ((creating ? c.createActionAllowedFields : c.updateActionAllowedFields) || []).includes(name) &&
+      schema?.metadatas?.[name]?.edit?.editable !== false &&
+      typeof c.addComponentToDynamicZone === "function" &&
+      typeof c.onChange === "function",
+    fieldLabel: (name: string) => zoneLabel(schema, name),
+    onChange: (name: string, value: any) => c.onChange({ target: { name, value } }),
+    // Native insertion at a position (4.11+): the edit view's own default data structure, relations emptied.
+    insertRows: (zone: string, at: number, items: any[]) =>
+      items.forEach((item, i) =>
+        c.addComponentToDynamicZone(zone, components[item.__component], components, Boolean(c.formErrors?.[zone]), at + i)),
+    get,
+    put,
+    notify: (type: string, message: string) => toggleNotification({ type, message }),
+    MediaLibrary: library?.["media-library"],
+    useNativeBase: () => null,
+    Actions: Actions4,
+  };
+}
+// The rendered label: the edit layout's (field labels may have rewritten it), else the stored metadata.
+const zoneLabel = (schema: any, name: string) =>
+  schema?.layouts?.edit?.flat().find((field: any) => field?.name === name)?.metadatas?.label ||
+  schema?.metadatas?.[name]?.edit?.label || name;
+// Status and Save / Publish of the pane toolbar. Strapi 4 keeps them in the edit view header: each button mirrors the
+// header's rule (Save needs a change, Publish none) and a click delegates to the header button, so its validation,
+// confirmation dialogs and notifications are reused. A button the header does not show (permissions) is not shown.
+function Actions4({ parts }: { parts: string[] }) {
+  const c: any = useCMEditViewDataManager();
+  const t = useMessages();
+  const { formatMessage } = useIntl();
+  // The header compares with lodash isEqual; the serialised values agree since the form keeps key order.
+  const dirty = React.useMemo(
+    () => (c.isCreatingEntry ? Object.keys(c.modifiedData || {}).length > 0 : JSON.stringify(c.initialData) !== JSON.stringify(c.modifiedData)),
+    [c.initialData, c.modifiedData, c.isCreatingEntry],
+  );
+  const published = typeof c.initialData?.publishedAt === "string";
+  const status = c.hasDraftAndPublish && !c.isCreatingEntry ? (published ? "published" : "draft") : undefined;
+  const save = formatMessage({ id: "content-manager.containers.Edit.submit", defaultMessage: "Save" });
+  const publish = formatMessage(published ? { id: "app.utils.unpublish", defaultMessage: "Unpublish" } : { id: "app.utils.publish", defaultMessage: "Publish" });
+  const native = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>("#main-content button")].find((b) => b.textContent?.trim() === label);
+  const actions = [
+    // Publish is the primary action, Save the secondary one (as in the Strapi 5 pane toolbar).
+    { label: save, variant: "secondary", disabled: !dirty, loading: c.status === "submit-pending", reason: t.saveDisabledHint },
+    ...(c.hasDraftAndPublish && !c.isCreatingEntry
+      ? [{ label: publish, variant: "default", disabled: dirty, loading: c.status === (published ? "unpublish-pending" : "publish-pending"), reason: t.publishDisabledHint }]
+      : []),
+  ].filter((action) => native(action.label));
+  return (
+    <Flex gap={2} alignItems="center" data-testid="page-preview-actions">
+      {parts.includes("status") && (status || dirty) && (
+        <Flex gap={2} alignItems="center" style={{ order: parts.indexOf("status") }}>
+          {status && (
+            <Status size="S" showBullet={false} role="status" data-testid="page-preview-status" variant={published ? "success" : "secondary"}>
+              <Typography as="span" variant="omega" fontWeight="bold">
+                {formatMessage({ id: `content-manager.containers.List.${status}`, defaultMessage: status === "published" ? "Published" : "Draft" })}
+              </Typography>
+            </Status>
+          )}
+          {dirty && <Typography variant="pi" textColor="neutral600">{t.unsaved}</Typography>}
+        </Flex>
+      )}
+      {parts.includes("actions") && actions.map((action) => (
+        <span key={action.label} title={action.disabled ? action.reason : undefined} style={{ order: parts.indexOf("actions") }}>
+          <Button size="S" variant={action.variant} disabled={action.disabled} loading={action.loading}
+            aria-description={action.disabled ? action.reason : undefined} onClick={() => native(action.label)?.click()}>
+            {action.label}
+          </Button>
+        </span>
+      ))}
+    </Flex>
   );
 }
 const ToggleField = ({ name, label, value, onChange, disabled }: any) => (
@@ -219,14 +345,14 @@ const SettingsPage = () => (
     ToggleField={ToggleField}
     SelectField={SelectField}
     TextField={TextField}
-    previewSupported={false}
   />
   </Guard>
 );
 export default {
   register(app: any) {
     register(app, SettingsPage, "/settings/blockscene");
-    app.registerPlugin({ id: "blockscene", name: "Blockscene" });
+    // Public admin API (README "Custom sidebar panels"), as on Strapi 5.
+    app.registerPlugin({ id: "blockscene", name: "Blockscene", apis: { registerPanel: (panel: any) => registerPanel(panel, ICON_NAMES) } });
   },
   registerTrads,
   bootstrap(app: any) {

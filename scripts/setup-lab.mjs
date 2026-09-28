@@ -62,10 +62,10 @@ module.exports = {
   updatePublished: (ctx) => run(ctx, () => strapi.documents('api::page.page').update({ documentId: ctx.params.documentId, data: ctx.request.body?.data || {}, status: 'published' })),
 }
 `)
- // The page-preview example the smoke uses as the preview route (refresh-lab keeps it in sync).
- mkdirSync(join(root, 'public/block-preview'), { recursive: true })
- for (const file of ['index.html', 'preview.js']) copyFileSync(`examples/page-preview/${file}`, join(root, 'public/block-preview', file))
 }
+// The page-preview example the smoke uses as the preview route (refresh-lab keeps it in sync).
+mkdirSync(join(root, 'public/block-preview'), { recursive: true })
+for (const file of ['index.html', 'preview.js']) copyFileSync(`examples/page-preview/${file}`, join(root, 'public/block-preview', file))
 const access = { email: 'editor@example.test', password: randomBytes(18).toString('base64url') + 'aA1!' }
 json('lab-access.json', access)
 write('src/index.js', `module.exports = { async bootstrap({ strapi }) { const access = require('../lab-access.json'); const existing = await strapi.db.query('admin::user').findOne({ where: { email: access.email } }); if (!existing) { const role = await strapi.db.query('admin::role').findOne({ where: { code: 'strapi-super-admin' } }); await strapi.admin.services.user.create({ ...access, firstname: 'Local', lastname: 'Tester', isActive: true, roles: [role.id] }); } } }\n`)
