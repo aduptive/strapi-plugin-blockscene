@@ -230,6 +230,8 @@
  "confirmDeleteOption": "Bevestigen voordat een blok wordt verwijderd",
  "duplicateOption": "\"Dupliceren\" op elk blok tonen",
  "clipboardOption": "\"Kopiëren\" en \"Plakken\" tonen (tussen pagina's)",
+ "friendlyLabels": "Leesbare veldlabels",
+ "friendlyLabelsHelp": "Velden waarvan het label nog de attribuutnaam is, verschijnen als woorden (\"mobileColumnsCount\" wordt \"Mobile columns count\"). Labels uit \"Weergave configureren\" en teksten uit de \"fields\"-configuratie van het project blijven behouden.",
  "hiddenBlocks": "Op de site verborgen blokken",
  "hiddenModes.strip": "Verwijderd uit de content-API",
  "hiddenModes.flag": "Verzonden met de markering (de frontend beslist)",

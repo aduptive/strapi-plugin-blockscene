@@ -202,8 +202,8 @@ try {
   })
   await step('open all / close all drive the native accordions per zone', async () => {
     const controls = page.getByTestId('block-accordion-controls-blocks')
-    // Beside the native zone label pill ("blocks (2)"), not in the side panel.
-    assert.ok(await controls.evaluate(el => { const anchor = el.closest('[data-blockscene-zone-controls="blocks"]'); const list = anchor?.parentElement?.parentElement?.querySelector(':scope > ol[aria-describedby]'); return Boolean(list && /^blocks\s*\(\d+\)/.test(anchor.parentElement.textContent.trim())) }), 'controls next to the zone label')
+    // Beside the native zone label pill ("Blocks (2)" with friendly labels), not in the side panel.
+    assert.ok(await controls.evaluate(el => { const anchor = el.closest('[data-blockscene-zone-controls="blocks"]'); const list = anchor?.parentElement?.parentElement?.querySelector(':scope > ol[aria-describedby]'); return Boolean(list && /^blocks\s*\(\d+\)/i.test(anchor.parentElement.textContent.trim())) }), 'controls next to the zone label')
     await page.locator('[data-blockscene-zone-controls="blocks"]').evaluate(el => el.parentElement.parentElement.scrollIntoView({ block: 'center' }))
     await page.screenshot({ path: `artifacts/strapi${major}-zone-label-controls.png`, animations: 'disabled' })
     await controls.getByRole('button', { name: 'Open all blocks' }).click()

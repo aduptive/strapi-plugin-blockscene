@@ -230,6 +230,8 @@
  "confirmDeleteOption": "Vor dem Löschen eines Blocks nachfragen",
  "duplicateOption": "„Duplizieren“ an jedem Block anzeigen",
  "clipboardOption": "„Kopieren“ und „Einfügen“ anzeigen (seitenübergreifend)",
+ "friendlyLabels": "Lesbare Feldbezeichnungen",
+ "friendlyLabelsHelp": "Felder, deren Bezeichnung noch der Attributname ist, erscheinen als Wörter („mobileColumnsCount“ wird zu „Mobile columns count“). In „Ansicht konfigurieren“ gesetzte Bezeichnungen und Texte aus der „fields“-Konfiguration des Projekts bleiben erhalten.",
  "hiddenBlocks": "Auf der Website ausgeblendete Blöcke",
  "hiddenModes.strip": "Aus der Content-API entfernt",
  "hiddenModes.flag": "Mit Markierung gesendet (das Frontend entscheidet)",

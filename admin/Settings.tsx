@@ -257,6 +257,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <ToggleField name="editor-showOpenAll" label={t.showOpenAll} value={editor.showOpenAll} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showOpenAll = v; return s })} />
         <ToggleField name="editor-showCloseAll" label={t.showCloseAll} value={editor.showCloseAll} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showCloseAll = v; return s })} />
         <ToggleField name="editor-showRowThumbnails" label={t.showRowThumbnails} value={editor.showRowThumbnails !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showRowThumbnails = v; return s })} />
+        <ToggleField name="editor-friendlyLabels" label={t.friendlyLabels} value={editor.friendlyLabels !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.friendlyLabels = v; return s })} />
+        <Typography variant="pi" textColor="neutral600">{t.friendlyLabelsHelp}</Typography>
         <SelectField name="editor-initialState" label={t.initialState} value={editor.initialState} disabled={!canUpdate || saving}
           options={['closed', 'open', 'remember'].map(value => ({ value, label: t.states[value] }))} onChange={(v: string) => update(s => { s.editor.initialState = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{t.rememberHelp}</Typography>

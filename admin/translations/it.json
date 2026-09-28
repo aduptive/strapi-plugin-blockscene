@@ -230,6 +230,8 @@
  "confirmDeleteOption": "Chiedi conferma prima di eliminare un blocco",
  "duplicateOption": "Mostra \"Duplica\" su ogni blocco",
  "clipboardOption": "Mostra \"Copia\" e \"Incolla\" (tra pagine)",
+ "friendlyLabels": "Etichette dei campi leggibili",
+ "friendlyLabelsHelp": "I campi la cui etichetta è ancora il nome dell'attributo appaiono come parole (\"mobileColumnsCount\" diventa \"Mobile columns count\"). Le etichette impostate in \"Configura la vista\" e i testi della configurazione \"fields\" del progetto restano invariati.",
  "hiddenBlocks": "Blocchi nascosti sul sito",
  "hiddenModes.strip": "Rimossi dall'API dei contenuti",
  "hiddenModes.flag": "Inviati con il flag (decide il frontend)",

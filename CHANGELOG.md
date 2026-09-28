@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Field labels in the edit view (Strapi 5 and 4), through the Content
+  Manager's `mutate-edit-view-layout` hook, no DOM patching: project texts from
+  the new plugin config `fields` (label, description, placeholder per content
+  type or component attribute, a string or a per-locale map resolved against
+  the admin user's interface language), else a label set in "Configure the
+  view", else the humanized attribute name (`mobileColumnsCount` → "Mobile
+  columns count"). New editor option `friendlyLabels` (default on) with a
+  Settings toggle; `fields` is code only and validated at boot (a malformed
+  map is ignored, stale entries skipped, with a warning). `scripts/fields-skeleton.mjs`
+  generates a starting map from a project's schemas. The catalog now also
+  returns `fields` and `types` (display name and attribute names per content
+  type, used to identify the Strapi 5 layout).
+
 ## 2.0.0-alpha.5 (Strapi 5) and 1.0.0-alpha.5 (Strapi 4) — 2026-09-28
 
 - Row actions in each block header, before the native delete (Strapi 5 and 4):

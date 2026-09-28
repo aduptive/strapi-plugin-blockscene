@@ -17,12 +17,13 @@ import {
   useRBAC,
   useNotification,
   auth,
+  getFetchClient,
 } from "@strapi/helper-plugin";
 import { Gallery } from "./Gallery";
 import { Settings, permissions, register } from "./Settings";
-import { editableZones, canInsert } from "./model.mjs";
+import { editableZones, canInsert, labelEditLayout4 } from "./model.mjs";
 import { cloneRow, integerKeys } from "./rows.mjs";
-import { useCatalog } from "./catalog";
+import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
 
@@ -81,7 +82,9 @@ function Picker() {
     !c.addComponentToDynamicZone,
   ).map((zone) => ({
     ...zone,
-    label: schema?.metadatas?.[zone.name]?.edit?.label || zone.name,
+    // The rendered label: the edit layout's (field labels may have rewritten it), else the stored metadata.
+    label: schema?.layouts?.edit?.flat().find((field: any) => field?.name === zone.name)?.metadatas?.label ||
+      schema?.metadatas?.[zone.name]?.edit?.label || zone.name,
   }));
   const add = (zone: any, uid: string) => {
     const close = catalog?.groups?.[uid];
@@ -207,6 +210,7 @@ export default {
   },
   registerTrads,
   bootstrap(app: any) {
+    app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout4));
     app.injectContentManagerComponent("editView", "right-links", {
       name: "blockscene",
       Component: () => (
