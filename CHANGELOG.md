@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
 
 - Fix (Strapi 5.0 to 5.44): the edit view crashed ("Cannot read properties of
   undefined (reading 'type')") on any document with a block whose hidden-on-site
