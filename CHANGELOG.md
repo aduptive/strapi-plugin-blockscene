@@ -91,6 +91,15 @@
   routes `GET /activity`, `GET /trash`, `GET /trash/:id`, `GET /trash/:id/check`,
   `POST /trash/:id/restore` (409 with the report when blocked) and
   `DELETE /trash/:id`, with strict query validation.
+- Layout groups in the form (Strapi 5 and 4): rows between an OPEN and its CLOSE
+  are indented with a guide line per nesting level; the CLOSE row is compact and
+  has no drag handle; a chevron on each OPEN folds its group ("N blocks"; in
+  memory for the session; a validation error inside unfolds it). Expand all /
+  Collapse all skip folded rows. Moving an OPEN (mouse, keyboard or the
+  small-screen arrows) takes its children and CLOSE along: read from the form
+  state after the move and corrected in the same unsaved change; a child moved
+  out becomes an ordinary block. A mouse drag of any block is one undo step.
+  Messages `groupCollapse`, `groupExpand` and `groupBlocks` added (8 catalogues).
 
 ## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
 

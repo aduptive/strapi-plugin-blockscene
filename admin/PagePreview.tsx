@@ -39,7 +39,7 @@ import { deviceEntries, panelsFor, toolbarLayout } from "./pane.mjs";
 import { Guard } from "./Guard";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
-import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
+import { createHistory, record, undo, redo, historyKey, dragStep } from "./history.mjs";
 import { pasteInto, useClipboard } from "./RowActions";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
@@ -425,9 +425,10 @@ function useFormHistory(docKey: string, enabled: boolean) {
     }
     // Our own undo/redo coming back through the form: already the present step (SET_VALUES keeps the reference).
     if (values === s.applied) return;
-    const now = Date.now();
-    s.h = record(s.h, clone(values), now - s.at < COALESCE_MS);
+    const now = Date.now(), drag = dragStep(now);
+    s.h = record(s.h, clone(values), now - s.at < COALESCE_MS || (drag !== 0 && s.drag === drag));
     s.at = now;
+    s.drag = drag;
     rerender();
   }, [values, initialValues, docKey]);
   const apply = (step: typeof undo) => {
@@ -435,7 +436,7 @@ function useFormHistory(docKey: string, enabled: boolean) {
     const next = s && step(s.h);
     if (!enabled || !next || next === s.h || typeof setValues !== "function") return;
     s.h = next;
-    s.at = 0; // the next change starts a new step
+    s.at = s.drag = 0; // the next change starts a new step
     s.applied = clone(next.present);
     setValues(s.applied);
     rerender();

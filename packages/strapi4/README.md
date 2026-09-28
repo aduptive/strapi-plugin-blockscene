@@ -57,7 +57,8 @@ Right beside the native zone label ("blocks (3)") each zone gets a short bar:
   state: "Expand all" while any block of the zone is collapsed, "Collapse all"
   when every block is open (a header opened or closed by hand counts too), and
   exposes it as `aria-expanded`. Blocks open or close a few at a time around the
-  viewport first (long pages stay responsive). Options `showOpenAll` /
+  viewport first (long pages stay responsive). Rows of a folded layout group
+  are left alone (see [Groups in the form](#groups-in-the-form)). Options `showOpenAll` /
   `showCloseAll`: with both on (the default) the button toggles; with only one
   on it offers that action alone, disabled while there is nothing to do; with
   both off there is no button.
@@ -537,7 +538,8 @@ on one shared history (the shortcuts use it too).
 They step through the whole edit view: blocks inserted, removed or moved from the
 gallery, the page, groups or the native actions, and any field edit. Changes
 within 400 ms of each other are one step, so a burst of typing undoes at once;
-up to 100 steps. Shortcuts: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y, only while
+a block dragged with the mouse is one step however long the drag lasts; up to
+100 steps. Shortcuts: Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y, only while
 the focus is outside a text field, select or rich text editor (those keep their
 own undo).
 
@@ -608,6 +610,37 @@ With a valid map:
 
 Configured groups are stored exactly as before: the flat list of components in
 the zone. Removing the config only removes the group tools and the guard.
+
+### Groups in the form
+
+The edit view draws the same structure over Strapi's native rows (Strapi 5 and
+4; data attributes on the rows, nothing of the Content Manager is patched):
+
+- The rows between an OPEN and its CLOSE are indented under it with a guide line
+  in the admin's primary colour, one level (and one line) per nested group.
+- The CLOSE row reads as the group's end: compact, dimmed, without a drag handle
+  (it cannot be dragged on its own; its delete stays, with the marker notice).
+- Each closed group's OPEN header gets a chevron before its title. It folds the
+  group: its rows and CLOSE are hidden and the header shows "N blocks" (every
+  row inside, nested ones too, CLOSE markers excluded). Folding is kept in memory
+  for the session, per document, zone and group; a reload shows every group open.
+  A validation error inside a folded group (on Save or Publish) unfolds it.
+  Expand all / Collapse all act on the visible block accordions only: they never
+  open the forms of a folded group's rows, and a group keeps its own chevron.
+- Moving an OPEN moves its group. Nothing intercepts Strapi's drag and drop:
+  after any change of the zone, if the only thing that changed is one OPEN
+  moving, its members as they were (children and CLOSE) are put back right after
+  it, in the same unsaved form change. This covers the mouse (settled on drop:
+  Strapi moves the row on every hover), the keyboard (Space, arrows, Space on the
+  drag handle) and the move arrows of small screens. An OPEN dropped among its
+  own rows (a single keyboard or arrow step down) moves the group one row down
+  instead. The whole drag and the correction are one undo step (Strapi 5).
+- Everything else keeps the flat-list meaning: a child dragged out of the range
+  is an ordinary block from then on, a block dropped inside becomes a child, and
+  an OPEN dropped inside another group is nested there with its rows. A CLOSE
+  moved by other means (the small-screen arrows) ends the group where it lands.
+  Unclosed groups and stray markers are indented as the page preview shows them
+  but have no chevron and are never moved (the diagnostics list them).
 
 ## Field labels
 

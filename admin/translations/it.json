@@ -394,5 +394,8 @@
  "report.media": "{count} file multimediale/i non esistono più, lasciati vuoti ({locale}).",
  "report.relations": "{count} documento/i collegati non esistono più, esclusi ({locale}).",
  "report.blocks": "{count} blocco/i il cui componente la zona non consente più, esclusi ({locale}).",
- "report.incoming": "Collegamenti da altri documenti e blocchi: {reconnect} rimessi al loro posto, {gone} il cui proprietario non esiste più, {replaced} il cui proprietario ora punta altrove, {published} da versioni pubblicate (tornano quando quei documenti vengono ripubblicati)."
+ "report.incoming": "Collegamenti da altri documenti e blocchi: {reconnect} rimessi al loro posto, {gone} il cui proprietario non esiste più, {replaced} il cui proprietario ora punta altrove, {published} da versioni pubblicate (tornano quando quei documenti vengono ripubblicati).",
+ "groupCollapse": "Comprimi il gruppo {label}",
+ "groupExpand": "Espandi il gruppo {label}",
+ "groupBlocks": "{count, plural, one {# blocco} other {# blocchi}}"
 }

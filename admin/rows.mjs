@@ -1,5 +1,5 @@
 import { generateNKeysBetween } from "fractional-indexing";
-import { groupRange, isOpener, isClose, validateGroups } from "../server/groups.js";
+import { blockKey, groupRange, isOpener, isClose, validateGroups } from "../server/groups.js";
 
 // Row actions (duplicate, copy/paste, hide): pure helpers shared by the Strapi 4 and 5 adapters and the unit tests.
 // Every change is a new zone array written through the form, so undo/redo and Save see it like any native edit.
@@ -149,4 +149,88 @@ export function pasteProblem(clip, zone, rows, components, groups) {
   if ((rows?.length || 0) + clip.rows.length > (zone.max ?? Infinity)) return { code: "full" };
   if (groups && validateGroups(clip.rows, groups).length) return { code: "unbalanced" };
   return null;
+}
+
+// Layout groups in the form (indentation, folding, keeping a dragged group together). Pure: indexes of one zone's rows.
+// Per row: `depth` (0 at the top), `kind` ('open' | 'close' | 'block'), `parents` (indexes of the OPENs around it,
+// outermost first; a CLOSE counts its own OPEN), and on a closed OPEN its `end` (CLOSE index) and `count` (rows between
+// the pair, CLOSE markers excluded). Lenient like groupRows: an unclosed OPEN wraps the rest of the list, a CLOSE that is
+// not the innermost group's own is an ordinary row (the diagnostics report both).
+export function groupOutline(rows, groups) {
+  const out = rows.map(() => ({ depth: 0, kind: "block", parents: [] }));
+  if (!groups) return out;
+  const stack = [];
+  rows.forEach((row, i) => {
+    const parents = stack.map((s) => s.index);
+    const top = stack[stack.length - 1];
+    if (top && isClose(row, groups) && row.__component === top.close) {
+      stack.pop();
+      out[top.index].end = i;
+      out[top.index].count = out.slice(top.index + 1, i).filter((r) => r.kind !== "close").length;
+      out[i] = { depth: parents.length, kind: "close", parents };
+      return;
+    }
+    const open = isOpener(row, groups);
+    out[i] = { depth: parents.length, kind: open ? "open" : "block", parents };
+    if (open) stack.push({ index: i, close: groups[row.__component] });
+  });
+  return out;
+}
+// The one row that moved between two versions of a zone, as { from, to } (its index before and after), or null when
+// the change is anything else (insert, delete, several rows, a whole range). An adjacent swap reads both ways (A went
+// down or B went up): `actor`, the key of the row the user acted on, decides, else null. Strapi versions that give a
+// moved unsaved row a new __temp_key__ are matched by component.
+export function movedRow(prev, next, actor) {
+  const n = prev.length;
+  if (n !== next.length || n < 2) return null;
+  const k = prev.map(blockKey), m = next.map(blockKey);
+  let i = 0;
+  while (i < n && k[i] === m[i]) i++;
+  if (i === n) return null;
+  let j = n - 1;
+  while (k[j] === m[j]) j--;
+  const same = (a, b) => blockKey(a) === blockKey(b) || (a?.id == null && b?.id == null && a?.__component === b?.__component);
+  const shifted = (from, to, by) => {
+    for (let x = from; x <= to; x++) if (m[x] !== k[x + by]) return false;
+    return true;
+  };
+  const down = same(prev[i], next[j]) && shifted(i, j - 1, 1); // prev[i] went to j
+  const up = same(prev[j], next[i]) && shifted(i + 1, j, -1); // prev[j] went to i
+  if (down && up) return actor === k[i] ? { from: i, to: j } : actor === k[j] ? { from: j, to: i } : null;
+  return down ? { from: i, to: j } : up ? { from: j, to: i } : null;
+}
+// A moved OPEN takes its group along. When the only change from `prev` to `next` is one OPEN of a closed group moving,
+// its members (children and CLOSE, as they were) are put back right after it; dropped among its own members (keyboard
+// and arrow moves go one row at a time) the whole group moves one row down instead. Returns the new list, or null when
+// there is nothing to do: a child moved alone leaves the group (it is independent now), a moved CLOSE ends the group
+// where it lands, and inserts, deletes and whole-range moves stay as they are.
+export function keepGroupsTogether(prev, next, groups, actor) {
+  if (!groups) return null;
+  const move = movedRow(prev, next, actor);
+  if (!move || !isOpener(prev[move.from], groups)) return null;
+  const start = move.from, end = groupOutline(prev, groups)[start].end;
+  if (end == null) return null; // unclosed: no members to keep
+  const members = new Set(prev.slice(start + 1, end + 1).map(blockKey));
+  const at = move.to;
+  if (at > 0 && members.has(blockKey(next[at - 1]))) {
+    // One row down: the row below the CLOSE goes above the group. Already the last one: the move is undone.
+    if (end + 1 >= prev.length) return prev.slice();
+    const rest = [...prev.slice(0, start), ...prev.slice(end + 1)];
+    return [...rest.slice(0, start + 1), ...prev.slice(start, end + 1), ...rest.slice(start + 1)];
+  }
+  const others = next.filter((row) => !members.has(blockKey(row)));
+  const o = others.indexOf(next[at]);
+  return [...others.slice(0, o + 1), ...next.filter((row) => members.has(blockKey(row))), ...others.slice(o + 1)];
+}
+// Indexes of a zone's rows with a validation error: Strapi 5 nests errors (errors[zone][index]), Strapi 4 keys them flat
+// ("zone.3.title").
+export function errorRows(errors, zone) {
+  const out = new Set();
+  const nested = errors?.[zone];
+  if (nested && typeof nested === "object") for (const [key, value] of Object.entries(nested)) if (value && /^\d+$/.test(key)) out.add(Number(key));
+  for (const key of Object.keys(errors || {})) {
+    const hit = key.startsWith(`${zone}.`) && /^(\d+)(\.|$)/.exec(key.slice(zone.length + 1));
+    if (hit) out.add(Number(hit[1]));
+  }
+  return [...out];
 }

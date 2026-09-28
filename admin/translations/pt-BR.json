@@ -394,5 +394,8 @@
  "report.media": "{count} arquivo(s) de mídia não existem mais, deixados vazios ({locale}).",
  "report.relations": "{count} documento(s) relacionados não existem mais, deixados de fora ({locale}).",
  "report.blocks": "{count} bloco(s) cujo componente a zona não permite mais, deixados de fora ({locale}).",
- "report.incoming": "Vínculos de outros documentos e blocos: {reconnect} recolocados, {gone} cujo dono não existe mais, {replaced} cujo dono agora aponta para outro, {published} de versões publicadas (voltam quando esses documentos forem publicados de novo)."
+ "report.incoming": "Vínculos de outros documentos e blocos: {reconnect} recolocados, {gone} cujo dono não existe mais, {replaced} cujo dono agora aponta para outro, {published} de versões publicadas (voltam quando esses documentos forem publicados de novo).",
+ "groupCollapse": "Recolher grupo {label}",
+ "groupExpand": "Expandir grupo {label}",
+ "groupBlocks": "{count, plural, one {# bloco} other {# blocos}}"
 }

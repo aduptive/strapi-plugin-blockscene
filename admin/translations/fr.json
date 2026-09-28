@@ -394,5 +394,8 @@
  "report.media": "{count} fichier(s) média n'existent plus, laissés vides ({locale}).",
  "report.relations": "{count} document(s) liés n'existent plus, laissés de côté ({locale}).",
  "report.blocks": "{count} bloc(s) dont la zone n'autorise plus le composant, laissés de côté ({locale}).",
- "report.incoming": "Liens depuis d'autres documents et blocs : {reconnect} remis en place, {gone} dont le propriétaire n'existe plus, {replaced} dont le propriétaire pointe désormais ailleurs, {published} depuis des versions publiées (ils reviennent quand ces documents sont republiés)."
+ "report.incoming": "Liens depuis d'autres documents et blocs : {reconnect} remis en place, {gone} dont le propriétaire n'existe plus, {replaced} dont le propriétaire pointe désormais ailleurs, {published} depuis des versions publiées (ils reviennent quand ces documents sont republiés).",
+ "groupCollapse": "Replier le groupe {label}",
+ "groupExpand": "Déplier le groupe {label}",
+ "groupBlocks": "{count, plural, one {# bloc} other {# blocs}}"
 }

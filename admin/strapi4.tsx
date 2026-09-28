@@ -24,7 +24,7 @@ import {
 import { Gallery } from "./Gallery";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, labelEditLayout4, dropField4 } from "./model.mjs";
-import { cloneRow, integerKeys } from "./rows.mjs";
+import { cloneRow, errorRows, integerKeys } from "./rows.mjs";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
@@ -72,6 +72,7 @@ function useRowForm(c: any, components: any) {
     locale: c.initialData?.locale || undefined,
     rows: (zone: string) => (Array.isArray(latest.current?.[zone]) ? latest.current[zone] : []),
     setRows: (zone: string, rows: any[]) => c.onChange({ target: { name: zone, value: rows } }),
+    errorRows: (zone: string) => errorRows(c.formErrors, zone),
     keys: (rows: any[], _at: number, n: number) => integerKeys(rows, n),
     notify: (type: string, message: string) => toggleNotification({ type, message }),
     prepare: async (rows: any[]) => rows.map((row) => cloneRow(row, components)),
