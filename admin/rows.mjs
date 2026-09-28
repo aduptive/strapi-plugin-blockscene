@@ -1,5 +1,6 @@
 import { generateNKeysBetween } from "fractional-indexing";
 import { blockKey, groupRange, isOpener, isClose, validateGroups } from "../server/groups.js";
+export { layoutColumns } from "../server/groups.js";
 
 // Row actions (duplicate, copy/paste, hide): pure helpers shared by the Strapi 4 and 5 adapters and the unit tests.
 // Every change is a new zone array written through the form, so undo/redo and Save see it like any native edit.
@@ -233,4 +234,48 @@ export function errorRows(errors, zone) {
     if (hit) out.add(Number(hit[1]));
   }
   return [...out];
+}
+
+// Layout grid of the closed group whose OPEN is at `open`: its cells in zone order, [start, end] each. A child block is
+// one row; a nested group is one cell from its OPEN to its CLOSE. The group's own CLOSE is not a cell. null when the
+// row is not the OPEN of a closed group.
+export function gridCells(rows, open, groups) {
+  const outline = groupOutline(rows, groups);
+  const end = outline[open]?.kind === "open" ? outline[open].end : null;
+  if (end == null) return null;
+  const cells = [];
+  for (let i = open + 1; i < end; ) {
+    const stop = outline[i].kind === "open" && outline[i].end != null ? Math.min(outline[i].end, end - 1) : i;
+    cells.push([i, stop]);
+    i = stop + 1;
+  }
+  return cells;
+}
+// Cell `from` moved to position `to` (cell positions, as the grid shows them): the new zone rows, same row objects, for
+// one form change; null when nothing moves.
+export function moveCell(rows, open, groups, from, to) {
+  const cells = gridCells(rows, open, groups);
+  if (!cells || from === to || !cells[from] || !cells[to]) return null;
+  const order = cells.map((_, i) => i);
+  order.splice(to, 0, order.splice(from, 1)[0]);
+  const start = cells[0][0], end = cells[cells.length - 1][1];
+  return [...rows.slice(0, start), ...order.flatMap((i) => rows.slice(cells[i][0], cells[i][1] + 1)), ...rows.slice(end + 1)];
+}
+// "Remove from group": the cell's rows go right after the group's CLOSE (a sibling of the group from then on).
+export function removeFromGroup(rows, open, groups, cell) {
+  const cells = gridCells(rows, open, groups);
+  if (!cells?.[cell]) return null;
+  const [start, end] = cells[cell], close = groupOutline(rows, groups)[open].end;
+  return [...rows.slice(0, start), ...rows.slice(end + 1, close + 1), ...rows.slice(start, end + 1), ...rows.slice(close + 1)];
+}
+// A cell's one-line summary: the first non-empty text attribute in schema order (markup stripped), else "".
+const TEXTY = ["string", "text", "richtext", "email", "uid", "customField"];
+export function textSummary(row, schema, max = 80) {
+  for (const [name, attr] of Object.entries(schema?.attributes || {})) {
+    const value = row?.[name];
+    if (!TEXTY.includes(attr?.type) || typeof value !== "string") continue;
+    const text = value.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&[a-z#0-9]+;/gi, "").replace(/\s+/g, " ").trim();
+    if (text) return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  }
+  return "";
 }

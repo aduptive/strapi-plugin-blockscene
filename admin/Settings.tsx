@@ -433,6 +433,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
                 onChange={(tags: string[]) => setComponent(component.uid, 'tags', tags.length ? tags : undefined)} />
               {meta.variants?.length > 0 && <Typography variant="pi" textColor="neutral600" data-testid={`variants-${component.uid}`}>
                 {t.variantsFromCode}: {meta.variants.map((item: any) => localized(item.label, t.locale) || item.id).join(', ')}</Typography>}
+              {catalog.groups?.[component.uid] && <LayoutFields component={component} layout={entry.layout} t={t} disabled={!canUpdate || saving} SelectField={SelectField}
+                set={(layout: any) => setComponent(component.uid, 'layout', layout)} />}
             </Flex>
           </Card>
         })}</Grid>
@@ -445,6 +447,26 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
       }} />}
     </>}
   </Flex></Box>
+}
+
+// Layout grid of a group OPEN (README "Layout grid"): the attribute with its desktop column count (none: no grid), an
+// optional mobile one and a cap. Only attributes that can hold a count are offered (the server's layoutFields).
+function LayoutFields({ component, layout, set, t, disabled, SelectField }: any) {
+  const fields = (component.layoutFields || []).map((name: string) => ({ value: name, label: name }))
+  const change = (key: string, value: any) => set(key === 'columnsField' && value === 'none' ? undefined
+    : Object.fromEntries(Object.entries({ ...layout, [key]: value }).filter(([, v]) => v !== 'none' && v !== undefined)))
+  return <Flex direction="column" alignItems="stretch" gap={2} data-testid={`layout-${component.uid}`} style={{ width: '100%' }}>
+    <SelectField name={`layout-columns-${component.uid}`} label={t.layoutColumnsField} value={layout?.columnsField || 'none'} disabled={disabled || !fields.length}
+      options={[{ value: 'none', label: t.layoutOff }, ...fields]} onChange={(v: string) => change('columnsField', v)} />
+    {layout?.columnsField && <>
+      <SelectField name={`layout-mobile-${component.uid}`} label={t.layoutMobileField} value={layout.mobileColumnsField || 'none'} disabled={disabled}
+        options={[{ value: 'none', label: t.layoutNoMobile }, ...fields]} onChange={(v: string) => change('mobileColumnsField', v)} />
+      <SelectField name={`layout-max-${component.uid}`} label={t.layoutMaxColumns} value={String(layout.maxColumns || 'none')} disabled={disabled}
+        options={[{ value: 'none', label: '12' }, ...Array.from({ length: 11 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]}
+        onChange={(v: string) => change('maxColumns', v === 'none' ? undefined : Number(v))} />
+    </>}
+    <Typography variant="pi" textColor="neutral600">{fields.length ? t.layoutHelp : t.layoutNoFields}</Typography>
+  </Flex>
 }
 
 // `to`: Strapi 4 wants the absolute path, Strapi 5 one relative to /settings (it warns otherwise).

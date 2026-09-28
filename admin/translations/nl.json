@@ -398,5 +398,22 @@
  "groupExpand": "Groep {label} uitklappen",
  "groupBlocks": "{count, plural, one {# blok} other {# blokken}}",
  "variants": "Variant",
- "variantsFromCode": "Invoegvarianten (uit de code)"
+ "variantsFromCode": "Invoegvarianten (uit de code)",
+ "gridLabel": "Layoutraster van {label}",
+ "gridColumns": "{count, plural, one {# kolom} other {# kolommen}}",
+ "gridColumnsMobile": "{count, plural, one {# kolom} other {# kolommen}}, {mobile} op mobiel",
+ "gridCellHint": "Blok openen. Sleep of gebruik Alt met de pijltjestoetsen om te herschikken.",
+ "gridCellError": "Bevat fouten",
+ "gridCellMenu": "Meer acties voor {label}",
+ "removeFromGroup": "Uit de groep halen",
+ "gridAdd": "Blok toevoegen",
+ "gridShowList": "Groep {label} als lijst tonen",
+ "gridShowGrid": "Groep {label} als raster tonen",
+ "layoutColumnsField": "Layoutraster: veld met kolommen",
+ "layoutMobileField": "Veld met kolommen op mobiel",
+ "layoutMaxColumns": "Maximaal aantal kolommen",
+ "layoutOff": "Geen raster",
+ "layoutNoMobile": "Geen",
+ "layoutHelp": "De blokken van de groep verschijnen als raster in het formulier, met het aantal kolommen van dit blok.",
+ "layoutNoFields": "Dit blok heeft geen veld dat een aantal kolommen kan bevatten."
 }

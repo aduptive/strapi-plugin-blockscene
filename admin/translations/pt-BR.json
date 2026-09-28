@@ -398,5 +398,22 @@
  "groupExpand": "Expandir grupo {label}",
  "groupBlocks": "{count, plural, one {# bloco} other {# blocos}}",
  "variants": "Variante",
- "variantsFromCode": "Variantes de inserção (do código)"
+ "variantsFromCode": "Variantes de inserção (do código)",
+ "gridLabel": "Grade do layout de {label}",
+ "gridColumns": "{count, plural, one {# coluna} other {# colunas}}",
+ "gridColumnsMobile": "{count, plural, one {# coluna} other {# colunas}}, {mobile} no celular",
+ "gridCellHint": "Abrir o bloco. Arraste ou use Alt com as setas para reordenar.",
+ "gridCellError": "Tem erros",
+ "gridCellMenu": "Mais ações para {label}",
+ "removeFromGroup": "Remover do grupo",
+ "gridAdd": "Adicionar bloco",
+ "gridShowList": "Mostrar o grupo {label} como lista",
+ "gridShowGrid": "Mostrar o grupo {label} como grade",
+ "layoutColumnsField": "Grade do layout: campo das colunas",
+ "layoutMobileField": "Campo das colunas no celular",
+ "layoutMaxColumns": "Máximo de colunas",
+ "layoutOff": "Sem grade",
+ "layoutNoMobile": "Nenhum",
+ "layoutHelp": "Os blocos do grupo aparecem em grade no formulário, com o número de colunas deste bloco.",
+ "layoutNoFields": "Este bloco não tem campo que guarde um número de colunas."
 }

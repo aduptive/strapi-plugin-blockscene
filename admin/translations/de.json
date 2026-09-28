@@ -398,5 +398,22 @@
  "groupExpand": "Gruppe {label} ausklappen",
  "groupBlocks": "{count, plural, one {# Block} other {# Blöcke}}",
  "variants": "Variante",
- "variantsFromCode": "Einfügevarianten (aus dem Code)"
+ "variantsFromCode": "Einfügevarianten (aus dem Code)",
+ "gridLabel": "Layout-Raster von {label}",
+ "gridColumns": "{count, plural, one {# Spalte} other {# Spalten}}",
+ "gridColumnsMobile": "{count, plural, one {# Spalte} other {# Spalten}}, {mobile} auf Mobilgeräten",
+ "gridCellHint": "Block öffnen. Ziehen oder Alt mit den Pfeiltasten zum Umordnen.",
+ "gridCellError": "Enthält Fehler",
+ "gridCellMenu": "Weitere Aktionen für {label}",
+ "removeFromGroup": "Aus der Gruppe entfernen",
+ "gridAdd": "Block hinzufügen",
+ "gridShowList": "Gruppe {label} als Liste anzeigen",
+ "gridShowGrid": "Gruppe {label} als Raster anzeigen",
+ "layoutColumnsField": "Layout-Raster: Feld der Spalten",
+ "layoutMobileField": "Feld der Spalten auf Mobilgeräten",
+ "layoutMaxColumns": "Höchstens Spalten",
+ "layoutOff": "Kein Raster",
+ "layoutNoMobile": "Keines",
+ "layoutHelp": "Die Blöcke der Gruppe erscheinen im Formular als Raster, mit der Spaltenzahl dieses Blocks.",
+ "layoutNoFields": "Dieser Block hat kein Feld, das eine Spaltenzahl enthalten kann."
 }

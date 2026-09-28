@@ -174,6 +174,9 @@ function Workspace({ c, schema, zones, components, add, catalog, docKey, form, g
         Menu={Menu}
         // No undo here: without a preview route there is nothing to add, and a zone bar with nothing else in it goes away.
         zoneTools={state.preview.base ? <ZoneBarTools state={state} /> : null}
+        // The layout grid opens its cells in the preview core's block dialog and inserts through its picker (any mode).
+        openBlock={state.openBlock}
+        openInsert={state.openInsert}
       />
       <PagePreview
         editor={editor}

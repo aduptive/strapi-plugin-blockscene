@@ -1086,6 +1086,105 @@ try {
     await expect('0b 0o 1b 1o 2c 1c 0b 0b', 'the hero error unfolded its group')
     await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
   })
+  if (GROUPS_MODE === '1') await step(`layout grid: the OPEN's column count (live), a cell opens its block in the dialog (form and split), reorder by Alt+Arrow and by drag${major === 5 ? ' (one undo step)' : ''}, remove from group, "+" inserts into the group, an error marks its cell, list view`, async () => {
+    // The lab's section OPEN has one string field, `note`: it holds the column count here (a string of a number is valid).
+    assert.equal((await api('PUT', '/blockscene/settings', { components: { 'group.section': { layout: { columnsField: 'nope' } } } })).status, 400, 'unknown columns field')
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
+    // Settings: only group OPENs get the layout fields, and only attributes that can hold a count are offered.
+    await page.goto('/admin/settings/blockscene')
+    const layoutCard = page.getByTestId('layout-group.section'); await layoutCard.waitFor()
+    assert.equal(await page.getByTestId('layout-blocks.hero').count(), 0, 'not an OPEN: no layout fields')
+    await layoutCard.getByRole('combobox', { name: 'Layout grid: columns field' }).click(); await page.getByRole('option', { name: 'note', exact: true }).click()
+    await layoutCard.getByRole('combobox', { name: 'Mobile columns field' }).waitFor()
+    await page.getByTestId('save-blockscene-settings').click(); await page.getByTestId('save-status').waitFor()
+    assert.deepEqual((await api('GET', '/blockscene/catalog')).data.layouts, { 'group.section': { columnsField: 'note' } })
+    const res = await api('POST', '/content-manager/collection-types/api::page.page', { title: `Grid ${Date.now()}`, blocks: [
+      { __component: 'blocks.text', body: 'A' }, { __component: 'group.section', note: '2' }, { __component: 'blocks.text', body: 'c1' },
+      { __component: 'blocks.hero', title: 'Hero c2', items: [{ label: 'a' }, { label: 'b' }] }, { __component: 'blocks.text', body: 'c3' },
+      { __component: 'group.end' }, { __component: 'blocks.text', body: 'B' }] })
+    assert.ok([200, 201].includes(res.status), JSON.stringify(res.data).slice(0, 300))
+    const id = major === 4 ? (res.data?.data?.id ?? res.data?.id) : (res.data?.data?.documentId ?? res.data?.documentId)
+    await page.goto(`/admin/content-manager/collection-types/api::page.page/${id}`)
+    const zone = page.locator('ol[aria-describedby]').first()
+    const row = n => zone.locator(':scope > li').nth(n)
+    const outline = () => zone.evaluate(ol => [...ol.querySelectorAll(':scope > li')].map(li => `${li.getAttribute('data-blockscene-depth') || 0}${(li.getAttribute('data-blockscene-group') || 'b')[0]}${li.hasAttribute('data-blockscene-folded') ? '-' : ''}`).join(' '))
+    const until = async (read, expected, message) => { let last; for (let i = 0; i < 60; i++) { last = await read(); if (JSON.stringify(last) === JSON.stringify(expected)) return; await page.waitForTimeout(100) } assert.deepEqual(last, expected, message) }
+    const grid = page.getByTestId('layout-grid-blocks-1')
+    const cells = () => grid.locator('[data-cell-key]').evaluateAll(buttons => buttons.map(b => b.getAttribute('aria-label')))
+    await grid.waitFor()
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'the children are hidden (still mounted), the CLOSE stays')
+    await until(cells, ['Text: c1', 'Hero example: Hero c2', 'Text: c3'], 'one cell per child: name and first text')
+    assert.equal(await grid.getAttribute('data-columns'), '2')
+    assert.equal(await grid.locator(':scope > div').last().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2, 'two columns')
+    await row(1).scrollIntoViewIfNeeded(); await shot('layout-grid')
+    // Live: the OPEN's own form field drives the grid.
+    // The initial accordion state (all closed) may land just after the first click: open until the field shows.
+    const note = page.locator('[name="blocks.1.note"]')
+    for (let i = 0; i < 10 && !(await note.isVisible()); i++) { if (await row(1).locator('button[aria-expanded]').first().getAttribute('aria-expanded') === 'false') await row(1).locator('button[aria-expanded]').first().click(); await page.waitForTimeout(300) }
+    await note.fill('3')
+    await until(() => grid.getAttribute('data-columns'), '3', 'the grid follows the columns field as it is typed')
+    await row(1).locator('button[aria-expanded]').first().click()
+    // A cell opens its block's native form in the block dialog (form mode), then in split mode the page shows the edit.
+    await grid.locator('[data-cell-key]').nth(1).click()
+    await page.getByTestId('block-modal-bar').waitFor()
+    assert.ok(await row(3).evaluate(li => li.hasAttribute('data-bp-block-modal')), 'the hero row is the one lifted')
+    await page.locator('[name="blocks.3.title"]').fill('Hero edited')
+    await shot('layout-grid-dialog')
+    await page.getByTestId('block-modal-done').click(); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'the row is hidden again')
+    await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3'], 'the cell reads the form')
+    await setMode('Fields + page')
+    const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
+    await frame.locator('[data-block-field="title"]', { hasText: 'Hero edited' }).waitFor()
+    await grid.locator('[data-cell-key]').nth(2).click(); await page.getByTestId('block-modal-bar').waitFor()
+    await page.locator('[data-bp-block-modal] textarea').first().fill('c3 split')
+    await page.getByTestId('block-modal-done').click()
+    await frame.getByText('c3 split').waitFor()
+    await setMode('Fields')
+    await page.waitForTimeout(400) // Design System 1 hands the focus back to the closed menu's button a moment later
+    // Reorder with the keyboard: one zone change (one undo step on Strapi 5); the moved cell keeps the focus.
+    await grid.locator('[data-cell-key]').first().focus(); await page.keyboard.press('Alt+ArrowRight')
+    await until(cells, ['Hero example: Hero edited', 'Text: c1', 'Text: c3 split'], 'c1 moved one cell right')
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Text: c1', 'focus follows the moved cell')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'still inside the group')
+    if (major === 5) await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
+    else await page.keyboard.press('Alt+ArrowLeft')
+    await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3 split'], major === 5 ? 'one undo reverts the move' : 'moved back')
+    // The same with the mouse (HTML5 drag and drop on the cells; Strapi's own row drag is not involved).
+    await grid.locator('[data-cell-key]').nth(2).dragTo(grid.locator('[data-cell-key]').nth(0))
+    await until(cells, ['Text: c3 split', 'Text: c1', 'Hero example: Hero edited'], 'c3 dragged onto the first cell')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'still inside the group')
+    await grid.locator('[data-cell-key]').nth(0).dragTo(grid.locator('[data-cell-key]').nth(2))
+    await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3 split'], 'dragged back')
+    // Remove from group: the cell's block goes right after the CLOSE.
+    await page.getByTestId('grid-cell-menu-blocks-1-2').click(); await page.getByTestId('grid-cell-remove-blocks-1-2').click()
+    await until(outline, '0b 0o 1b- 1b- 1c 0b 0b', 'c3 left the group')
+    await until(cells, ['Text: c1', 'Hero example: Hero edited'])
+    // "+": the gallery inserts at the end of the group.
+    await page.getByTestId('grid-add-blocks-1').click()
+    await page.getByTestId('blockscene-blocks.text').locator('button').first().dblclick()
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b 0b', 'the new block is the group\'s last child')
+    await until(async () => (await cells()).length, 3)
+    // An error inside a grid child marks its cell; opening it shows the field.
+    await grid.locator('[data-cell-key]').nth(1).click(); await page.getByTestId('block-modal-bar').waitFor()
+    await page.locator('[name="blocks.3.title"]').fill('')
+    await page.getByTestId('block-modal-done').click()
+    if (major === 4) { await page.getByRole('button', { name: 'Save', exact: true }).first().click(); await page.getByRole('button', { name: 'Publish', exact: true }).and(page.locator(':enabled')).first().waitFor() }
+    await page.getByRole('button', { name: 'Publish', exact: true }).first().click()
+    await page.getByTestId('grid-cell-blocks-1-1').and(page.locator('[data-error]')).waitFor()
+    assert.equal(await page.locator('[data-testid^="grid-cell-blocks-1-"][data-error]').count(), 1, 'only the hero cell')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b 0b', 'the grid stays')
+    await grid.locator('[data-cell-key]').nth(1).click(); await page.getByTestId('block-modal-bar').waitFor()
+    assert.equal(await page.locator('[name="blocks.3.title"]').getAttribute('aria-invalid'), 'true', 'the dialog shows the invalid field')
+    await page.getByTestId('block-modal-done').click()
+    // List view: the rows come back; the grid view again.
+    await page.getByTestId('group-view-blocks-1').click()
+    await grid.waitFor({ state: 'detached' }); await until(outline, '0b 0o 1b 1b 1b 1c 0b 0b', 'list view')
+    await page.getByTestId('group-view-blocks-1').click(); await grid.waitFor()
+    await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
+    await putSettings({})
+  })
   await step('admin locale drives the plugin chrome: pt-BR, fr, en and an unsupported locale (ja) falls back to English', async () => {
     const cases = [['fr', { expand: 'Tout déplier', undo: 'Annuler', split: 'Champs + page', palette: 'Palette des wireframes' }],
       ['pt-BR', { expand: 'Expandir tudo', undo: 'Desfazer', split: 'Campos + página', palette: 'Paleta dos wireframes' }],

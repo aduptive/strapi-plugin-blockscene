@@ -110,4 +110,32 @@ function removeGroup(rows, key, g) {
   return [...rows.slice(0, start), ...rows.slice(end + 1)]
 }
 
-module.exports = { safeGroups, validateGroups, groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, blockKey, isOpener, isClose }
+// Layout grid (settings `components[uid].layout`, see README "Layout grid"): the OPEN attribute that holds its column
+// count, desktop and optionally mobile. A count is a whole number from 1, or a string of one ("3"): number attributes,
+// strings, and enumerations whose every value is a count ("1", "2", "3") can hold one.
+const MAX_COLUMNS = 12
+const parseColumns = value => {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && /^\s*\d{1,3}\s*$/.test(value) ? Number(value) : NaN
+  return Number.isInteger(n) && n >= 1 ? n : null
+}
+const columnsAttribute = attr => Boolean(attr) && typeof attr === 'object' && !attr.private && (['integer', 'biginteger', 'float', 'decimal', 'string'].includes(attr.type) ||
+  (attr.type === 'enumeration' && Array.isArray(attr.enum) && attr.enum.length > 0 && attr.enum.every(value => parseColumns(value) !== null)))
+const layoutFields = schema => Object.entries(schema?.attributes || {}).filter(([, attr]) => columnsAttribute(attr)).map(([name]) => name)
+// `attributes`: the component's (null skips the attribute check).
+function validLayout(value, attributes) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if (!Object.keys(value).every(key => ['columnsField', 'mobileColumnsField', 'maxColumns'].includes(key))) return false
+  const field = name => typeof name === 'string' && /^[A-Za-z_][\w-]{0,63}$/.test(name) && (!attributes || columnsAttribute(attributes[name]))
+  return field(value.columnsField) && (value.mobileColumnsField === undefined || field(value.mobileColumnsField)) &&
+    (value.maxColumns === undefined || (Number.isInteger(value.maxColumns) && value.maxColumns >= 1 && value.maxColumns <= MAX_COLUMNS))
+}
+// The grid of an OPEN row: { desktop, mobile } column counts, each the row's value, else the attribute's default, else 1,
+// capped at maxColumns (12 when absent). No mobile field: mobile is null.
+function layoutColumns(row, layout, schema) {
+  const max = layout.maxColumns || MAX_COLUMNS
+  const read = name => Math.min(max, parseColumns(row?.[name]) ?? parseColumns(schema?.attributes?.[name]?.default) ?? 1)
+  return { desktop: read(layout.columnsField), mobile: layout.mobileColumnsField ? read(layout.mobileColumnsField) : null }
+}
+
+module.exports = { safeGroups, validateGroups, groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, blockKey, isOpener, isClose,
+  MAX_COLUMNS, parseColumns, layoutFields, validLayout, layoutColumns }

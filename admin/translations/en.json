@@ -398,5 +398,22 @@
  "groupExpand": "Expand group {label}",
  "groupBlocks": "{count, plural, one {# block} other {# blocks}}",
  "variants": "Variant",
- "variantsFromCode": "Insert variants (from code)"
+ "variantsFromCode": "Insert variants (from code)",
+ "gridLabel": "Layout grid of {label}",
+ "gridColumns": "{count, plural, one {# column} other {# columns}}",
+ "gridColumnsMobile": "{count, plural, one {# column} other {# columns}}, {mobile} on mobile",
+ "gridCellHint": "Open the block. Drag or press Alt with the arrow keys to reorder.",
+ "gridCellError": "Has errors",
+ "gridCellMenu": "More actions for {label}",
+ "removeFromGroup": "Remove from group",
+ "gridAdd": "Add a block",
+ "gridShowList": "Show group {label} as a list",
+ "gridShowGrid": "Show group {label} as a grid",
+ "layoutColumnsField": "Layout grid: columns field",
+ "layoutMobileField": "Mobile columns field",
+ "layoutMaxColumns": "Maximum columns",
+ "layoutOff": "No grid",
+ "layoutNoMobile": "None",
+ "layoutHelp": "The group's blocks show as a grid in the form, with the column count this block holds.",
+ "layoutNoFields": "This block has no field that can hold a column count."
 }

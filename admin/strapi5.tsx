@@ -217,6 +217,8 @@ function Workspace({ scope }: any) {
         userId={user?.id}
         form={form}
         zoneTools={<ZoneBarTools state={state} />}
+        openBlock={state.openBlock}
+        openInsert={state.openInsert}
       />
       <PagePreview
         editor={editor}
