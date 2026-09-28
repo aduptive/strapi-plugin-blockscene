@@ -924,6 +924,74 @@ try {
     }
     for (const id of [badId, goodId]) await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
   })
+  if (GROUPS_MODE === '1') await step(`layout groups in the form: indented children, the CLOSE as the group's end, folding, a moved OPEN keeps its group (keyboard and mouse${major === 5 ? ', one undo step each' : ''}), a child moved out leaves it, an error unfolds`, async () => {
+    // A (hero c1, [c2]) B, as saved rows; the hero's empty required fields fail validation on Publish (nothing is published).
+    const res = await api('POST', '/content-manager/collection-types/api::page.page', { title: `Nesting ${Date.now()}`, blocks: [
+      { __component: 'blocks.text', body: 'A' }, { __component: 'group.section', note: 'outer' }, { __component: 'blocks.hero', title: '', items: [{ label: 'a' }, { label: 'b' }] },
+      { __component: 'group.section', note: 'inner' }, { __component: 'blocks.text', body: 'c2' }, { __component: 'group.end' }, { __component: 'group.end' },
+      { __component: 'blocks.text', body: 'B' }] })
+    assert.ok([200, 201].includes(res.status), JSON.stringify(res.data).slice(0, 300))
+    const id = major === 4 ? (res.data?.data?.id ?? res.data?.id) : (res.data?.data?.documentId ?? res.data?.documentId)
+    await page.goto(`/admin/content-manager/collection-types/api::page.page/${id}`)
+    const zone = page.locator('ol[aria-describedby]').first()
+    const row = n => zone.locator(':scope > li').nth(n)
+    // Depth and kind per row (b block, o OPEN, c CLOSE), "-" when folded away.
+    const outline = () => zone.evaluate(ol => [...ol.querySelectorAll(':scope > li')].map(li => `${li.getAttribute('data-blockscene-depth') || 0}${(li.getAttribute('data-blockscene-group') || 'b')[0]}${li.hasAttribute('data-blockscene-folded') ? '-' : ''}`).join(' '))
+    const expect = async (expected, message) => { let last; for (let i = 0; i < 60; i++) { last = await outline(); if (last === expected) return; await page.waitForTimeout(100) } assert.equal(last, expected, message) }
+    const start = '0b 0o 1b 1o 2b 2c 1c 0b'
+    await expect(start, 'children indented one level per group, CLOSE rows inside their group')
+    assert.ok(await row(4).evaluate(li => parseFloat(getComputedStyle(li).paddingLeft) > parseFloat(getComputedStyle(li.previousElementSibling.previousElementSibling).paddingLeft)), 'deeper rows sit further right')
+    assert.equal(await row(6).locator('[data-handler-id]').first().isVisible(), false, 'the CLOSE has no drag handle')
+    assert.equal(await row(0).locator('[data-blockscene-fold]').count(), 0); assert.equal(await row(1).locator('[data-blockscene-fold]').count(), 1)
+    await row(1).scrollIntoViewIfNeeded(); await shot('groups-indented')
+    // Fold the outer group: its rows (inner group included) are hidden, the header counts them; Expand all leaves them alone.
+    await page.getByTestId('group-fold-blocks-1').click()
+    await expect('0b 0o 1b- 1o- 2b- 2c- 1c- 0b', 'folded rows')
+    assert.equal(await page.getByTestId('group-count-blocks-1').innerText(), '3 blocks'); assert.equal(await row(2).isVisible(), false)
+    assert.equal(await page.getByTestId('group-fold-blocks-1').getAttribute('aria-expanded'), 'false')
+    await toggle().click(); await page.waitForTimeout(400)
+    await expect('0b 0o 1b- 1o- 2b- 2c- 1c- 0b', 'Expand all acts on block accordions only')
+    await shot('groups-folded')
+    await page.getByTestId('group-fold-blocks-1').click()
+    await expect(start, 'unfolded')
+    // Keyboard move (Strapi's own drag handle: Space, ArrowDown, Space) of the outer OPEN: the whole group goes below B.
+    const move = async (n, keys) => { await row(n).locator('[data-handler-id]').first().focus(); for (const key of [' ', ...keys, ' ']) await page.keyboard.press(key) }
+    await move(1, ['ArrowDown'])
+    await expect('0b 0b 0o 1b 1o 2b 2c 1c', 'the group moved one row down with its children and CLOSE')
+    if (major === 5) {
+      await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
+      await expect(start, 'one undo reverts the whole group move')
+    } else {
+      await move(2, ['ArrowUp'])
+      await expect(start, 'moved back up as a whole')
+    }
+    // The same with the mouse: Strapi moves the dragged row on every hover; the group is settled on drop.
+    const handle = row(1).locator('[data-handler-id]').first(); await handle.scrollIntoViewIfNeeded()
+    const from = await handle.boundingBox(), to = await row(7).boundingBox(), x = from.x + from.width / 2, y = from.y + from.height / 2
+    await page.mouse.move(x, y); await page.mouse.down()
+    for (let i = 1; i <= 20; i++) await page.mouse.move(x, y + (to.y + to.height * 0.8 - y) * i / 20, { steps: 2 })
+    // Headless Chromium may deliver no drop: react-dnd then ends the drag on the first pointer move after 1 s (as for a user).
+    await page.mouse.up(); await page.waitForTimeout(1200); await page.mouse.move(x + 4, y + 4)
+    await expect('0b 0b 0o 1b 1o 2b 2c 1c', 'dragged with the mouse: the group moved below B')
+    if (major === 5) {
+      await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
+      await expect(start, 'one undo reverts the whole drag')
+    } else {
+      await move(2, ['ArrowUp'])
+      await expect(start, 'moved back up as a whole')
+    }
+    // A child moved out (past its CLOSE, then past the outer CLOSE) becomes independent; nothing follows it.
+    await move(4, ['ArrowDown', 'ArrowDown'])
+    await expect('0b 0o 1b 1o 2c 1c 0b 0b', 'the child left both groups')
+    // A validation error inside a folded group unfolds it (Publish validates required fields in the browser first).
+    await page.getByTestId('group-fold-blocks-1').click()
+    await expect('0b 0o 1b- 1o- 2c- 1c- 0b 0b', 'folded again')
+    // Strapi 4 publishes saved drafts only (the draft itself may miss required fields).
+    if (major === 4) { await page.getByRole('button', { name: 'Save', exact: true }).first().click(); await page.getByRole('button', { name: 'Publish', exact: true }).and(page.locator(':enabled')).first().waitFor() }
+    await page.getByRole('button', { name: 'Publish', exact: true }).first().click()
+    await expect('0b 0o 1b 1o 2c 1c 0b 0b', 'the hero error unfolded its group')
+    await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
+  })
   await step('admin locale drives the plugin chrome: pt-BR, fr, en and an unsupported locale (ja) falls back to English', async () => {
     const cases = [['fr', { expand: 'Tout déplier', undo: 'Annuler', split: 'Champs + page', palette: 'Palette des wireframes' }],
       ['pt-BR', { expand: 'Expandir tudo', undo: 'Desfazer', split: 'Campos + página', palette: 'Paleta dos wireframes' }],

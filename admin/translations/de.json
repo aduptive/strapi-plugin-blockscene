@@ -394,5 +394,8 @@
  "report.media": "{count} Mediendatei(en) existieren nicht mehr, leer gelassen ({locale}).",
  "report.relations": "{count} verknüpfte(s) Dokument(e) existieren nicht mehr, ausgelassen ({locale}).",
  "report.blocks": "{count} Block/Blöcke, deren Komponente die Zone nicht mehr erlaubt, ausgelassen ({locale}).",
- "report.incoming": "Verknüpfungen aus anderen Dokumenten und Blöcken: {reconnect} wiederhergestellt, {gone} ohne existierenden Besitzer, {replaced} deren Besitzer jetzt woandershin zeigt, {published} aus veröffentlichten Versionen (sie kommen zurück, wenn diese Dokumente erneut veröffentlicht werden)."
+ "report.incoming": "Verknüpfungen aus anderen Dokumenten und Blöcken: {reconnect} wiederhergestellt, {gone} ohne existierenden Besitzer, {replaced} deren Besitzer jetzt woandershin zeigt, {published} aus veröffentlichten Versionen (sie kommen zurück, wenn diese Dokumente erneut veröffentlicht werden).",
+ "groupCollapse": "Gruppe {label} einklappen",
+ "groupExpand": "Gruppe {label} ausklappen",
+ "groupBlocks": "{count, plural, one {# Block} other {# Blöcke}}"
 }

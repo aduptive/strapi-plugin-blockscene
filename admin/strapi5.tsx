@@ -33,7 +33,7 @@ import { Icon, ICON_NAMES } from "./icons";
 import { registerPanel } from "./pane.mjs";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults, labelEditLayout, dropField } from "./model.mjs";
-import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
+import { cloneRow, currentRelations, errorRows, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
 import { Guard } from "./Guard";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
@@ -69,6 +69,7 @@ async function relationsOf(get: any, { uid, id, field }: any, locale?: string) {
 // relations as the `connect` list a new row holds (what the server has for the source row, plus its unsaved changes).
 function useRowForm(c: any, values: any, get: any) {
   const onChange = useForm("Blockscene", (state: any) => state.onChange);
+  const errors = useForm("Blockscene", (state: any) => state.errors);
   const { toggleNotification } = useNotification();
   const latest = React.useRef(values);
   latest.current = values;
@@ -79,6 +80,7 @@ function useRowForm(c: any, values: any, get: any) {
     locale,
     rows: (zone: string) => (Array.isArray(latest.current?.[zone]) ? latest.current[zone] : []),
     setRows: (zone: string, rows: any[]) => onChange(zone, rows),
+    errorRows: (zone: string) => errorRows(errors, zone),
     keys: fractionalKeys,
     notify: (type: string, message: string) => toggleNotification({ type, message }),
     prepare: (rows: any[]) =>

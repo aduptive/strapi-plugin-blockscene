@@ -394,5 +394,8 @@
  "report.media": "{count} media file(s) no longer exist, left empty ({locale}).",
  "report.relations": "{count} related document(s) no longer exist, left out ({locale}).",
  "report.blocks": "{count} block(s) whose component the zone no longer allows, left out ({locale}).",
- "report.incoming": "Links from other documents and blocks: {reconnect} put back, {gone} whose owner is gone, {replaced} whose owner points elsewhere now, {published} from published versions (they come back when those documents are published again)."
+ "report.incoming": "Links from other documents and blocks: {reconnect} put back, {gone} whose owner is gone, {replaced} whose owner points elsewhere now, {published} from published versions (they come back when those documents are published again).",
+ "groupCollapse": "Collapse group {label}",
+ "groupExpand": "Expand group {label}",
+ "groupBlocks": "{count, plural, one {# block} other {# blocks}}"
 }

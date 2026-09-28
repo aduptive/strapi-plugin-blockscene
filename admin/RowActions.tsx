@@ -26,6 +26,8 @@ import { Icon } from "./icons";
 export type RowForm = {
   rows: (zone: string) => any[];
   setRows: (zone: string, rows: any[]) => void;
+  // Indexes of the zone's rows with a validation error (a folded layout group around one unfolds).
+  errorRows?: (zone: string) => number[];
   keys: (rows: any[], at: number, n: number) => any[];
   // Deep copies ready to be inserted as new rows (ids stripped, relations in the new-row shape).
   prepare: (rows: any[]) => Promise<any[]>;

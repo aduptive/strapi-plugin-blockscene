@@ -29,9 +29,12 @@ import {
   toggles,
   isNativeAddButton,
   accordionToggle,
+  shownToggles,
+  FOLDED,
 } from "./accordions.mjs";
 import { Wireframe } from "./wireframes";
 import { RowPreviews } from "./RowPreviews";
+import { GroupRows } from "./GroupRows";
 import { RowActions, SelectionBar, useRowActions, zoneMenuItems } from "./RowActions";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
@@ -1311,7 +1314,7 @@ function useRowStates(zone: any, enabled: boolean) {
     const read = () => {
       frame = 0;
       const list = findZoneList(zone.label);
-      const values = list ? toggles(list).map((button: HTMLElement) => button.getAttribute("aria-expanded") === "true") : [];
+      const values = list ? shownToggles(list).map((button: HTMLElement) => button.getAttribute("aria-expanded") === "true") : [];
       const closed = values.includes(false), open = values.includes(true);
       setState((prev) => (prev.closed === closed && prev.open === open ? prev : { closed, open }));
     };
@@ -1319,7 +1322,7 @@ function useRowStates(zone: any, enabled: boolean) {
     const observer = new MutationObserver(() => {
       if (!frame) frame = requestAnimationFrame(read);
     });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-expanded"] });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-expanded", FOLDED] });
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
@@ -1395,6 +1398,8 @@ export function Gallery({
         />
       )}
       <RowActions zones={zones} actions={actions} Modal={props.Modal} />
+      <GroupRows zones={zones} form={props.form} groups={catalog?.groups || null} docKey={docKey}
+        labelOf={(row: any) => catalog?.components?.[row?.__component]?.label || props.components?.[row?.__component]?.info?.displayName || row?.__component || ""} />
       {zones.map((zone: any, index: number) => (
         <React.Fragment key={zone.name}>
           {/* Opened by the zone's native "Add a component" button. docKey ends with the content locale (both versions): the {locale} of blockPreviewUrl. */}

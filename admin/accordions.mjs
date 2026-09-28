@@ -14,6 +14,9 @@ export function findZoneList(label, root = document) {
 export function toggles(list) {
   return [...list.querySelectorAll(':scope > li')].map(item => item.querySelector('button[aria-expanded]')).filter(Boolean)
 }
+// Rows inside a folded layout group (GroupRows) are hidden: Expand all / Collapse all and the zone toggle's state skip them.
+export const FOLDED = 'data-blockscene-folded'
+export const shownToggles = (list) => toggles(list).filter(button => !button.closest(`li[${FOLDED}]`))
 // Rows near the viewport first. `rects` are the rows' {top, bottom}, `view` the visible {top, bottom} of the scroller
 // and `margin` how far around it still counts as near. `now` keeps list order; `later` is nearest first.
 export function planRows(rects, view, margin = 0) {
@@ -50,7 +53,7 @@ export function setAll(list, open, batch = (run) => run()) {
   const header = (li) => li.querySelector('button[aria-expanded]')
   const differs = (li) => { const b = li.isConnected && header(li); return b && (b.getAttribute('aria-expanded') === 'true') !== open ? b : null }
   const click = (rows) => { const buttons = rows.map(differs).filter(Boolean); if (buttons.length) batch(() => { for (const b of buttons) b.click() }); return buttons.length }
-  const rows = [...list.querySelectorAll(':scope > li')].filter(differs)
+  const rows = [...list.querySelectorAll(':scope > li')].filter(li => !li.hasAttribute(FOLDED) && differs(li))
   if (!rows.length) return 0
   const root = scroller(list)
   const view = () => root ? root.getBoundingClientRect() : { top: 0, bottom: window.innerHeight }

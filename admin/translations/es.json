@@ -394,5 +394,8 @@
  "report.media": "{count} archivo(s) multimedia ya no existen, quedan vacíos ({locale}).",
  "report.relations": "{count} documento(s) relacionados ya no existen, omitidos ({locale}).",
  "report.blocks": "{count} bloque(s) cuyo componente la zona ya no permite, omitidos ({locale}).",
- "report.incoming": "Vínculos desde otros documentos y bloques: {reconnect} repuestos, {gone} cuyo dueño ya no existe, {replaced} cuyo dueño ahora apunta a otro, {published} desde versiones publicadas (vuelven cuando esos documentos se publiquen de nuevo)."
+ "report.incoming": "Vínculos desde otros documentos y bloques: {reconnect} repuestos, {gone} cuyo dueño ya no existe, {replaced} cuyo dueño ahora apunta a otro, {published} desde versiones publicadas (vuelven cuando esos documentos se publiquen de nuevo).",
+ "groupCollapse": "Contraer el grupo {label}",
+ "groupExpand": "Expandir el grupo {label}",
+ "groupBlocks": "{count, plural, one {# bloque} other {# bloques}}"
 }

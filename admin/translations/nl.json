@@ -394,5 +394,8 @@
  "report.media": "{count} mediabestand(en) bestaan niet meer, leeg gelaten ({locale}).",
  "report.relations": "{count} gekoppelde document(en) bestaan niet meer, weggelaten ({locale}).",
  "report.blocks": "{count} blok(ken) waarvan de zone het component niet meer toestaat, weggelaten ({locale}).",
- "report.incoming": "Koppelingen vanuit andere documenten en blokken: {reconnect} teruggezet, {gone} waarvan de eigenaar niet meer bestaat, {replaced} waarvan de eigenaar nu ergens anders naar wijst, {published} vanuit gepubliceerde versies (die komen terug wanneer die documenten opnieuw worden gepubliceerd)."
+ "report.incoming": "Koppelingen vanuit andere documenten en blokken: {reconnect} teruggezet, {gone} waarvan de eigenaar niet meer bestaat, {replaced} waarvan de eigenaar nu ergens anders naar wijst, {published} vanuit gepubliceerde versies (die komen terug wanneer die documenten opnieuw worden gepubliceerd).",
+ "groupCollapse": "Groep {label} inklappen",
+ "groupExpand": "Groep {label} uitklappen",
+ "groupBlocks": "{count, plural, one {# blok} other {# blokken}}"
 }
