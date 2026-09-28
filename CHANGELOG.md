@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.8 (Strapi 5) and 1.0.0-alpha.8 (Strapi 4) — 2026-09-28
 
 - Page preview on Strapi 4 (ADU-387): the Strapi 4 package gets the whole-page
   preview with the same bridge (`blockscene:page-preview:v1`), so one frontend
