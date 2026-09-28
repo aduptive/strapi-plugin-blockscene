@@ -1,7 +1,8 @@
 'use strict'
 
 // "Hide on the site": a boolean attribute added at register time to every component used in a Dynamic Zone (the way
-// i18n adds `locale`), hidden from the edit view (`visible: false`) and toggled by the row eye icon. In `strip` mode a
+// i18n adds `locale`), toggled by the row eye icon and never rendered as an input (the admin's edit-layout hook removes it).
+// It stays `visible` to the Content Manager: before 5.45 its edit view crashes on a data key missing from the schema. In `strip` mode a
 // document service middleware (Strapi 5) or an entity service decorator (Strapi 4) drops hidden rows from Dynamic
 // Zones in content-API reads only; admin reads always see every row. One file for the server and the unit tests.
 
@@ -22,7 +23,7 @@ function injectHidden(components, contentTypes, name) {
     schema.attributes ||= {}
     const current = schema.attributes[name]
     if (current && current.type !== 'boolean') { skipped.push(uid); continue }
-    if (!current) schema.attributes[name] = { type: 'boolean', default: false, visible: false, configurable: false }
+    if (!current) schema.attributes[name] = { type: 'boolean', default: false, configurable: false }
     added.push(uid)
   }
   return { added, skipped }

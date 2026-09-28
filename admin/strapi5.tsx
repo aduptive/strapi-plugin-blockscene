@@ -26,7 +26,7 @@ import { Gallery } from "./Gallery";
 import { PagePreview } from "./PagePreview";
 import { History } from "./History";
 import { Settings, permissions, register } from "./Settings";
-import { editableZones, canInsert, componentDefaults, labelEditLayout } from "./model.mjs";
+import { editableZones, canInsert, componentDefaults, labelEditLayout, dropField } from "./model.mjs";
 import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
 import { Guard } from "./Guard";
 import { useCatalog, labelsHook } from "./catalog";
@@ -306,7 +306,7 @@ export default {
   registerTrads,
   bootstrap(app: any) {
     app.getPlugin("content-manager").apis.addEditViewSidePanel([Panel]);
-    app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout));
+    app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout, dropField));
     // Every plugin has registered its custom fields by now.
     wrapCustomFields(strapiApp);
   },

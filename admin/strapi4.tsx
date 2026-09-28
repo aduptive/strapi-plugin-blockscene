@@ -21,7 +21,7 @@ import {
 } from "@strapi/helper-plugin";
 import { Gallery } from "./Gallery";
 import { Settings, permissions, register } from "./Settings";
-import { editableZones, canInsert, labelEditLayout4 } from "./model.mjs";
+import { editableZones, canInsert, labelEditLayout4, dropField4 } from "./model.mjs";
 import { cloneRow, integerKeys } from "./rows.mjs";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
@@ -210,7 +210,7 @@ export default {
   },
   registerTrads,
   bootstrap(app: any) {
-    app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout4));
+    app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout4, dropField4));
     app.injectContentManagerComponent("editView", "right-links", {
       name: "blockscene",
       Component: () => (
