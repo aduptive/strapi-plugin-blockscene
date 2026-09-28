@@ -501,7 +501,7 @@ try {
     // The block's own tools sit over the middle of the title in a narrow pane: click its start.
     await frame.locator('[data-block-uid="blocks.hero"] [data-block-field="title"]').click({ position: { x: 8, y: 8 } })
     await page.keyboard.press('Meta+A'); await page.keyboard.type('Inline title'); await page.keyboard.press('Enter')
-    // In a narrow form the row tools cover the header's middle: open the row from its chevron.
+    // In a narrow form the header's middle is the row tools: open the row from its chevron.
     if ((await expanded())[0] !== 'true') await rows().first().locator('[data-strapi-dropdown]').first().click()
     await page.waitForFunction(() => document.getElementById('blocks.0.title')?.value === 'Inline title')
     // Side by side: a rich "body" click focuses the native textarea on the left; typing updates the frame.

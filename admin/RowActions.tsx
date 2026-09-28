@@ -283,7 +283,14 @@ export function RowActions({ zones, actions, Modal }: any) {
   };
   return (
     <>
-      <style>{`li[${HIDDEN_ATTR}] button[aria-expanded] { opacity: 0.5; }`}</style>
+      {/* DS1 (Strapi 4) row headers: the toggle shrinks but its content does not, so in a narrow form (split mode) the
+          thumbnail and title ran under these tools. The toggle now clips, the row thumbnail gives way first and the title
+          keeps its own ellipsis. */}
+      <style>{`li[${HIDDEN_ATTR}] button[aria-expanded] { opacity: 0.5; }
+ol[aria-describedby] > li button[data-strapi-accordion-toggle] { overflow: hidden; }
+ol[aria-describedby] > li button[data-strapi-accordion-toggle] > [data-blockscene-row-thumb] { flex-shrink: 100; min-width: 0; overflow: hidden; }
+ol[aria-describedby] > li button[data-strapi-accordion-toggle] > span:last-child,
+ol[aria-describedby] > li button[data-strapi-accordion-toggle] > span:last-child span { min-width: 0; }`}</style>
       {anchors.map(({ select, zone, index }) => {
         const row = a.form.rows(zone)[index];
         const key = blockKey(row) || "";
