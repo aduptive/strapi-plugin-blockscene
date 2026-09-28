@@ -396,5 +396,7 @@
  "report.incoming": "Koppelingen vanuit andere documenten en blokken: {reconnect} teruggezet, {gone} waarvan de eigenaar niet meer bestaat, {replaced} waarvan de eigenaar nu ergens anders naar wijst, {published} vanuit gepubliceerde versies (die komen terug wanneer die documenten opnieuw worden gepubliceerd).",
  "groupCollapse": "Groep {label} inklappen",
  "groupExpand": "Groep {label} uitklappen",
- "groupBlocks": "{count, plural, one {# blok} other {# blokken}}"
+ "groupBlocks": "{count, plural, one {# blok} other {# blokken}}",
+ "variants": "Variant",
+ "variantsFromCode": "Invoegvarianten (uit de code)"
 }

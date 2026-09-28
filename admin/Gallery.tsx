@@ -18,7 +18,8 @@ import {
   writeMemory,
   initialState,
   blockPreviewSrc,
-  componentDefaults,
+  variantRow,
+  localized,
 } from "./model.mjs";
 import { PROTOCOL, isPreviewMessage, projectPage } from "./preview.mjs";
 import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from "./devices";
@@ -629,11 +630,11 @@ const flip = (panel: HTMLElement | null, scrim: HTMLElement | null, card: Elemen
 };
 const newChannel = () => (crypto as any).randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 // Live source: editor.blockPreviewUrl (plain page per block), else the page preview route with the bridge
-// (one block of schema defaults, read-only), else none (the image stays).
-function useLiveSource(entry: any, config: any, components: any, get: any, contentType?: string, locale?: string) {
+// (one block: the chosen variant over the schema defaults, read-only), else none (the image stays).
+function useLiveSource(entry: any, config: any, get: any, contentType?: string, locale?: string, variant?: string) {
   const editor = config?.editor || {};
   const [native, setNative] = React.useState<string | null>(null);
-  const plain = editor.blockPreviewUrl ? blockPreviewSrc(editor.blockPreviewUrl, entry.uid, { locale: locale || "" }) : null;
+  const plain = editor.blockPreviewUrl ? blockPreviewSrc(editor.blockPreviewUrl, entry.uid, { variant, locale: locale || "" }) : null;
   React.useEffect(() => {
     if (editor.blockPreviewUrl || editor.previewUrl || !contentType || !get) return;
     let active = true;
@@ -672,7 +673,25 @@ function Magnify({ entry, palette, config, components, get, contentType, locale,
   const [device, setDevice] = React.useState<Device>("fit");
   const [fields, setFields] = React.useState(false);
   const [state, setState] = React.useState<"loading" | "ready" | "failed">("loading");
-  const live = useLiveSource(entry, config, components, get, contentType, locale);
+  // Insert variant: the first by default; the live preview follows the choice ({variant}, or the bridge block).
+  const [variantId, setVariantId] = React.useState<string | undefined>(entry.variants[0]?.id);
+  const variant = entry.variants.find((item: any) => item.id === variantId);
+  const live = useLiveSource(entry, config, get, contentType, locale, variantId);
+  const send = () => {
+    let blocks: any[] = [];
+    try {
+      const row = { ...variantRow(components[entry.uid], components, variant?.values), __component: entry.uid, __temp_key__: "blockscene-magnify" };
+      blocks = projectPage([row], components, window.location.origin);
+    } catch {
+      /* recursive defaults: the page renders nothing */
+    }
+    frame.current?.contentWindow?.postMessage(
+      { protocol: PROTOCOL, channel: live!.channel, type: "update-page", blocks, groups: null, locale: t.locale, mode: "preview" },
+      live!.origin,
+    );
+  };
+  const sendRef = React.useRef(send);
+  sendRef.current = send;
   React.useLayoutEffect(() => {
     flip(panel.current, scrim.current, cardOf(entry.uid), false);
     closeButton.current?.querySelector("button")?.focus({ preventScroll: true });
@@ -712,17 +731,7 @@ function Magnify({ entry, palette, config, components, get, contentType, locale,
       if (live.kind !== "bridge" || !isPreviewMessage(event, live.origin, frame.current?.contentWindow, live.channel, "ready")) return;
       clearTimeout(timer);
       setState("ready");
-      let blocks: any[] = [];
-      try {
-        const row = { ...componentDefaults(components[entry.uid], components), __component: entry.uid, __temp_key__: "blockscene-magnify" };
-        blocks = projectPage([row], components, window.location.origin);
-      } catch {
-        /* recursive defaults: the page renders nothing */
-      }
-      frame.current?.contentWindow?.postMessage(
-        { protocol: PROTOCOL, channel: live.channel, type: "update-page", blocks, groups: null, locale: t.locale, mode: "preview" },
-        live.origin,
-      );
+      sendRef.current();
     };
     window.addEventListener("message", receive);
     return () => {
@@ -730,6 +739,10 @@ function Magnify({ entry, palette, config, components, get, contentType, locale,
       window.removeEventListener("message", receive);
     };
   }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The bridge page stays loaded across variants: a new choice is sent as a new block.
+  React.useEffect(() => {
+    if (live?.kind === "bridge" && state === "ready") send();
+  }, [variantId]); // eslint-disable-line react-hooks/exhaustive-deps
   const onLoad = () => {
     if (live?.kind === "plain") setState("ready");
     else frame.current?.contentWindow?.postMessage({ protocol: PROTOCOL, channel: live!.channel, type: "ping" }, live!.origin);
@@ -788,11 +801,24 @@ function Magnify({ entry, palette, config, components, get, contentType, locale,
                 </FieldsButton>
               )}
               <Tool icon="star" label={starred ? t.unstar : t.star} active={starred} onClick={onStar} data-testid="gallery-detail-star" />
-              <Button onClick={onInsert} data-testid="gallery-insert">
+              <Button onClick={() => onInsert(variant?.values)} data-testid="gallery-insert">
                 {t.insert}
               </Button>
             </Flex>
           </Flex>
+          {entry.variants.length > 1 && (
+            <Flex gap={2} alignItems="center" wrap="wrap" role="group" aria-label={t.variants} data-testid="gallery-variants">
+              <Typography variant="pi" textColor="neutral600">
+                {t.variants}
+              </Typography>
+              {entry.variants.map((item: any) => (
+                <MenuButton key={item.id} type="button" $active={item.id === variantId} aria-pressed={item.id === variantId}
+                  onClick={() => setVariantId(item.id)} data-testid={`gallery-variant-${item.id}`}>
+                  {localized(item.label, t.locale) || item.id}
+                </MenuButton>
+              ))}
+            </Flex>
+          )}
           {entry.description && (
             <Clamp variant="pi" textColor="neutral700">
               {entry.description}
@@ -932,9 +958,10 @@ function ZoneGallery({
     setPicked(NO_FILTERS);
   };
   const labelOf = (menu: string, value: string) => (menu === "tags" ? value : t.facets[value] || value);
-  const select = (uid: string) => {
+  // values: the chosen insert variant's (a quick insert takes the first one), undefined without variants.
+  const select = (uid: string, values?: any) => {
     try {
-      if (controlled ? (controlled.onSelect(uid), true) : add(zone, uid)) {
+      if (controlled ? (controlled.onSelect(uid, values), true) : add(zone, uid, values)) {
         savePrefs({ ...prefs, recent: [uid, ...prefs.recent.filter((item) => item !== uid)].slice(0, 20) });
         setOpen(false);
         setQuery("");
@@ -1130,7 +1157,7 @@ function ZoneGallery({
                             starred={prefs.starred.includes(entry.uid)}
                             active={detail === entry.uid}
                             onOpen={() => setDetail(entry.uid)}
-                            onInsert={() => select(entry.uid)}
+                            onInsert={() => select(entry.uid, entry.variants[0]?.values)}
                             onStar={() => star(entry.uid)}
                           />
                         </div>
@@ -1153,7 +1180,7 @@ function ZoneGallery({
                 cardOf={cardOf}
                 starred={prefs.starred.includes(chosen.uid)}
                 onStar={() => star(chosen.uid)}
-                onInsert={() => select(chosen.uid)}
+                onInsert={(values: any) => select(chosen.uid, values)}
                 onClose={() => setDetail(null)}
               />
             )}

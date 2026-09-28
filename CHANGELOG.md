@@ -13,6 +13,18 @@
   options on Strapi 4 too; only the lazy editor options stay Strapi 5 only. The
   page preview core is shared: each distribution passes a small host adapter
   (`admin/host5.tsx`, `usePreviewHost4` in `admin/strapi4.tsx`).
+- Insert variants (both versions): a block can offer named presets of its
+  field values, from the plugin config `components[uid].variants` (`{ id,
+  label, values }`, code only, listed read-only in Settings). The magnified
+  block shows the choice, its live preview follows it (`{variant}` in the
+  block preview URL, or the variant's block through the bridge) and Insert
+  inserts it through the usual form path (undo/redo included); quick insert
+  takes the first variant; the page preview's insertion seams offer the same
+  choice. Values are checked against the schema at boot: scalars,
+  enumerations, JSON, blocks and nested components (single or repeatable);
+  media and relation values, `id` and `__component` are dropped, so a
+  frontend fixture works as is; unknown attributes reject the variant. At
+  most 12 variants per block, 16 KB each, 256 KB in all (ADU-383).
 
 ## 2.0.0-alpha.7 (Strapi 5) and 1.0.0-alpha.7 (Strapi 4) — 2026-09-28
 

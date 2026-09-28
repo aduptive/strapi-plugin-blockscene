@@ -396,5 +396,7 @@
  "report.incoming": "Liens depuis d'autres documents et blocs : {reconnect} remis en place, {gone} dont le propriétaire n'existe plus, {replaced} dont le propriétaire pointe désormais ailleurs, {published} depuis des versions publiées (ils reviennent quand ces documents sont republiés).",
  "groupCollapse": "Replier le groupe {label}",
  "groupExpand": "Déplier le groupe {label}",
- "groupBlocks": "{count, plural, one {# bloc} other {# blocs}}"
+ "groupBlocks": "{count, plural, one {# bloc} other {# blocs}}",
+ "variants": "Variante",
+ "variantsFromCode": "Variantes d'insertion (depuis le code)"
 }

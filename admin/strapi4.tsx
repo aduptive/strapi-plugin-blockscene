@@ -29,7 +29,7 @@ import { PagePreview, ZoneBarTools, useEditorState, type PreviewHost } from "./P
 import { registerPanel } from "./pane.mjs";
 import { useMessages } from "./messages";
 import { Settings, permissions, register } from "./Settings";
-import { editableZones, canInsert, labelEditLayout4, dropField4 } from "./model.mjs";
+import { editableZones, canInsert, variantRow, labelEditLayout4, dropField4 } from "./model.mjs";
 import { cloneRow, errorRows, integerKeys } from "./rows.mjs";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
@@ -66,6 +66,12 @@ const Menu = ({ label, testid, items }: any) => (
     </SimpleMenu>
   </div>
 );
+// An insert variant on Strapi 4: addComponentToDynamicZone builds the row from its own defaults, then each variant field
+// is set on it through the reducer (ON_CHANGE; nested lists get integer keys).
+function overlayVariant(c: any, components: any, zone: string, at: number, uid: string, values: any) {
+  const row = variantRow(components[uid], components, values, (n: number) => [...Array(n).keys()]);
+  for (const name of Object.keys(values)) if (name in row) c.onChange({ target: { name: `${zone}.${at}.${name}`, value: row[name] } });
+}
 // Row actions write whole zone arrays through the edit view reducer (ON_CHANGE); new rows get integer keys. Relations
 // are copied as the form holds them (the loaded pages of each relation list).
 function useRowForm(c: any, components: any) {
@@ -104,19 +110,21 @@ function Picker() {
     !c.addComponentToDynamicZone,
   ).map((zone) => ({ ...zone, label: zoneLabel(schema, zone.name) }));
 
-  const add = (zone: any, uid: string) => {
+  const add = (zone: any, uid: string, values?: any) => {
     const close = catalog?.groups?.[uid];
     if (
       !canInsert(zone, uid, c.modifiedData, components, close ? 2 : 1) ||
       (close && !zone.components.includes(close))
     )
       return false;
+    const at = Array.isArray(c.modifiedData?.[zone.name]) ? c.modifiedData[zone.name].length : 0;
     c.addComponentToDynamicZone(
       zone.name,
       components[uid],
       components,
       Boolean(c.formErrors?.[zone.name]),
     );
+    if (values) overlayVariant(c, components, zone.name, at, uid, values);
     // A configured OPEN always brings its CLOSE in the same unsaved change: an empty group, never a lone marker.
     if (close)
       c.addComponentToDynamicZone(
@@ -211,9 +219,12 @@ function usePreviewHost4(c: any, schema: any, components: any, get: any, put: an
     fieldLabel: (name: string) => zoneLabel(schema, name),
     onChange: (name: string, value: any) => c.onChange({ target: { name, value } }),
     // Native insertion at a position (4.11+): the edit view's own default data structure, relations emptied.
-    insertRows: (zone: string, at: number, items: any[]) =>
+    // An insert variant's values are overlaid on the first row as in the gallery insert (Picker `add`).
+    insertRows: (zone: string, at: number, items: any[], values?: any) => {
       items.forEach((item, i) =>
-        c.addComponentToDynamicZone(zone, components[item.__component], components, Boolean(c.formErrors?.[zone]), at + i)),
+        c.addComponentToDynamicZone(zone, components[item.__component], components, Boolean(c.formErrors?.[zone]), at + i));
+      if (values && items[0]) overlayVariant(c, components, zone, at, items[0].__component, values);
+    },
     get,
     put,
     notify: (type: string, message: string) => toggleNotification({ type, message }),

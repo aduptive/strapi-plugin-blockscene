@@ -25,9 +25,13 @@ const shot = name => page.screenshot({ path: `artifacts/strapi${major}-${name}.p
 const step = async (name, fn) => { await fn(); checks.push(name); console.log(`  ok ${name}`) }
 // API helpers reuse the lab login in memory; nothing is written to disk.
 let token = ''
-const api = async (method, path, body, auth = true) => {
+// A synchronous capture (execFileSync) can outlast the server's keep-alive: the next request then lands on a closed
+// pooled socket (EPIPE / ECONNRESET, nothing reached the server) and is sent once more on a fresh one.
+const api = async (method, path, body, auth = true, retry = true) => {
   const res = await fetch(`${baseURL}${path}`, { method, headers: { ...(auth && token ? { Authorization: `Bearer ${token}` } : {}), ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}) },
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined })
+    .catch(error => { if (retry && ['EPIPE', 'ECONNRESET'].includes(error.cause?.code)) return null; throw error })
+  if (!res) return api(method, path, body, auth, false)
   return { status: res.status, data: await res.json().catch(() => null) }
 }
 const putSettings = async patch => { const { status, data } = await api('PUT', '/blockscene/settings', patch); assert.equal(status, 200, JSON.stringify(data)); return data }
@@ -1104,6 +1108,65 @@ try {
     await putSettings({})
     await page.goto(docUrl); await toggle().waitFor()
     assert.equal(await page.getByTestId('zone-mode-menu').count(), 0, 'no preview route: no mode menu (the Settings page explains it)')
+  })
+  // Insert variants run only when the lab config gives blocks.hero some (plugin config components['blocks.hero'].variants:
+  // 'default' {} and 'dark' { title: 'Variant title', visible: true, three items }, see README "Insert variants").
+  const heroVariants = (await api('GET', '/blockscene/catalog')).data?.components?.['blocks.hero']?.variants || []
+  if (heroVariants.length > 1) await step('insert variants: the magnified block offers them, the preview follows the choice, Insert and the page preview seams insert it', async () => {
+    assert.deepEqual(heroVariants.map(variant => variant.id).slice(0, 2), ['default', 'dark'])
+    assert.ok(heroVariants.every(variant => variant.values.image === undefined && variant.values.id === undefined), 'media values and ids are dropped')
+    if (major === 5) await putSettings({ editor: { blockPreviewUrl: `${baseURL}/block-preview/index.html?variant={variant}` } })
+    await page.evaluate(() => localStorage.setItem('strapi-admin-language', 'en'))
+    await page.goto('/admin/content-manager/collection-types/api::page.page/create')
+    await page.getByRole('textbox', { name: /^title/i }).first().fill(`Variant smoke ${Date.now()}`)
+    await openGallery()
+    await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
+    const detail = page.getByTestId('gallery-detail'); await detail.waitFor()
+    await detail.getByTestId('gallery-variants').waitFor()
+    assert.equal(await detail.getByTestId('gallery-variant-default').getAttribute('aria-pressed'), 'true', 'the first variant is chosen')
+    await detail.getByTestId('gallery-variant-dark').click()
+    assert.equal(await detail.getByTestId('gallery-variant-dark').getAttribute('aria-pressed'), 'true')
+    if (major === 5) {
+      await page.waitForFunction(() => document.querySelector('[data-testid="gallery-magnify-frame"]')?.getAttribute('src')?.endsWith('variant=dark'))
+      await page.locator('[data-testid="gallery-detail"][data-live="ready"]').waitFor()
+    }
+    await page.getByRole('dialog').screenshot({ path: `artifacts/strapi${major}-gallery-variants.png`, animations: 'disabled' })
+    await detail.getByTestId('gallery-insert').click()
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    // Quick insert takes the first variant (plain defaults here).
+    await openGallery()
+    await page.getByTestId('blockscene-blocks.hero').hover(); await page.getByTestId('gallery-quick-blocks.hero').click()
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    const response = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && res.request().method() === 'POST')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    const saved = await response
+    assert.ok(saved.ok(), `Save returned ${saved.status()}: ${(await saved.text()).slice(0, 500)}`)
+    const payload = await saved.json(), document = payload.data || payload
+    const [dark, plain] = document.blocks
+    assert.equal(dark.title, 'Variant title'); assert.equal(dark.visible, true)
+    assert.deepEqual(dark.items.map(item => item.label), ['One', 'Two', 'Three'], 'a list replaces the default list')
+    assert.equal(plain.title, 'Hello from Strapi'); assert.equal(plain.items.length, 2)
+    // Page preview seam (both majors): the same picker offers the variants and the seam inserts the chosen one there.
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'split' } })
+    await page.reload()
+    const seamFrame = page.getByTestId('page-preview-pane').frameLocator('iframe')
+    const gap = seamFrame.locator('[data-testid^="bp-gap-"]').nth(1); await gap.waitFor()
+    await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
+    const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
+    await picker.getByTestId('blockscene-blocks.hero').locator('button').first().click()
+    await picker.getByTestId('gallery-variant-dark').click()
+    await picker.getByTestId('gallery-insert').click(); await picker.waitFor({ state: 'hidden' })
+    await page.waitForFunction(() => document.querySelector('ol[aria-describedby]')?.querySelectorAll(':scope > li').length === 3)
+    const updated = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && res.request().method() === 'PUT')
+    await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+    const seamSaved = await updated
+    assert.ok(seamSaved.ok(), `Save returned ${seamSaved.status()}`)
+    const seamDoc = (await seamSaved.json()), seamBlocks = (seamDoc.data || seamDoc).blocks
+    assert.deepEqual(seamBlocks.map(block => block.title), ['Variant title', 'Variant title', 'Hello from Strapi'], 'the seam inserted the chosen variant after the first block')
+    assert.deepEqual(seamBlocks[1].items.map(item => item.label), ['One', 'Two', 'Three']); assert.equal(seamBlocks[1].visible, true)
+    await putSettings({})
+    await page.goto('/admin/settings/blockscene')
+    assert.match(await page.getByTestId('variants-blocks.hero').innerText(), /Default, Dark$/, 'Settings lists the code variants read-only')
   })
   await page.goto('/admin/settings/image-pipeline')
   await page.getByTestId('save-image-settings').waitFor()

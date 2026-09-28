@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import styled, { useTheme } from "styled-components";
 import { Box, Button, Flex, MenuItem, SimpleMenu, Typography } from "@strapi/design-system";
 import { PickerModal } from "./Gallery";
-import { componentDefaults, editableZones } from "./model.mjs";
+import { componentDefaults, editableZones, variantRow } from "./model.mjs";
 import { findZoneList, toggles } from "./accordions.mjs";
 import {
   PROTOCOL,
@@ -50,7 +50,8 @@ export type PreviewHost = {
   editable: (name: string) => boolean; // create/update permission on the field and not disabled by the layout
   fieldLabel: (name: string) => string;
   onChange: (name: string, value: any) => void;
-  insertRows: (zone: string, at: number, rows: any[]) => void;
+  // values: an insert variant already merged into rows[0]; a host that builds its own row (Strapi 4) overlays them.
+  insertRows: (zone: string, at: number, rows: any[], values?: any) => void;
   get: any;
   put: any;
   notify: (type: string, message: string) => void;
@@ -1207,7 +1208,7 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
           onOpenChange={(open: boolean) => {
             if (!open) setInserting(null);
           }}
-          onSelect={(uid: string) => {
+          onSelect={(uid: string, values?: any) => {
             // Resolved now, not when the gap was clicked: reorders in between are respected.
             const index = insertIndex(latest.current, inserting.after);
             setInserting(null);
@@ -1224,14 +1225,11 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
               return;
             }
             // A configured OPEN chosen from the seam picker brings its CLOSE too (same rule as the gallery and "+ Group").
-            insertRows(
-              index,
-              {
-                ...componentDefaults(host.components[uid], host.components),
-                __component: uid,
-              },
+            // values: the chosen insert variant, merged into the row and handed to hosts that build their own row.
+            if (zone) host.insertRows(zone, index, [
+              { ...variantRow(host.components[uid], host.components, values), __component: uid },
               ...(close ? [{ __component: close }] : []),
-            );
+            ], values);
           }}
         />
       )}
