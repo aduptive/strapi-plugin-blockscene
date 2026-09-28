@@ -11,16 +11,22 @@ Package: `@aduptive/strapi-blockscene` (one name, two distributions).
    `packages/strapi5/package.json`; add a `CHANGELOG.md` entry.
 4. `npm pack --dry-run` in each package and read the file list (only `dist`,
    the two entry files, README and LICENSE).
-5. Publish with explicit dist-tags, never a bare `npm publish`:
+5. Commit the bump through a PR and merge it. Then tag the merge commit and
+   push the tag; `.github/workflows/release.yml` publishes from GitHub Actions
+   with npm trusted publishing (no token, provenance attached), after checking
+   the tag matches the package version, the CHANGELOG has the version and
+   `npm run check` passes:
 
    ```sh
-   cd packages/strapi4 && npm publish --access public --tag strapi4
-   cd packages/strapi5 && npm publish --access public --tag next
+   git tag v2.0.0-alpha.7 && git push origin v2.0.0-alpha.7   # Strapi 5, dist-tag latest
+   git tag v1.0.0-alpha.7 && git push origin v1.0.0-alpha.7   # Strapi 4, dist-tag strapi4
    ```
 
-   `latest` is set to the Strapi 5 distribution once a stable 2.x exists;
-   while only alphas are published, `latest` points at the newest 2.x alpha so
-   `npm install @aduptive/strapi-blockscene` installs the Strapi 5 build.
-6. Tag the commit (`v1.0.0-alpha.1`, `v2.0.0-alpha.1`) and push.
+   Never publish from a laptop. One-time setup (done once for the
+   package): npmjs.com, `@aduptive/strapi-blockscene`, Settings, Trusted
+   publisher, GitHub Actions, repository `aduptive/strapi-plugin-blockscene`,
+   workflow `release.yml`.
+6. Check the run in the repository's Actions tab and `npm view
+   @aduptive/strapi-blockscene dist-tags`.
 7. Marketplace / Community Hub submission is a separate, later step:
    https://docs.strapi.io/cms/plugins/installing-plugins-via-marketplace

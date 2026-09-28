@@ -1,0 +1,44 @@
+# Publishing happens HERE, never from a laptop: push a version tag and the release only reaches npm if every gate is
+# green. v2.* publishes the Strapi 5 package (dist-tag latest), v1.* the Strapi 4 package (dist-tag strapi4).
+# Auth is npm trusted publishing (OIDC): no token. One-time setup on npmjs.com, package @aduptive/strapi-blockscene,
+# Settings, Trusted publisher: GitHub Actions, repository aduptive/strapi-plugin-blockscene, workflow release.yml.
+# Until that exists, the publish step fails safely and nothing ships.
+name: release
+on:
+  push:
+    tags: ['v1.*', 'v2.*']
+
+permissions:
+  contents: read
+  id-token: write   # trusted publishing and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        # Node 24 ships npm 11, which trusted publishing needs.
+        with: { node-version: 24, cache: npm, registry-url: 'https://registry.npmjs.org' }
+      - name: which distribution
+        id: dist
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$VERSION" in
+            2.*) echo "dir=packages/strapi5" >> "$GITHUB_OUTPUT"; echo "tag=latest" >> "$GITHUB_OUTPUT" ;;
+            1.*) echo "dir=packages/strapi4" >> "$GITHUB_OUTPUT"; echo "tag=strapi4" >> "$GITHUB_OUTPUT" ;;
+            *) echo "unexpected tag $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: tag matches the package version
+        run: |
+          PKG=$(node -p "require('./${{ steps.dist.outputs.dir }}/package.json').version")
+          [ "$PKG" = "${{ steps.dist.outputs.version }}" ] || { echo "tag $GITHUB_REF_NAME != ${{ steps.dist.outputs.dir }} $PKG"; exit 1; }
+      - name: CHANGELOG has a heading for this version
+        run: grep -q "^## .*${{ steps.dist.outputs.version }}" CHANGELOG.md
+      - run: npm ci
+      # Unit tests, build, both tarballs, file allowlist. The browser smoke needs the local labs and runs before tagging.
+      - run: npm run check
+      - name: publish to npm (trusted publishing, with provenance)
+        working-directory: ${{ steps.dist.outputs.dir }}
+        run: npm publish --provenance --access public --tag ${{ steps.dist.outputs.tag }}
