@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.7 (Strapi 5) and 1.0.0-alpha.7 (Strapi 4) — 2026-09-28
 
 - Fix: an empty `previewUrl` or `blockPreviewUrl` saved from the Settings page
   (for example before the project added a code default) no longer hides the
