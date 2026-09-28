@@ -1182,6 +1182,16 @@ try {
     await page.getByTestId('group-view-blocks-1').click()
     await grid.waitFor({ state: 'detached' }); await until(outline, '0b 0o 1b 1b 1b 1c 0b 0b', 'list view')
     await page.getByTestId('group-view-blocks-1').click(); await grid.waitFor()
+    // "+" goes through the variant-aware insert path: the chosen variant's values land in the new child.
+    if (((await api('GET', '/blockscene/catalog')).data?.components?.['blocks.hero']?.variants || []).length > 1) {
+      await page.getByTestId('grid-add-blocks-1').click()
+      await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
+      await page.getByTestId('gallery-detail').getByTestId('gallery-variant-dark').click()
+      await page.getByTestId('gallery-detail').getByTestId('gallery-insert').click()
+      await page.getByRole('dialog').waitFor({ state: 'hidden' })
+      await until(outline, '0b 0o 1b- 1b- 1b- 1b- 1c 0b 0b', 'the variant block is the group\'s last child')
+      await until(async () => (await cells()).at(-1), 'Hero example: Variant title')
+    }
     await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
     await putSettings({})
   })
