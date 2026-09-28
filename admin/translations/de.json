@@ -72,7 +72,6 @@
  "previewHelp": "Ungespeicherte Änderungen erscheinen in der Vorschau. Klicken Sie auf einen Block, um sein Formular zu öffnen, auf ein Bild für die Medienbibliothek, auf einen Text, um ihn zu bearbeiten.",
  "previewNoUrl": "Keine Vorschau-URL: in Einstellungen, Blockscene festlegen oder die native Strapi-Vorschau für diesen Inhaltstyp konfigurieren.",
  "previewFailed": "Die Vorschau hat innerhalb von 15 s nicht geantwortet. Lädt das Frontend noch, erscheint sie von selbst; das Formular bleibt benutzbar.",
- "previewReady": "Seitenvorschau · ungespeicherte Änderungen",
  "previewLoading": "Vorschau wird geladen…",
  "retry": "Erneut versuchen",
  "editText": "Text bearbeiten",

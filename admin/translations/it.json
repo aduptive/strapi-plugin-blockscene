@@ -72,7 +72,6 @@
  "previewHelp": "Le modifiche non salvate compaiono nell'anteprima. Clicca un blocco per aprire il suo modulo, un'immagine per aprire la Libreria media, un testo per modificarlo.",
  "previewNoUrl": "Nessun URL di anteprima: impostalo in Impostazioni, Blockscene, oppure configura l'Anteprima nativa di Strapi per questo tipo di contenuto.",
  "previewFailed": "L'anteprima non ha risposto entro 15 s. Se il frontend sta ancora caricando, comparirà da sola; il modulo resta utilizzabile.",
- "previewReady": "Anteprima della pagina · modifiche non salvate",
  "previewLoading": "Caricamento dell'anteprima…",
  "retry": "Riprova",
  "editText": "Modifica testo",

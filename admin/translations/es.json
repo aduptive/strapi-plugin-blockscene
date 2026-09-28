@@ -72,7 +72,6 @@
  "previewHelp": "Los cambios sin guardar aparecen en la vista previa. Haga clic en un bloque para abrir su formulario, en una imagen para abrir la Biblioteca multimedia, en un texto para editarlo.",
  "previewNoUrl": "Sin URL de vista previa: defínala en Ajustes, Blockscene, o configure la Vista previa nativa de Strapi para este tipo de contenido.",
  "previewFailed": "La vista previa no respondió en 15 s. Si el frontend aún está cargando, aparecerá sola; el formulario sigue utilizable.",
- "previewReady": "Vista previa de la página · cambios sin guardar",
  "previewLoading": "Cargando vista previa…",
  "retry": "Reintentar",
  "editText": "Editar texto",
