@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Box, Button, Flex, Searchbar, Typography } from '@strapi/design-system'
 import styled from 'styled-components'
-import { candidatesFor } from './model.mjs'
+import { candidatesFor, localized } from './model.mjs'
 import { Thumb } from './Gallery'
 import { Wireframe, TEMPLATES, DEFAULT_PALETTE } from './wireframes'
 import { useMessages } from './messages'
@@ -431,6 +431,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
                 onChange={(v: string) => setComponent(component.uid, 'typology', v === 'auto' ? undefined : v)} />
               <TagsField name={`tags-${component.uid}`} label={t.tags} hint={t.tagsHelp} value={entry.tags || []} disabled={!canUpdate || saving}
                 onChange={(tags: string[]) => setComponent(component.uid, 'tags', tags.length ? tags : undefined)} />
+              {meta.variants?.length > 0 && <Typography variant="pi" textColor="neutral600" data-testid={`variants-${component.uid}`}>
+                {t.variantsFromCode}: {meta.variants.map((item: any) => localized(item.label, t.locale) || item.id).join(', ')}</Typography>}
             </Flex>
           </Card>
         })}</Grid>

@@ -321,6 +321,68 @@ function validateFields(input, schemas = {}, stale = []) {
   return out
 }
 
+// Plugin config `components[uid].variants` (code only): [{ id, label, values }], named presets the gallery inserts.
+// `values` is a partial field map merged over the schema defaults at insert: scalar attributes (by type, enumerations
+// against their values), JSON, blocks and nested components (single or repeatable, each item validated against its
+// schema). A content-API shaped block (a fixture) is accepted: `id` and `__component` keys are dropped, and so are media
+// and relation values (ids of another install cannot be checked here; noted at boot). Unknown attributes, passwords and
+// Dynamic Zones reject the variant. Bounds: 12 variants per component, 16 KB per variant, 256 KB in all, 100 items per list.
+const VARIANT = { id: /^[a-z0-9][a-z0-9_-]{0,39}$/, perComponent: 12, bytes: 16 * 1024, total: 256 * 1024, items: 100 }
+const text = value => typeof value === 'string'
+const finite = value => typeof value === 'number' && Number.isFinite(value)
+const SCALARS = { string: text, text, richtext: text, email: text, uid: text, date: text, datetime: text, time: text, timestamp: text,
+  integer: Number.isInteger, biginteger: value => Number.isInteger(value) || (text(value) && /^-?\d{1,19}$/.test(value)), float: finite, decimal: finite,
+  boolean: value => typeof value === 'boolean', json: () => true, customField: () => true, blocks: Array.isArray,
+  enumeration: (value, attr) => (attr.enum || []).includes(value) }
+function variantValues(values, schema, schemas, path, skipped) {
+  if (!plain(values)) throw new Error(`${path} must be an object`)
+  const out = {}
+  for (const [name, value] of Object.entries(values)) {
+    if (name === 'id' || name === '__component') continue
+    const attr = schema.attributes?.[name], at = `${path}.${name}`
+    if (!attr) throw new Error(`${at} is not an attribute of the component`)
+    if (attr.type === 'media' || attr.type === 'relation') { skipped.push(at); continue }
+    if (attr.type === 'component') {
+      const nested = schemas[attr.component], max = Math.min(attr.max ?? Infinity, VARIANT.items)
+      if (!nested) throw new Error(`${at}: unknown component "${attr.component}"`)
+      if (!attr.repeatable) out[name] = value === null ? null : variantValues(value, nested, schemas, at, skipped)
+      else if (!Array.isArray(value) || value.length > max) throw new Error(`${at} must be a list of at most ${max} items`)
+      else out[name] = value.map((item, index) => variantValues(item, nested, schemas, `${at}[${index}]`, skipped))
+    } else if (value === null || SCALARS[attr.type]?.(value, attr)) out[name] = structuredClone(value)
+    else throw new Error(`${at}: ${SCALARS[attr.type] ? `not a valid ${attr.type}` : `${attr.type} values are not supported`}`)
+  }
+  return out
+}
+// An invalid variant is left out with a note (its component keeps the valid ones); `notes` collects the boot warnings.
+function validateVariants(config, schemas = {}, notes = []) {
+  const out = {}
+  let total = 0
+  for (const [uid, entry] of Object.entries(plain(config) ? config : {})) {
+    if (!plain(entry) || entry.variants === undefined) continue
+    if (!schemas[uid]) { notes.push(`${uid}: unknown component`); continue }
+    if (!Array.isArray(entry.variants) || entry.variants.length > VARIANT.perComponent) { notes.push(`${uid}: variants must be a list of at most ${VARIANT.perComponent}`); continue }
+    const ids = new Set()
+    entry.variants.forEach((variant, index) => {
+      const name = `${uid} variant "${variant?.id ?? index}"`
+      try {
+        if (!plain(variant) || Object.keys(variant).some(key => !['id', 'label', 'values'].includes(key))) throw new Error('expected { id, label, values }')
+        if (!text(variant.id) || !VARIANT.id.test(variant.id) || ids.has(variant.id)) throw new Error('id must be 1 to 40 lowercase letters, digits, "-" or "_", unique per component')
+        if (!fieldText(variant.label, 60)) throw new Error('label must be a string of 1 to 60 characters, or { "<locale>": string }')
+        const skipped = []
+        const values = variantValues(variant.values ?? {}, schemas[uid], schemas, 'values', skipped)
+        const size = JSON.stringify(values).length
+        if (size > VARIANT.bytes) throw new Error(`values over ${VARIANT.bytes / 1024} KB`)
+        if (total + size > VARIANT.total) throw new Error(`all variants together over ${VARIANT.total / 1024} KB`)
+        if (skipped.length) notes.push(`${name}: media and relation values are not inserted (${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ', ...' : ''})`)
+        ids.add(variant.id)
+        total += size
+        ;(out[uid] ||= []).push({ id: variant.id, label: structuredClone(variant.label), values })
+      } catch (error) { notes.push(`${name} ignored: ${error.message}`) }
+    })
+  }
+  return out
+}
+
 // Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.
 const PREFS = { starred: 200, recent: 20 }
 function validatePrefs(input, componentUids) {
@@ -336,4 +398,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, mergeSaved, layer, overrides, safeUrl, fail }

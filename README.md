@@ -104,8 +104,9 @@ The modal is a block browser (80vw wide):
   under `prefers-reduced-motion: reduce`. The panel shows a large live preview
   with Fit / Mobile / Tablet / Desktop widths (scaled to fit, as in the page
   preview) and a compact strip: label, uid, description, badges, fields (on
-  demand), star and Insert. Double click, "+" or Enter on a focused card
-  inserts without it.
+  demand), the variant choice (see [Insert variants](#insert-variants)), star
+  and Insert. Double click, "+" or Enter on a focused card inserts without it
+  (the first variant, when the block has variants).
 
 The magnified preview shows the card's thumbnail at once and fades the live
 page in over it once it has loaded. Live source, first match wins:
@@ -113,14 +114,16 @@ page in over it once it has loaded. Live source, first match wins:
 1. **Block preview URL** (`editor.blockPreviewUrl`, Settings, both versions):
    a plain page per block in a plain iframe, no bridge. Placeholders, URL
    encoded: `{uid}`, `{name}` (after the dot), `{category}` (before the dot),
-   `{variant}` (`default`) and `{locale}` (the entry's locale, empty when the
-   type is not localized). Example:
+   `{variant}` (the chosen [insert variant](#insert-variants)'s id, else
+   `default`) and `{locale}` (the entry's locale, empty when the type is not
+   localized). Example:
    `http://localhost:3026/{locale}/block-preview/{name}/{variant}`. Such a
    fixtures route is usually dev-only: leave the option empty on production.
 2. **Page preview route** (the preview route base URL, else on Strapi 5 the
    native Preview origin + `/block-preview/page`): the same bridge as the
-   whole-page preview, sent one block made from the schema defaults, mode
-   `preview`. Read-only: every message except `ready` is ignored.
+   whole-page preview, sent one block made from the chosen variant over the
+   schema defaults, mode `preview`. Read-only: every message except `ready`
+   is ignored.
 3. Otherwise the image only.
 
 If the live page neither loads nor says `ready` within 8 s, the image stays
@@ -156,6 +159,59 @@ enhancements off, keep the native picker. The button is recognised by its
 label ending with the raw zone name, which Strapi's message carries in every
 locale; a zone whose name ends another zone's name (`blocks` and `sub blocks`)
 is the documented limit.
+
+### Insert variants
+
+A block can offer named presets of its field values, so the editor inserts
+"Hero, dark" instead of the bare schema defaults. Variants come from the
+project's code, never from the Settings page: the plugin config
+`components[uid].variants`, a list of `{ id, label, values }`.
+
+```js
+// config/plugins.js
+components: {
+  'blocks.hero': {
+    variants: [
+      { id: 'default', label: 'Default', values: {} },
+      { id: 'dark', label: { en: 'Dark', 'pt-BR': 'Escuro' }, values: {
+        title: 'Big launch', theme: 'dark',
+        link: { text: 'Read more', url: '/news' },
+        items: [{ label: 'One' }, { label: 'Two' }],
+      } },
+      // A frontend fixture works as is: ids, __component, media and relations are dropped.
+      { id: 'cases', label: 'Cases', values: require('../fixtures/hero/cases.json').data },
+    ],
+  },
+},
+```
+
+- **Choosing**: with two or more variants the magnified block shows them as a
+  row of buttons; the live preview follows the choice (`{variant}` in the
+  block preview URL, or the variant's block sent through the bridge) and
+  Insert inserts it. Double click, "+" and Enter insert the first variant.
+  The picker opened from a page preview insertion seam offers the same
+  choice. A block without variants behaves as before; Settings, Blockscene
+  lists each block's variants read-only.
+- **Merge**: `values` is a partial field map over the schema defaults. A
+  nested component merges over its own defaults; a repeatable list replaces
+  the default list, each item over the item's defaults. The row goes through
+  the same form path as any gallery insert (Strapi 5 `addFieldRow`, Strapi 4
+  `addComponentToDynamicZone` then the fields' `onChange`), so nothing is
+  saved until Save and undo/redo covers it.
+- **Supported values**, checked against the schema once at boot: text-like
+  fields (strings, rich text, email, uid, dates as strings), numbers
+  (integers, big integers, floats, decimals), booleans, enumerations (one of
+  their values), JSON, blocks (an array) and `null`; nested components,
+  single or repeatable (up to the attribute's `max`, and 100), each validated
+  against its own schema. Media and relation values are dropped with a boot
+  warning: their ids belong to one install and are not checked here. `id` and
+  `__component` keys are ignored, so a content-API shaped block works.
+  Unknown attributes, passwords and Dynamic Zones reject the variant.
+- **Bounds**: `id` is 1 to 40 of `a-z 0-9 - _`, unique per block (it is the
+  `{variant}` URL segment); `label` a string of 1 to 60 characters or
+  `{ "<locale>": string }`; at most 12 variants per block, 16 KB of values
+  per variant and 256 KB for all of them. An invalid variant is left out with
+  a warning naming the problem; the block keeps its valid ones.
 
 ## Row thumbnails
 

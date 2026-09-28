@@ -396,5 +396,7 @@
  "report.incoming": "Links from other documents and blocks: {reconnect} put back, {gone} whose owner is gone, {replaced} whose owner points elsewhere now, {published} from published versions (they come back when those documents are published again).",
  "groupCollapse": "Collapse group {label}",
  "groupExpand": "Expand group {label}",
- "groupBlocks": "{count, plural, one {# block} other {# blocks}}"
+ "groupBlocks": "{count, plural, one {# block} other {# blocks}}",
+ "variants": "Variant",
+ "variantsFromCode": "Insert variants (from code)"
 }

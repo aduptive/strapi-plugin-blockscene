@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
 const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
@@ -155,6 +155,7 @@ module.exports = {
     ])
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
     strapi.plugin(PLUGIN).service('settings').fields()
+    strapi.plugin(PLUGIN).service('settings').variants()
     registerPublishGuard(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
     if (STRAPI5) { registerHistory(strapi); registerPurge(strapi) }
@@ -184,9 +185,18 @@ module.exports = {
       if (stale.length) strapi.log?.warn(`[${PLUGIN}] "fields" entries for fields the schema no longer has were skipped: ${stale.slice(0, 20).join(', ')}${stale.length > 20 ? ` and ${stale.length - 20} more` : ''}.`)
       return fields
     }
+    // Insert variants (plugin config `components[uid].variants`): validated once against the schemas; what is left out is warned about.
+    let variants
+    const insertVariants = () => {
+      if (variants !== undefined) return variants
+      const notes = []
+      variants = validateVariants(strapi.plugin(PLUGIN).config('components'), strapi.components || {}, notes)
+      for (const note of notes) strapi.log?.warn(`[${PLUGIN}] components variants: ${note}.`)
+      return variants
+    }
     const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi))
     return {
-      projectDefaults, get, fields: fieldTexts,
+      projectDefaults, get, fields: fieldTexts, variants: insertVariants,
       async set(value) {
         const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi))
         for (const [uid, entry] of Object.entries(next.components)) {
@@ -212,6 +222,7 @@ module.exports = {
           groups: plugin.config('groups'), componentUids: componentUids(strapi), schemas: strapi.components })
         const settings = await plugin.service('settings').get()
         const media = await resolveMedia(strapi, settings)
+        for (const [uid, list] of Object.entries(plugin.service('settings').variants())) base.components[uid] = { ...base.components[uid], variants: list }
         for (const [uid, entry] of Object.entries(settings.components)) {
           base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template,
             ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }) }

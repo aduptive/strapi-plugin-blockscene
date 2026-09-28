@@ -396,5 +396,7 @@
  "report.incoming": "Vínculos de outros documentos e blocos: {reconnect} recolocados, {gone} cujo dono não existe mais, {replaced} cujo dono agora aponta para outro, {published} de versões publicadas (voltam quando esses documentos forem publicados de novo).",
  "groupCollapse": "Recolher grupo {label}",
  "groupExpand": "Expandir grupo {label}",
- "groupBlocks": "{count, plural, one {# bloco} other {# blocos}}"
+ "groupBlocks": "{count, plural, one {# bloco} other {# blocos}}",
+ "variants": "Variante",
+ "variantsFromCode": "Variantes de inserção (do código)"
 }

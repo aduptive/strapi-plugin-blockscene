@@ -28,6 +28,26 @@ export function componentDefaults(schema, components, stack = []) {
   return row;
 }
 
+// A gallery insert variant: its values (validated by the server) over the schema defaults. A nested component merges
+// over its own defaults; a list replaces the default list, each item over the item defaults with a new key. `keys(n)`
+// gives the row keys of a list (Strapi 5 fractional indexes; Strapi 4 passes integers). No values: plain defaults.
+const fractional = (n) => generateNKeysBetween(null, null, n);
+export function variantRow(schema, components, values, keys = fractional) {
+  const row = componentDefaults(schema, components);
+  for (const [name, value] of Object.entries(values || {})) {
+    const attr = schema.attributes?.[name];
+    if (!attr) continue;
+    const nested = attr.type === "component" && value !== null ? components[attr.component] : null;
+    if (!nested) row[name] = structuredClone(value);
+    else if (!attr.repeatable) row[name] = variantRow(nested, components, value, keys);
+    else {
+      const ids = keys(value.length);
+      row[name] = value.map((item, index) => ({ ...variantRow(nested, components, item, keys), __temp_key__: ids[index] }));
+    }
+  }
+  return row;
+}
+
 // Every editable top-level Dynamic Zone. `full` zones keep their accordion
 // controls but hide the gallery button.
 export function editableZones(schema, values, canEdit, disabled = false) {
@@ -136,6 +156,8 @@ function entryOf(uid, schema, config) {
     fields: fieldsOf(schema),
     candidates: candidatesFor(uid, meta, config),
     template: meta.template || "generic",
+    // Insert variants from the code config ({ id, label, values }); the first is what a quick insert uses.
+    variants: Array.isArray(meta.variants) ? meta.variants : [],
   };
 }
 const allEntries = (zone, components, config) =>

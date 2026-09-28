@@ -396,5 +396,7 @@
  "report.incoming": "Verknüpfungen aus anderen Dokumenten und Blöcken: {reconnect} wiederhergestellt, {gone} ohne existierenden Besitzer, {replaced} deren Besitzer jetzt woandershin zeigt, {published} aus veröffentlichten Versionen (sie kommen zurück, wenn diese Dokumente erneut veröffentlicht werden).",
  "groupCollapse": "Gruppe {label} einklappen",
  "groupExpand": "Gruppe {label} ausklappen",
- "groupBlocks": "{count, plural, one {# Block} other {# Blöcke}}"
+ "groupBlocks": "{count, plural, one {# Block} other {# Blöcke}}",
+ "variants": "Variante",
+ "variantsFromCode": "Einfügevarianten (aus dem Code)"
 }

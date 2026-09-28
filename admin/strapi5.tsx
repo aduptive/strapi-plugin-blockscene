@@ -33,7 +33,7 @@ import { validateGroups } from "./preview.mjs";
 import { Icon, ICON_NAMES } from "./icons";
 import { registerPanel } from "./pane.mjs";
 import { Settings, permissions, register } from "./Settings";
-import { editableZones, canInsert, componentDefaults, labelEditLayout, dropField } from "./model.mjs";
+import { editableZones, canInsert, variantRow, labelEditLayout, dropField } from "./model.mjs";
 import { cloneRow, currentRelations, errorRows, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
 import { Guard } from "./Guard";
 import { useCatalog, labelsHook } from "./catalog";
@@ -174,7 +174,7 @@ function Workspace({ scope }: any) {
     previewToolbar: typeSettings.previewToolbar || catalog.editor.previewToolbar, previewDevices: typeSettings.previewDevices || catalog.editor.previewDevices };
   const host = usePreviewHost5();
   const state = useEditorState(editor, host);
-  const add = (zone: any, uid: string) => {
+  const add = (zone: any, uid: string, preset?: any) => {
     const values = formValues ?? c.form.values;
     const close = catalog?.groups?.[uid];
     if (
@@ -190,7 +190,7 @@ function Workspace({ scope }: any) {
     c.form.addFieldRow(
       zone.name,
       {
-        ...componentDefaults(c.components[uid], c.components),
+        ...variantRow(c.components[uid], c.components, preset),
         __component: uid,
       },
       at,
