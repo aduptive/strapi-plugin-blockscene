@@ -270,17 +270,23 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
 // Project baseline (plugin config `settings`, validated) under the saved document: palette and editor key by key,
 // components and contentTypes per uid entry (a saved entry replaces the code entry for that uid).
 const ENTRY_KEYS = ['components', 'contentTypes']
+// Optional URLs where '' means "not set": an empty saved value never hides the project's code value (a Settings page
+// saved before the code default existed would otherwise keep the preview off). Clearing the field restores the code one.
+const UNSET_WHEN_EMPTY = ['previewUrl', 'blockPreviewUrl']
+const withoutEmpty = (editor) => Object.fromEntries(Object.entries(editor).filter(([key, value]) => !(UNSET_WHEN_EMPTY.includes(key) && value === '')))
 function layer(base, saved) {
   if (!base) return saved
   const doc = saved && typeof saved === 'object' ? saved : {}
-  return Object.fromEntries(Object.keys(DEFAULTS).map(key => [key, { ...base[key], ...(doc[key] && typeof doc[key] === 'object' ? doc[key] : {}) }]))
+  const own = (key) => doc[key] && typeof doc[key] === 'object' ? (key === 'editor' ? withoutEmpty(doc[key]) : doc[key]) : {}
+  return Object.fromEntries(Object.keys(DEFAULTS).map(key => [key, { ...base[key], ...own(key) }]))
 }
 // What to store: only what differs from the baseline, so later code changes still reach untouched keys. A baseline
 // uid the admin removed is kept as {} (an empty entry replaces the code entry and is then dropped on read).
 function overrides(next, base) {
   if (!base) return next
   return Object.fromEntries(Object.keys(DEFAULTS).map(key => {
-    const entries = Object.entries(next[key] || {}).filter(([name, value]) => JSON.stringify(value) !== JSON.stringify(base[key]?.[name]))
+    const entries = Object.entries(next[key] || {}).filter(([name, value]) => JSON.stringify(value) !== JSON.stringify(base[key]?.[name]) &&
+      !(key === 'editor' && UNSET_WHEN_EMPTY.includes(name) && value === ''))
     if (ENTRY_KEYS.includes(key)) for (const uid of Object.keys(base[key] || {})) if (!(uid in (next[key] || {}))) entries.push([uid, {}])
     return [key, Object.fromEntries(entries)]
   }))
