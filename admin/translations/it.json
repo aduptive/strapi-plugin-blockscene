@@ -63,7 +63,6 @@
  "lazyFields": "Campi personalizzati caricati su richiesta",
  "lazyEditorsHelp": "I campi personalizzati elencati mostrano un'anteprima di sola lettura finché non ricevono un clic o il focus, così le pagine grandi si aprono in fretta. Separa gli uid con virgole.",
  "lazyFieldsInvalid": "Usa fino a {max} uid di campi personalizzati, come plugin::ckeditor5.CKEditor o global::mio-campo.",
- "previewV4": "L'anteprima dell'intera pagina esiste solo nella distribuzione Strapi 5; queste opzioni non hanno effetto su Strapi 4.",
  "modeForm": "Campi",
  "modeSplit": "Campi + pagina",
  "modePreview": "Editor visivo",

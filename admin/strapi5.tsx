@@ -27,6 +27,7 @@ import {
 } from "@strapi/content-manager/strapi-admin";
 import { Gallery } from "./Gallery";
 import { GroupDiagnostics, PagePreview, ZoneBarTools, useEditorState, usePreviewZone } from "./PagePreview";
+import { usePreviewHost5 } from "./host5";
 import { History, HISTORY_READ } from "./History";
 import { validateGroups } from "./preview.mjs";
 import { Icon, ICON_NAMES } from "./icons";
@@ -171,7 +172,8 @@ function Workspace({ scope }: any) {
   const editor = { ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
     sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left",
     previewToolbar: typeSettings.previewToolbar || catalog.editor.previewToolbar, previewDevices: typeSettings.previewDevices || catalog.editor.previewDevices };
-  const state = useEditorState(editor);
+  const host = usePreviewHost5();
+  const state = useEditorState(editor, host);
   const add = (zone: any, uid: string) => {
     const values = formValues ?? c.form.values;
     const close = catalog?.groups?.[uid];
@@ -219,6 +221,7 @@ function Workspace({ scope }: any) {
       <PagePreview
         editor={editor}
         state={state}
+        host={host}
         groups={catalog.groups || null}
         hiddenAttribute={catalog.editor.hiddenBlocks !== "off" ? catalog.hiddenAttribute : null}
         form={form}
@@ -233,7 +236,8 @@ function Workspace({ scope }: any) {
 function Panel() {
   const { c, rbac, get, catalog, gallery, history } = useScope();
   const canReadHistory = Boolean((useRBAC(HISTORY_READ) as any).allowedActions?.canRead);
-  const preview = usePreviewZone();
+  const preview = usePreviewZone(usePreviewHost5());
+
   const groups = gallery ? catalog?.groups : null;
   const problems = groups && preview.zone ? validateGroups(preview.rows, groups) : [];
   const versions = history && canReadHistory;
@@ -356,7 +360,7 @@ const SettingsPage = () => (
     ToggleField={ToggleField}
     SelectField={SelectField}
     TextField={TextField}
-    previewSupported
+    lazyEditors
   />
   </Guard>
 );

@@ -9,5 +9,9 @@ for (const major of [4, 5]) {
  assert.ok(files.includes('dist/admin.mjs') && files.includes('dist/admin.cjs') && files.includes('dist/server.cjs'));
  assert.ok(files.every(file => /^(dist\/|strapi-(admin|server)\.js$|package\.json$|README\.md$|LICENSE$)/.test(file)), 'Unexpected package contents');
  assert.ok(!files.some(file => /(?:\.env|sqlite|lab-access|node_modules)/.test(file)));
+ // The shared admin code (page preview, gallery) must not pull the other major's admin packages into the bundle.
+ const admin = readFileSync(`packages/strapi${major}/dist/admin.mjs`, 'utf8');
+ const foreign = major === 4 ? /from\s+["']@strapi\/(?:strapi\/admin|content-manager\/strapi-admin)["']/ : /from\s+["']@strapi\/helper-plugin["']/;
+ assert.ok(!foreign.test(admin), `Strapi ${major} admin bundle imports the other major's admin packages`);
  console.log(`Strapi ${major}: tarball allowlist OK (${files.length} files)`);
 }

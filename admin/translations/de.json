@@ -63,7 +63,6 @@
  "lazyFields": "Bei Bedarf geladene benutzerdefinierte Felder",
  "lazyEditorsHelp": "Die aufgeführten benutzerdefinierten Felder zeigen eine schreibgeschützte Vorschau, bis sie angeklickt oder fokussiert werden, damit große Seiten schnell öffnen. Uids durch Kommas trennen.",
  "lazyFieldsInvalid": "Bis zu {max} Uids benutzerdefinierter Felder verwenden, z. B. plugin::ckeditor5.CKEditor oder global::mein-feld.",
- "previewV4": "Die Ganzseiten-Vorschau gibt es nur in der Strapi-5-Distribution; diese Optionen haben unter Strapi 4 keine Wirkung.",
  "modeForm": "Felder",
  "modeSplit": "Felder + Seite",
  "modePreview": "Visueller Editor",

@@ -63,7 +63,6 @@
  "lazyFields": "Aangepaste velden die op aanvraag laden",
  "lazyEditorsHelp": "De vermelde aangepaste velden tonen een alleen-lezen voorbeeld tot ze worden aangeklikt of focus krijgen, zodat grote pagina's snel openen. Scheid uids met komma's.",
  "lazyFieldsInvalid": "Gebruik maximaal {max} uids van aangepaste velden, zoals plugin::ckeditor5.CKEditor of global::mijn-veld.",
- "previewV4": "Het paginavoorbeeld bestaat alleen in de Strapi 5-distributie; deze opties hebben geen effect op Strapi 4.",
  "modeForm": "Velden",
  "modeSplit": "Velden + pagina",
  "modePreview": "Visuele editor",

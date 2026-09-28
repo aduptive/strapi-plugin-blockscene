@@ -63,7 +63,6 @@
  "lazyFields": "Champs personnalisés chargés à la demande",
  "lazyEditorsHelp": "Les champs personnalisés listés affichent un aperçu en lecture seule jusqu'au clic ou au focus, pour que les grandes pages s'ouvrent vite. Séparez les uids par des virgules.",
  "lazyFieldsInvalid": "Utilisez jusqu'à {max} uids de champs personnalisés, comme plugin::ckeditor5.CKEditor ou global::mon-champ.",
- "previewV4": "L'aperçu de page entière n'existe que dans la distribution Strapi 5 ; ces options n'ont aucun effet sur Strapi 4.",
  "modeForm": "Champs",
  "modeSplit": "Champs + page",
  "modePreview": "Éditeur visuel",

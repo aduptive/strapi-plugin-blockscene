@@ -1,21 +1,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import styled, { useTheme } from "styled-components";
-import { Box, Button, Flex, MenuItem, SimpleMenu, Status, Typography } from "@strapi/design-system";
-import { useIntl } from "react-intl";
-import {
-  DescriptionComponentRenderer,
-  useFetchClient,
-  useForm,
-  useNotification,
-  useQueryParams,
-  useStrapiApp,
-} from "@strapi/strapi/admin";
-import {
-  unstable_useContentManagerContext as useContext,
-  unstable_useDocument as useDocument,
-  useDocumentRBAC,
-} from "@strapi/content-manager/strapi-admin";
+import { Box, Button, Flex, MenuItem, SimpleMenu, Typography } from "@strapi/design-system";
 import { PickerModal } from "./Gallery";
 import { componentDefaults, editableZones } from "./model.mjs";
 import { findZoneList, toggles } from "./accordions.mjs";
@@ -43,9 +29,37 @@ import { createHistory, record, undo, redo, historyKey, dragStep } from "./histo
 import { pasteInto, useClipboard } from "./RowActions";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
-// (split) or over (preview) the native form, which stays mounted. Works with
-// public Strapi 5 APIs only: no patch of the Content Manager. The frontend
-// owns the page it renders; the admin validates every request from it.
+// (split) or over (preview) the native form, which stays mounted. Version
+// neutral: each distribution passes a PreviewHost built from its own public
+// edit view APIs (host5.tsx for Strapi 5, strapi4.tsx for Strapi 4); no patch
+// of the Content Manager. The frontend owns the page it renders; the admin
+// validates every request from it.
+export type PreviewHost = {
+  ds: 1 | 2; // design system major: menu items act on onClick (1) or onSelect (2), headings take `as` (1) or `tag` (2)
+  model: string;
+  documentId?: string | number; // undefined while creating
+  locale?: string;
+  creating: boolean;
+  loading: boolean;
+  disabled: boolean; // read-only form
+  contentType: any;
+  components: any;
+  values: any; // live form values
+  history: { epoch: unknown; setValues: (values: any) => void } | null; // a new epoch starts a fresh undo history; null: no undo
+  readable: (name: string) => boolean;
+  editable: (name: string) => boolean; // create/update permission on the field and not disabled by the layout
+  fieldLabel: (name: string) => string;
+  onChange: (name: string, value: any) => void;
+  insertRows: (zone: string, at: number, rows: any[]) => void;
+  get: any;
+  put: any;
+  notify: (type: string, message: string) => void;
+  MediaLibrary?: React.ComponentType<any>;
+  useNativeBase: (skip: boolean, model: string, documentId?: string | number, locale?: string) => string | null;
+  Actions: React.ComponentType<{ parts: string[] }>; // document status and Save / Publish of the pane toolbar
+};
+export const itemProps = (ds: 1 | 2, run: () => void) => (ds === 1 ? { onClick: run } : { onSelect: run });
+export const tagProps = (ds: 1 | 2, tag: string) => (ds === 1 ? { as: tag } : { tag });
 type Mode = "form" | "split" | "preview";
 const RATIO_KEY = "blockscene:page-split-ratio",
   DEVICE_KEY = "blockscene:page-device";
@@ -245,157 +259,6 @@ const markLayout = (anchor: HTMLElement | null) => {
   item.parentElement.dataset.bpGrid = "";
 };
 
-// Preview base: the settings URL wins; otherwise Strapi's native Preview origin
-// (when configured for this type) with `/block-preview` appended. A published
-// page never receives unsaved values by itself: the bridge stays mandatory.
-function usePreviewBase(
-  override: string,
-  model: string,
-  documentId?: string,
-  locale?: string,
-) {
-  const { get } = useFetchClient();
-  const [native, setNative] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    if (override || !model) return;
-    let active = true;
-    const query = new URLSearchParams({
-      status: "draft",
-      ...(documentId ? { documentId } : {}),
-      ...(locale ? { locale } : {}),
-    });
-    get(`/content-manager/preview/url/${model}?${query}`)
-      .then(({ data }: any) => {
-        if (active && typeof data?.data?.url === "string")
-          setNative(`${new URL(data.data.url).origin}/block-preview/page`);
-      })
-      .catch(() => {
-        if (active) setNative(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [get, model, documentId, locale, override]);
-  return override
-    ? { base: override, source: "custom" }
-    : native
-      ? { base: native, source: "native" }
-      : { base: null, source: "none" };
-}
-
-// Compact Save / Publish on the pane toolbar: the native document actions are
-// resolved as the Entry panel resolves them (permissions, validation, dirty,
-// loading, publishing) and rendered as small buttons; a click delegates to the
-// native button so its dialogs and notifications are reused. No second save API.
-const ACTION_TYPES = ["update", "publish"];
-const nativeButtons = () =>
-  document.querySelectorAll<HTMLButtonElement>(
-    '#main-content button:not([data-testid="page-preview-pane"] button)',
-  );
-// `parts`: "status" (document state and the unsaved hint) and "actions" (Save, Publish), in the order they show.
-function ToolbarActions({ model, collectionType, documentId, locale, parts }: any) {
-  const plugins: any = useStrapiApp(
-    "BlocksceneToolbar",
-    (state: any) => state.plugins,
-  );
-  const [{ query }] = useQueryParams<{ status?: string }>();
-  const { document: doc, meta } = useDocument(
-    { model, collectionType, documentId, params: { locale } } as any,
-    { skip: !documentId },
-  );
-  const { toggleNotification } = useNotification();
-  const t = useMessages();
-  const { formatMessage } = useIntl();
-  const modified = useForm("BlocksceneToolbar", (state: any) => state.modified);
-  // The document's state as the edit view header shows it (Draft / Modified / Published), with the same colours and
-  // Content Manager labels; unsaved form changes are a separate hint.
-  const status: string | undefined = documentId ? doc?.status : undefined;
-  const descriptions = (
-    plugins["content-manager"]?.apis?.getDocumentActions?.("panel") || []
-  ).filter((d: any) => ACTION_TYPES.includes(d.type));
-  const props = {
-    activeTab: query.status || "draft",
-    model,
-    documentId,
-    document: doc,
-    meta,
-    collectionType,
-  };
-  const run = async (action: any, event: React.MouseEvent) => {
-    const native = [...nativeButtons()].find(
-      (b) => b.textContent?.trim() === action.label,
-    );
-    if (native) {
-      native.click();
-      return;
-    }
-    const mute = await action.onClick?.(event);
-    if (action.dialog && !mute && action.dialog.type === "notification")
-      toggleNotification({
-        title: action.dialog.title,
-        message: action.dialog.content,
-        type: action.dialog.status,
-      });
-  };
-  // The rendered description carries no `type` on every Strapi 5 minor (5.31 omits it; its id is `<ComponentName>-<n>`),
-  // so the type comes from the description component that produced it.
-  const typeOf = (action: any) =>
-    action.type ||
-    descriptions.find(
-      (d: any) =>
-        typeof action.id === "string" &&
-        action.id.startsWith(`${d.name || d.displayName}-`),
-    )?.type;
-  return (
-    <DescriptionComponentRenderer props={props} descriptions={descriptions}>
-      {(actions: any[]) => (
-        <Flex gap={2} alignItems="center" data-testid="page-preview-actions">
-          {parts.includes("status") && (status || modified) && <Flex gap={2} alignItems="center" style={{ order: parts.indexOf("status") }}>
-          {status && (
-            <Status size="S" role="status" data-testid="page-preview-status"
-              variant={status === "draft" ? "secondary" : status === "published" ? "success" : "alternative"}>
-              <Typography tag="span" variant="omega" fontWeight="bold">
-                {formatMessage({ id: `content-manager.containers.List.${status}`, defaultMessage: status.charAt(0).toUpperCase() + status.slice(1) })}
-              </Typography>
-            </Status>
-          )}
-          {modified && <Typography variant="pi" textColor="neutral600">{t.unsaved}</Typography>}
-          </Flex>}
-          {parts.includes("actions") && [...actions]
-            .sort(
-              (a, b) =>
-                ACTION_TYPES.indexOf(typeOf(a)) -
-                ACTION_TYPES.indexOf(typeOf(b)),
-            )
-            .map((action) => {
-              // Native semantics untouched: same disabled state as the panel button, plus an accessible reason.
-              const reason = action.disabled
-                ? typeOf(action) === "publish"
-                  ? t.publishDisabledHint
-                  : t.saveDisabledHint
-                : undefined;
-              return (
-                <span key={action.id} title={reason} style={{ order: parts.indexOf("actions") }}>
-                  <Button
-                    size="S"
-                    // Publish is the primary action, Save the secondary one (as in the edit view's panel).
-                    variant={typeOf(action) === "publish" ? "default" : "secondary"}
-                    disabled={action.disabled}
-                    loading={action.loading}
-                    aria-description={reason}
-                    onClick={(e: React.MouseEvent) => run(action, e)}
-                  >
-                    {action.label}
-                  </Button>
-                </span>
-              );
-            })}
-        </Flex>
-      )}
-    </DescriptionComponentRenderer>
-  );
-}
-
 // Undo/redo of the whole edit view: snapshots of the native form values, one step per ~400 ms of continuous change.
 // A new document, locale or loaded initial values (a Save re-initialises the form) starts a fresh history.
 const COALESCE_MS = 400;
@@ -411,10 +274,11 @@ const inField = (el: any) =>
   el instanceof Element &&
   ((el as HTMLElement).isContentEditable ||
     Boolean(el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .ck')));
-function useFormHistory(docKey: string, enabled: boolean) {
-  const values = useForm("BlocksceneHistory", (state: any) => state.values);
-  const initialValues = useForm("BlocksceneHistory", (state: any) => state.initialValues);
-  const setValues = useForm("BlocksceneHistory", (state: any) => state.setValues);
+function useFormHistory(docKey: string, host: PreviewHost) {
+  const values = host.values;
+  const initialValues = host.history?.epoch;
+  const setValues = host.history?.setValues;
+  const enabled = Boolean(setValues) && !host.disabled;
   const state = React.useRef<any>(null);
   const [, rerender] = React.useReducer((n: number) => n + 1, 0);
   React.useEffect(() => {
@@ -469,49 +333,34 @@ const UNDO_KEYS = MAC ? "⌘Z" : "Ctrl+Z",
 
 // One state per edit view: the zone bar, the pane toolbar and the keyboard shortcuts share this mode, undo history
 // and preview route. Mounted once the catalog is known, so the configured mode is the first one.
-export function useEditorState(editor: any) {
-  const c: any = useContext();
-  const history = useFormHistory(`${c.model}:${c.id || "new"}:${c.form?.initialValues?.locale || ""}`, !c.form?.disabled);
+export function useEditorState(editor: any, host: PreviewHost) {
+  const history = useFormHistory(`${host.model}:${host.documentId || "new"}:${host.locale || ""}`, host);
   // Every edit view opens in the configured mode (per content type, else global); a switch lasts for this view only.
   const [mode, setMode] = React.useState<Mode>(() => editor?.previewMode || "form");
-  const preview = usePreviewBase(editor?.previewUrl || "", c.model, c.isCreatingEntry ? undefined : c.id, c.form?.initialValues?.locale);
-  return { history, mode, setMode, preview, disabled: Boolean(c.form?.disabled) };
+  // Preview base: the settings URL wins; otherwise the host's native Preview origin (Strapi 5, when configured for this
+  // type) with `/block-preview/page` appended. A published page never receives unsaved values by itself: the bridge stays mandatory.
+  const override = editor?.previewUrl || "";
+  const native = host.useNativeBase(Boolean(override), host.model, host.creating ? undefined : host.documentId, host.locale);
+  const preview = override ? { base: override, source: "custom" } : native ? { base: native, source: "native" } : { base: null, source: "none" };
+  return { history, mode, setMode, preview, disabled: host.disabled, undo: Boolean(host.history) && !host.disabled, ds: host.ds };
 }
 export type EditorState = ReturnType<typeof useEditorState>;
 
 // The zone the page renders: the first Dynamic Zone the user may read (create: any), never a conditional one; editing
 // it additionally needs the update/create permission on the field and an enabled, non-disabled form.
-export function usePreviewZone() {
-  const c: any = useContext();
-  const rbac: any = useDocumentRBAC("BlockscenePagePreview", (state: any) => state);
-  const values = useForm("BlockscenePagePreview", (state: any) => state.values);
-  const addFieldRow = useForm("BlockscenePagePreview", (state: any) => state.addFieldRow);
-  const moveFieldRow = useForm("BlockscenePagePreview", (state: any) => state.moveFieldRow);
-  const fields = c.layout?.edit?.layout?.flat(3) || [];
-  const readable = (name: string) => c.isCreatingEntry || (rbac.canReadFields || []).includes(name);
+export function usePreviewZone(host: PreviewHost) {
+  const values = host.values;
+  // host.readable changes with the permissions it reads; the zone only when they, the schema or the values do.
   const zone: string | undefined = React.useMemo(
-    () => editableZones(c.contentType, values, readable, c.isLoading)[0]?.name,
-    [c.contentType, values, c.isLoading, rbac.canReadFields, c.isCreatingEntry],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
-  const field = fields.find((f: any) => f.name === zone);
-  const canEdit = Boolean(
-    zone &&
-    ((c.isCreatingEntry ? rbac.canCreateFields : rbac.canUpdateFields) || []).includes(zone) &&
-    field?.disabled !== true &&
-    !c.form?.disabled &&
-    typeof addFieldRow === "function",
+    () => editableZones(host.contentType, values, host.readable, host.loading)[0]?.name,
+    [host.contentType, values, host.loading, host.readable],
   );
+  const canEdit = Boolean(zone && host.editable(zone) && !host.disabled);
   const rows: any[] = zone && Array.isArray(values?.[zone]) ? values[zone] : [];
   const latest = React.useRef(rows);
   latest.current = rows;
-  // Append then move: Strapi < 5.8.1 addFieldRow(field, value, index) overwrites the row at index instead of inserting.
-  const insertRows = (at: number, ...items: any[]) =>
-    items.forEach((item, i) => {
-      const from = latest.current.length + i;
-      addFieldRow(zone, item);
-      if (at + i < from) moveFieldRow(zone, from, at + i);
-    });
-  return { c, values, fields, zone, zoneLabel: field?.label || zone || "", canEdit, rows, latest, insertRows };
+  const insertRows = (at: number, ...items: any[]) => zone && host.insertRows(zone, at, items);
+  return { host, values, zone, zoneLabel: zone ? host.fieldLabel(zone) : "", canEdit, rows, latest, insertRows };
 }
 
 // Undo, Redo and the editing mode on the zone bar, after the first zone's label (the pane toolbar keeps its own set).
@@ -522,7 +371,7 @@ export function ZoneBarTools({ state }: { state: EditorState }) {
   const label = modes.find(([value]) => value === mode)?.[1] || t.modeForm;
   return (
     <>
-      {!state.disabled && (
+      {state.undo && (
         <Flex gap={1} data-testid="blockscene-history" role="group" aria-label={t.historyGroup}>
           <Button size="S" variant="tertiary" startIcon={<Icon name="undo" size={14} />} title={`${t.undo} (${UNDO_KEYS})`}
             disabled={!history.canUndo} onClick={history.undo}>{t.undo}</Button>
@@ -536,7 +385,7 @@ export function ZoneBarTools({ state }: { state: EditorState }) {
           <SimpleMenu variant="tertiary" size="S" aria-label={`${t.modeGroup}: ${label}`}
             label={<Flex gap={2} alignItems="center"><Icon name={MODE_ICONS[mode]} size={16} />{label}</Flex>}>
             {modes.map(([value, text]) => (
-              <MenuItem key={value} onSelect={() => setMode(value)} aria-checked={mode === value}>
+              <MenuItem key={value} {...itemProps(state.ds, () => setMode(value))} aria-checked={mode === value}>
                 <Flex gap={2} alignItems="center"><Icon name={MODE_ICONS[value]} size={16} />{text}</Flex>
               </MenuItem>
             ))}
@@ -566,7 +415,7 @@ export function GroupDiagnostics({ scope, groups, problems }: { scope: ReturnTyp
         <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>
           {problems.map((error: any) => (
             <li key={`${error.code}-${error.index}`} style={{ marginBottom: 8 }}>
-              <Typography variant="pi" textColor="neutral800" tag="p">
+              <Typography variant="pi" textColor="neutral800" {...tagProps(scope.host.ds, "p")}>
                 {t.f(
                   error.code === "closeBeforeOpen" ? "diagCloseBeforeOpen" : error.code === "mismatch" ? "diagMismatch" : "diagUnclosed",
                   { n: error.index + 1, uid: error.uid, open: error.open || "", expected: error.expected || "" },
@@ -587,7 +436,8 @@ export function GroupDiagnostics({ scope, groups, problems }: { scope: ReturnTyp
                 </Box>
               )}
               {error.code === "closeBeforeOpen" && (
-                <Typography variant="pi" textColor="neutral600" tag="p" style={{ marginTop: 2 }}>
+                <Typography variant="pi" textColor="neutral600" {...tagProps(scope.host.ds, "p")} style
+={{ marginTop: 2 }}>
                   {t.diagStrayHint}
                 </Typography>
               )}
@@ -604,6 +454,7 @@ export function GroupDiagnostics({ scope, groups, problems }: { scope: ReturnTyp
 export function PagePreview({
   editor,
   state,
+  host,
   groups = null,
   hiddenAttribute = null,
   form = null,
@@ -612,6 +463,7 @@ export function PagePreview({
 }: {
   editor: any;
   state: EditorState;
+  host: PreviewHost;
   groups?: Record<string, string> | null;
   hiddenAttribute?: string | null;
   form?: any;
@@ -619,17 +471,9 @@ export function PagePreview({
   Toggle?: React.ComponentType<any>;
 }) {
   const t = useMessages();
-  const { c, values, zone, zoneLabel, canEdit, rows, latest, insertRows } = usePreviewZone();
+  const { values, zone, zoneLabel, canEdit, latest, insertRows } = usePreviewZone(host);
   const { history, mode, setMode } = state;
-  const onChange = useForm(
-    "BlockscenePagePreview",
-    (state: any) => state.onChange,
-  );
-  const components: any = useStrapiApp(
-    "BlockscenePagePreview",
-    (state: any) => state.components,
-  );
-  const MediaLibraryDialog = components?.["media-library"];
+  const { onChange, get, put, notify, MediaLibrary: MediaLibraryDialog, Actions, ds } = host;
   // Width menu entries (editor.previewDevices); a remembered width the list no longer offers falls back to its first.
   const deviceList = deviceEntries(editor?.previewDevices, DEVICES);
   const [deviceId, setDeviceState] = React.useState<string | null>(() => read(DEVICE_KEY));
@@ -669,10 +513,10 @@ export function PagePreview({
     setInserting(null);
     setBlockModal(null);
     setFieldsPanel(null);
-  }, [c.id, c.form?.initialValues?.locale]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [host.documentId, host.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [blockModal, setBlockModal] = React.useState<{ index: number; field?: string } | null>(null);
   // Configured field items, then the panels registered for this content type (apis.registerPanel).
-  const sidebar: any[] = [...(editor?.sidebar || []), ...panelsFor(c.model)];
+  const sidebar: any[] = [...(editor?.sidebar || []), ...panelsFor(host.model)];
   const sidebarPosition: "left" | "right" | "bottom" = editor?.sidebarPosition || "left";
   const [fieldsPanel, setFieldsPanel] = React.useState<any>(null);
   const [railEl, setRailEl] = React.useState<HTMLDivElement | null>(null);
@@ -697,9 +541,7 @@ export function PagePreview({
   const [inserting, setInserting] = React.useState<{
     after: string | null;
   } | null>(null);
-  const { get, put } = useFetchClient();
-  const { toggleNotification } = useNotification();
-  const zoneAttr: any = zone ? c.contentType?.attributes?.[zone] : null;
+  const zoneAttr: any = zone ? host.contentType?.attributes?.[zone] : null;
   const iframe = React.useRef<HTMLIFrameElement>(null);
   const loaded = React.useRef(false);
   const anchor = React.useRef<HTMLDivElement>(null);
@@ -721,7 +563,7 @@ export function PagePreview({
     mode,
     canEdit,
     zoneLabel,
-    components: c.components,
+    components: host.components,
     setMode,
     onChange,
     clip,
@@ -731,7 +573,7 @@ export function PagePreview({
     mode,
     canEdit,
     zoneLabel,
-    components: c.components,
+    components: host.components,
     setMode,
     onChange,
     clip,
@@ -792,7 +634,8 @@ export function PagePreview({
       for (let i = 0; i + 1 < parts.length; i += 2) {
         const nested = [
           ...scope.querySelectorAll<HTMLButtonElement>(
-            "button[aria-expanded][data-radix-collection-item]",
+            // Repeatable component rows: Radix accordion items (Design System 2) or DS1 accordion toggles.
+            "button[aria-expanded][data-radix-collection-item], button[aria-expanded][data-strapi-accordion-toggle]",
           ),
         ].filter((b) => b !== header);
         const row = nested[Number(parts[i + 1])];
@@ -850,7 +693,7 @@ export function PagePreview({
 
   const blockLabel = (index: number) => {
     const uid = latest.current[index]?.__component;
-    return c.components?.[uid]?.info?.displayName || uid || "";
+    return host.components?.[uid]?.info?.displayName || uid || "";
   };
   // Lift the block's native form item over the preview; the field clicked in the page gets focus. Esc, the backdrop
   // or Done put it back. Escape is left to any dialog opened from inside the block (Media Library, CKEditor).
@@ -910,7 +753,11 @@ export function PagePreview({
     item.setAttribute("data-bp-block-modal", "");
     // The dialog bar already names the block: its accordion header (whose click would collapse the form) and the
     // zone's connector line are hidden while it is lifted. Nested accordions of repeatables keep theirs.
-    const chrome = [header?.closest("h3"), ...[...item.children].filter((child) => header && !child.contains(header))].filter(Boolean) as HTMLElement[];
+    // Strapi 4 (DS1) has no heading around the toggle: its row is the header's ancestor beside the content it controls.
+    const content = document.getElementById(header?.getAttribute("aria-controls") || "");
+    let bar: HTMLElement | null = content ? header : null;
+    while (bar?.parentElement && !bar.parentElement.contains(content)) bar = bar.parentElement;
+    const chrome = [header?.closest("h3") || bar, ...[...item.children].filter((child) => header && !child.contains(header))].filter(Boolean) as HTMLElement[];
     chrome.forEach((el) => el.setAttribute("data-bp-modal-hide", ""));
     document.body.classList.add("bp-block-modal");
     // Focus leaves the iframe either way, so Escape reaches this document. Deferred: the page still owns focus while
@@ -961,7 +808,7 @@ export function PagePreview({
             : String(event.data.after);
         if (after !== null && insertIndex(latest.current, after) < 0) return;
         if (latest.current.length >= (zoneAttr?.max ?? Infinity)) {
-          toggleNotification({ type: "info", message: t.zoneFull });
+          notify("info", t.zoneFull);
           return;
         }
         setInserting({ after });
@@ -1013,7 +860,7 @@ export function PagePreview({
         )
           return;
         if (latest.current.length + 2 > (zoneAttr?.max ?? Infinity)) {
-          toggleNotification({ type: "info", message: t.zoneFull });
+          notify("info", t.zoneFull);
           return;
         }
         insertRows(
@@ -1096,7 +943,7 @@ export function PagePreview({
     if (!ready || !active) return;
     const timer = setTimeout(send, 120);
     return () => clearTimeout(timer);
-  }, [values, c.components, ready, active, send, mode, clipCount]); // mode and the clipboard travel with the update
+  }, [values, host.components, ready, active, send, mode, clipCount]); // mode and the clipboard travel with the update
   // Form -> page hover: the zone row under the pointer (open or closed), sent only when it changes.
   React.useEffect(() => {
     if (!active || !ready) return;
@@ -1165,7 +1012,7 @@ export function PagePreview({
       ))}
     </Flex>
   );
-  const historyTools = !state.disabled && (
+  const historyTools = state.undo && (
     <Flex gap={1} data-testid="blockscene-history" role="group" aria-label={t.historyGroup}>
       <Tool icon="undo" label={`${t.undo} (${UNDO_KEYS})`} disabled={!history.canUndo} onClick={history.undo} />
       <Tool icon="redo" label={`${t.redo} (${REDO_KEYS})`} disabled={!history.canRedo} onClick={history.redo} />
@@ -1180,7 +1027,7 @@ export function PagePreview({
       <SimpleMenu variant="tertiary" size="S" aria-label={`${t.deviceGroup}: ${deviceLabel(device)}`}
         label={<Flex gap={2} alignItems="center"><Icon name={device.icon} size={16} />{deviceName(device)}</Flex>}>
         {deviceList.map((entry) => (
-          <MenuItem key={entry.id} onSelect={() => setDevice(entry.id)} aria-checked={device.id === entry.id} data-testid={`page-preview-device-${entry.id}`}>
+          <MenuItem key={entry.id} {...itemProps(ds, () => setDevice(entry.id))} aria-checked={device.id === entry.id} data-testid={`page-preview-device-${entry.id}`}>
             <Flex gap={2} alignItems="center"><Icon name={entry.icon} size={16} />{deviceLabel(entry)}</Flex>
           </MenuItem>
         ))}
@@ -1220,7 +1067,9 @@ export function PagePreview({
               userSelect: dragging ? "none" : undefined,
             }}
           >
-            <style>{`${SPLIT_STYLE}\n[${HOVER_ATTR}] { outline: 2px solid ${theme?.colors?.primary600 || "#4945ff"}; outline-offset: 2px; border-radius: 4px; }`}</style>
+            <style>{`${SPLIT_STYLE}\n[${HOVER_ATTR}] { outline: 2px solid ${theme?.colors?.primary600 || "#4945ff"}; outline-offset: 2px; border-radius: 4px; }
+${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside the pane in split mode, gone under it otherwise. */
+  resizable ? "[data-strapi-header-sticky] { right: var(--bp-pane) !important; }" : "[data-strapi-header-sticky] { display: none !important; }"}`}</style>
             {resizable && edge && (
               <EdgeButton
                 type="button"
@@ -1301,13 +1150,7 @@ export function PagePreview({
                     {t.retry}
                   </Button>
                 )}
-                {layout.right.length > 0 && <ToolbarActions
-                  model={c.model}
-                  collectionType={c.collectionType}
-                  documentId={c.isCreatingEntry ? undefined : c.id}
-                  locale={c.form?.initialValues?.locale}
-                  parts={layout.right}
-                />}
+                {layout.right.length > 0 && <Actions parts={layout.right} />}
               </Flex>
               {layout.after.map((id) => <React.Fragment key={id}>{tools[id]}</React.Fragment>)}
             </Flex>}
@@ -1353,13 +1196,13 @@ export function PagePreview({
             components: zoneAttr.components || [],
             max: zoneAttr.max,
           }}
-          components={c.components}
+          components={host.components}
           Modal={Modal}
           Toggle={Toggle}
           get={get}
           put={put}
-          contentType={c.model}
-          locale={c.form?.initialValues?.locale}
+          contentType={host.model}
+          locale={host.locale}
           open
           onOpenChange={(open: boolean) => {
             if (!open) setInserting(null);
@@ -1377,17 +1220,14 @@ export function PagePreview({
               latest.current.length + (close ? 2 : 1) >
                 (zoneAttr.max ?? Infinity)
             ) {
-              toggleNotification({
-                type: "warning",
-                message: close ? t.zoneFull : t.insertMoved,
-              });
+              notify("warning", close ? t.zoneFull : t.insertMoved);
               return;
             }
             // A configured OPEN chosen from the seam picker brings its CLOSE too (same rule as the gallery and "+ Group").
             insertRows(
               index,
               {
-                ...componentDefaults(c.components[uid], c.components),
+                ...componentDefaults(host.components[uid], host.components),
                 __component: uid,
               },
               ...(close ? [{ __component: close }] : []),
@@ -1405,7 +1245,7 @@ export function PagePreview({
               paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
               style={{ position: "fixed", top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)",
                 height: "5.6rem", zIndex: 1001, borderRadius: "8px 8px 0 0", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)" }}>
-              <Typography variant="delta" tag="h2">{blockLabel(blockModal.index)}</Typography>
+              <Typography variant="delta" {...tagProps(ds, "h2")}>{blockLabel(blockModal.index)}</Typography>
               <Button size="S" onClick={() => setBlockModal(null)} data-testid="block-modal-done">{t.blockModalDone}</Button>
             </Flex>
           </>,
@@ -1427,7 +1267,7 @@ export function PagePreview({
                   : drawer ? { top: drawer.top, left: drawer.left, width: drawer.width } : { display: "none" }) }}>
               <Flex gap={2} alignItems="center">
                 {typeof fieldsPanel.icon === "string" ? fieldsPanel.icon && <Icon name={fieldsPanel.icon} /> : fieldsPanel.icon}
-                <Typography variant="delta" tag="h2">{fieldsPanel.label}</Typography>
+                <Typography variant="delta" {...tagProps(ds, "h2")}>{fieldsPanel.label}</Typography>
               </Flex>
               <Button size="S" onClick={() => setFieldsPanel(null)} data-testid="fields-panel-done">{t.blockModalDone}</Button>
             </Flex>
@@ -1436,9 +1276,9 @@ export function PagePreview({
               <div data-bp-fields={fieldsPanel.open} data-testid={`custom-panel-${fieldsPanel.id}`}>
                 <Guard key={fieldsPanel.id}>
                   <fieldsPanel.Component
-                    model={c.model}
-                    documentId={c.isCreatingEntry ? undefined : c.id}
-                    locale={c.form?.initialValues?.locale}
+                    model={host.model}
+                    documentId={host.creating ? undefined : host.documentId}
+                    locale={host.locale}
                     values={values}
                     onChange={onChange}
                     disabled={state.disabled}

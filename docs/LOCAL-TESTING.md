@@ -100,12 +100,17 @@ HTTP checks verify protected settings, real raster upload/resize/WebP bytes,
 SVG sanitization, file limits and replacement behavior. They restore settings
 and remove media created after a successful upload response was parsed.
 
-The Strapi 5 smoke also exercises the whole-page preview: it copies
-`examples/page-preview/` into `.local/strapi5/public/block-preview/` (same
-origin as the admin, so the bridge script must be an external file to pass the
-admin CSP), sets `editor.previewUrl` through the settings API, opens side by
-side, edits a title inline, edits a text field through the admin modal, picks
-an image from the Media Library and asserts that nothing was written.
+Both smokes also exercise the whole-page preview: `lab:setup` and `lab:refresh`
+copy `examples/page-preview/` into `.local/strapi<4|5>/public/block-preview/`
+(same origin as the admin, so the bridge script must be an external file to
+pass the admin CSP), the smoke sets `editor.previewUrl` through the settings
+API, opens side by side, edits a title inline, edits a text field through the
+block dialog, picks an image from the Media Library and asserts that nothing
+was written before Save.
+
+`SMOKE_PORT=<port>` points the smoke at a lab copy on another port (for example
+a copy of `.local/` in a worktree, its `config/server.js` port changed, while
+another checkout's lab holds 1444 or 1445).
 
 The capture command can be exercised without Strapi:
 
