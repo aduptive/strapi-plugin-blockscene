@@ -284,5 +284,6 @@
  "historyMax": "Istantanee per documento (massimo)",
  "historyEventDays": "Conserva l'attività (giorni)",
  "historyRetentionHelp": "Un'attività notturna svuota le istantanee più vecchie di così o oltre il massimo per documento (le più recenti restano) ed elimina l'attività più vecchia del suo limite. Non elimina mai file multimediali.",
- "historyInvalid": "Numeri interi: da 1 a 3650 giorni (l'attività conservata almeno quanto le istantanee) e da 1 a 1000 istantanee."
+ "historyInvalid": "Numeri interi: da 1 a 3650 giorni (l'attività conservata almeno quanto le istantanee) e da 1 a 1000 istantanee.",
+ "fieldHelp": "Maggiori informazioni"
 }

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { helpAction } from './FieldHelp'
 // One catalog request per edit view. Any failure yields null, which the
 // adapters treat as "use the native editor" so a plugin outage never blocks editing.
 // The last catalog is also kept for the synchronous edit-layout hook (field labels).
@@ -24,12 +25,13 @@ const adminLocale = () => {
 // catalog: until one has loaded (the first edit/list view of a session) only the hidden-on-site attribute is removed
 // (default name) and a fetch starts; the next layout computed (another document, list -> edit) gets the labels.
 // The removal runs whatever the editor settings (kill switch included): the attribute exists whenever the server adds it.
+// Field help texts become an info icon next to the label on Strapi 5 (helpAction; Strapi 4 ignores it).
 // Any error: layout untouched.
-export const labelsHook = (get: () => any, relabel: (layout: any, catalog: any, locale: string) => any, drop: (layout: any, name: string | null) => any) => (args: any) => {
+export const labelsHook = (get: () => any, relabel: (layout: any, catalog: any, locale: string, action: typeof helpAction) => any, drop: (layout: any, name: string | null) => any) => (args: any) => {
   try {
     if (!cached) pending ||= load(get()).catch(() => {}).finally(() => { pending = null })
     const trimmed = drop(args.layout, cached ? cached.hiddenAttribute : 'bsHidden')
-    const layout = cached ? relabel(trimmed, cached, adminLocale()) : trimmed
+    const layout = cached ? relabel(trimmed, cached, adminLocale(), helpAction) : trimmed
     return layout === args.layout ? args : { ...args, layout }
   } catch (error) {
     console.error('[blockscene] field labels skipped after an error:', error)

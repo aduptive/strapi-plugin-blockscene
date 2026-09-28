@@ -556,13 +556,23 @@ blockscene: { config: { fields: {
     pageSeo: { label: { en: 'Search engine settings', 'pt-BR': 'Configurações de SEO' },
       description: { en: 'Title and description shown on Google', 'pt-BR': 'Título e descrição no Google' } },
   },
-  'shared.seo': { metaTitle: { placeholder: 'Up to 60 characters' } },
+  'shared.seo': { metaTitle: { placeholder: 'Up to 60 characters' },
+    metaDescription: { help: { en: 'Shown under the title in search results. Google cuts it around 155 characters; write for people, not keywords.' } } },
 } } },
 ```
 
 Keys are content type or component uids, then attribute names; each of
-`label` (up to 80 characters), `description` (300) and `placeholder` (120) is a
-string or `{ "<locale>": string }`. The map is validated at boot: an unknown
+`label` (up to 80 characters), `description` (300), `placeholder` (120) and
+`help` (500) is a string or `{ "<locale>": string }`.
+
+`description` stays the line under the input. `help` is for the longer
+explanation that would stretch the form: on Strapi 5 it becomes an "i" icon next
+to the label, in the Content Manager's own label action slot (where the i18n
+plugin puts its globe; both icons show on localized fields), with the text in a
+tooltip on hover and on keyboard focus (the button is reachable with Tab and
+named "More information"). A field can have both. On Strapi 4 the Content
+Manager gives component fields, where blocks live, no label action, so `help`
+is appended to the description under the input instead. The map is validated at boot: an unknown
 key, an empty or too long text, or a malformed locale code logs a warning
 naming it and the whole `fields` config is ignored (labels fall back to the two
 other steps). Entries for a uid or attribute the schema no longer has (a

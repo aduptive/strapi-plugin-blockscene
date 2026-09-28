@@ -284,5 +284,6 @@
  "historyMax": "Instantáneas por documento (máximo)",
  "historyEventDays": "Conservar la actividad (días)",
  "historyRetentionHelp": "Una tarea nocturna vacía las instantáneas más antiguas que esto o por encima del máximo por documento (se conservan las más recientes) y elimina la actividad más antigua que su límite. Nunca elimina archivos multimedia.",
- "historyInvalid": "Números enteros: de 1 a 3650 días (la actividad se conserva al menos tanto como las instantáneas) y de 1 a 1000 instantáneas."
+ "historyInvalid": "Números enteros: de 1 a 3650 días (la actividad se conserva al menos tanto como las instantáneas) y de 1 a 1000 instantáneas.",
+ "fieldHelp": "Más información"
 }

@@ -62,10 +62,28 @@ test('field labels: config > "Configure the view" > humanized; kill switches and
   assert.equal(labelEditLayout4(v4, { ...catalog, contentTypes: { 'api::page.page': { enabled: false } } }, 'en'), v4)
 })
 
+test('field help: labelAction next to the label on Strapi 5 (kept with the previous action), hint on Strapi 4 or without a factory', async () => {
+  const { labelEditLayout, labelEditLayout4 } = await import('../admin/model.mjs')
+  const globe = { i18n: true }
+  const layout = { settings: { displayName: 'Page' }, layout: [[[{ name: 'title', label: 'title', hint: 'Native', labelAction: globe }, { name: 'slug', label: 'slug', hint: '' }]]], components: {} }
+  const catalog = { editor: { enabled: true, friendlyLabels: false }, contentTypes: {}, types: { 'api::page.page': ['Page', 'title', 'slug'] },
+    fields: { 'api::page.page': { title: { help: { en: 'Long help', 'pt-BR': 'Ajuda longa' } }, slug: { description: 'Short', help: 'Long help' } } } }
+  const action = (text, previous) => ({ text, previous })
+  let [title, slug] = labelEditLayout(layout, catalog, 'pt-BR', action).layout[0][0]
+  assert.deepEqual(title.labelAction, { text: 'Ajuda longa', previous: globe }); assert.equal(title.hint, 'Native', 'hint untouched')
+  assert.deepEqual(slug.labelAction, { text: 'Long help', previous: undefined }); assert.equal(slug.hint, 'Short')
+  ;[title, slug] = labelEditLayout(layout, catalog, 'en').layout[0][0]
+  assert.equal(title.hint, 'Native Long help'); assert.equal(title.labelAction, globe); assert.equal(slug.hint, 'Short Long help')
+  const m = (name, description = '') => ({ name, metadatas: { label: name, description, placeholder: '' } })
+  const v4 = { contentType: { uid: 'api::page.page', layouts: { edit: [[m('title', 'Native'), m('slug')]] } }, components: {} }
+  const out4 = labelEditLayout4(v4, catalog, 'en', action).contentType.layouts.edit[0]
+  assert.deepEqual(out4.map(x => x.metadatas.description), ['Native Long help', 'Short Long help']); assert.equal('help' in out4[0].metadatas, false)
+})
+
 test('field labels: code config validated strictly; invalid config ignored with a warning; catalog exposes it', async () => {
   const { validateFields, DEFAULTS, validateSettings } = require('../server/settings')
   const schemas = { 'api::page.page': ['title', 'blocks'], 'b.hero': ['ctaURL'] }
-  const ok = { 'api::page.page': { title: { label: { en: 'Title', 'pt-BR': 'Título' }, description: 'Main heading', placeholder: 'Hello' } }, 'b.hero': { ctaURL: { label: 'Button link' } } }
+  const ok = { 'api::page.page': { title: { label: { en: 'Title', 'pt-BR': 'Título' }, description: 'Main heading', placeholder: 'Hello', help: 'x'.repeat(500) } }, 'b.hero': { ctaURL: { label: 'Button link' } } }
   assert.deepEqual(validateFields(ok, schemas), ok); assert.deepEqual(validateFields(undefined, schemas), {})
   const stale = []
   assert.deepEqual(validateFields({ ...ok, 'api::x.x': { a: { label: 'x' } }, 'b.hero': { ctaURL: { label: 'Button link' }, gone: { label: 'x' } } }, schemas, stale),
@@ -75,7 +93,7 @@ test('field labels: code config validated strictly; invalid config ignored with 
   for (const [bad, message] of [[[], /must be an object/], [{ 'b.hero': { ctaURL: { hint: 'x' } } }, /Unknown field setting "hint"/],
     [{ 'b.hero': { ctaURL: { label: ' ' } } }, /Invalid label/], [{ 'b.hero': { ctaURL: { label: 'x'.repeat(81) } } }, /1 to 80/],
     [{ 'b.hero': { ctaURL: { label: { EN: 'x' } } } }, /Invalid label/], [{ 'b.hero': { ctaURL: { label: {} } } }, /Invalid label/],
-    [{ 'b.hero': { ctaURL: { description: { en: 7 } } } }, /Invalid description/], [{ 'b.hero': { ctaURL: 'Link' } }, /Invalid entry/]])
+    [{ 'b.hero': { ctaURL: { description: { en: 7 } } } }, /Invalid description/], [{ 'b.hero': { ctaURL: { help: 'x'.repeat(501) } } }, /Invalid help.*1 to 500/], [{ 'b.hero': { ctaURL: 'Link' } }, /Invalid entry/]])
     assert.throws(() => validateFields(bad, schemas), message)
   assert.equal(DEFAULTS.editor.friendlyLabels, true)
   assert.equal(validateSettings({ editor: { friendlyLabels: false } }, []).editor.friendlyLabels, false)
