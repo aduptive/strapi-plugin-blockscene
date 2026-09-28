@@ -595,6 +595,78 @@ try {
     const after = (await api('GET', '/blockscene/settings')).data
     assert.deepEqual(after.settings.contentTypes, {}); assert.equal(after.projectDefaults, null)
   })
+  if (major === 5) await step('pane toolbar (Strapi 5): Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
+    const previewUrl = `${baseURL}/block-preview/index.html`
+    await putSettings({ editor: { previewUrl } })
+    await page.goto('/admin/settings/blockscene')
+    const checklist = page.getByTestId('pane-editor-editor')
+    await checklist.waitFor()
+    await checklist.locator('input[name="editor-previewToolbar-history"]').uncheck()
+    await checklist.getByTestId('editor-toolbar-actions').getByRole('button', { name: 'Move up' }).click()
+    await page.getByTestId('editor-add-width').click()
+    await checklist.getByText(/Keep 1 to 8 widths/).waitFor()
+    assert.ok(await page.getByTestId('save-blockscene-settings').isDisabled(), 'an unnamed width blocks Save')
+    await checklist.locator('input[name="editor-device-label-4"]').fill('Laptop')
+    await checklist.locator('input[name="editor-device-width-4"]').fill('1280')
+    await checklist.screenshot({ path: `artifacts/strapi${major}-settings-pane.png`, animations: 'disabled' })
+    await page.getByTestId('save-blockscene-settings').click()
+    await page.getByText('Settings saved.', { exact: true }).waitFor()
+    const saved = (await api('GET', '/blockscene/settings')).data.settings.editor
+    assert.deepEqual(saved.previewToolbar, ['modes', 'devices', 'actions', 'status'])
+    assert.deepEqual(saved.previewDevices, ['fit', 'mobile', 'tablet', 'desktop', { label: 'Laptop', width: 1280 }])
+    // A visual-editor-only view: width menu and Save/Publish, nothing else.
+    await putSettings({ editor: { previewUrl, previewMode: 'preview', previewToolbar: ['devices', 'actions'], previewDevices: ['fit', { label: 'Laptop', width: 1280 }] } })
+    await page.goto(docUrl)
+    const pane = page.getByTestId('page-preview-pane')
+    await pane.getByTestId('page-preview-actions').getByRole('button', { name: 'Save', exact: true }).waitFor()
+    assert.equal(await pane.getByTestId('page-preview-modes').count(), 0, 'no mode buttons')
+    assert.equal(await pane.getByTestId('blockscene-history').count(), 0, 'no undo / redo')
+    assert.equal(await pane.getByTestId('page-preview-status').count(), 0, 'no status badge')
+    await pane.getByTestId('page-preview-devices').getByRole('button').click()
+    assert.equal(await page.getByRole('menuitem').count(), 2, 'only the configured widths')
+    await page.getByRole('menuitem', { name: /Laptop · 1280 px/ }).click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-stage"]')?.getAttribute('data-device') === 'px-1280')
+    assert.equal(await pane.locator('iframe').evaluate(el => el.style.width), '1280px')
+    await shot('pane-toolbar-reduced')
+    // The content type's own choice replaces the global one: status only, a single width (no menu).
+    await putSettings({ editor: { previewUrl, previewMode: 'preview', previewToolbar: ['devices', 'actions'] },
+      contentTypes: { 'api::page.page': { previewToolbar: ['status'], previewDevices: ['desktop'] } } })
+    await page.goto(docUrl)
+    await pane.getByTestId('page-preview-status').waitFor()
+    assert.equal(await pane.getByTestId('page-preview-devices').count(), 0, 'one width: no menu')
+    assert.equal(await pane.getByTestId('page-preview-actions').getByRole('button').count(), 0, 'no Save / Publish')
+    assert.equal(await page.getByTestId('page-preview-stage').getAttribute('data-device'), 'desktop')
+    await putSettings({})
+    await page.evaluate(() => localStorage.removeItem('blockscene:page-device'))
+  })
+  // Needs a lab host that registers the fixture panels in .local/strapi5/src/admin/app.js bootstrap (not kept in the lab):
+  //   app.getPlugin('blockscene').apis.registerPanel({ id: 'smoke-notes', label: 'Notes', icon: 'info', contentTypes: ['api::page.page'],
+  //     Component: ({ values, onChange }) => <input name="smoke-title" value={values.title || ''} onChange={e => onChange('title', e.target.value)} /> })
+  //   app.getPlugin('blockscene').apis.registerPanel({ id: 'smoke-crash', label: 'Crash', open: 'modal', Component: () => { throw new Error('smoke') } })
+  if (major === 5 && process.env.SMOKE_PANELS) await step('registered sidebar panels (Strapi 5): a host panel opens in the drawer and edits the form; a crashing one stays contained', async () => {
+    await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html`, previewMode: 'preview' } })
+    await page.goto(docUrl)
+    const button = page.getByTestId('sidebar-panel-smoke-notes')
+    await button.waitFor()
+    assert.equal(await button.getAttribute('title'), 'Notes')
+    await button.click()
+    const panel = page.getByTestId('custom-panel-smoke-notes')
+    await panel.locator('input[name="smoke-title"]').waitFor({ state: 'visible' })
+    const box = await panel.boundingBox(), rail = await page.getByTestId('page-preview-sidebar').boundingBox()
+    assert.ok(Math.abs(box.x - (rail.x + rail.width)) <= 1, `drawer beside the rail ${JSON.stringify({ box, rail })}`)
+    await panel.locator('input[name="smoke-title"]').fill('From a registered panel')
+    await page.waitForFunction(() => document.querySelector('input[name="title"]')?.value === 'From a registered panel')
+    await page.getByTestId('page-preview-pane').screenshot({ path: `artifacts/strapi${major}-registered-panel.png`, animations: 'disabled' })
+    await page.getByTestId('fields-panel-done').click(); await panel.waitFor({ state: 'detached' })
+    await page.getByTestId('sidebar-panel-smoke-crash').click()
+    await page.getByTestId('custom-panel-smoke-crash').getByRole('alert').waitFor()
+    await page.getByTestId('fields-panel-done').click()
+    await page.getByTestId('sidebar-panel-smoke-notes').waitFor()
+    assert.equal(await page.getByTestId('page-preview-pane').count(), 1, 'the editor survives a crashing panel')
+    // React reports the error the boundary caught: expected here, not a runtime error of the plugin.
+    errors.splice(0, errors.length, ...errors.filter(error => !error.includes('smoke panel crash')))
+    await putSettings({})
+  })
   await step(`row actions${major === 5 ? ' (with undo, relations and the page preview)' : ''}: confirm delete, hide on the site (REST strip / flag), duplicate, copy two blocks and paste them on another page`, async () => {
     const shots = process.env.SHOTS || 'artifacts', suffix = major === 5 ? '' : '-4'
     const create = async (title, blocks) => { const res = await api('POST', '/content-manager/collection-types/api::page.page', { title, blocks }); assert.ok([200, 201].includes(res.status), JSON.stringify(res.data)); return res.data.data || res.data }

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Page preview toolbar (Strapi 5): `editor.previewToolbar` chooses and orders
+  the pane toolbar's controls (`modes`, `history`, `devices`, `status`,
+  `actions`; missing ones hidden) and `editor.previewDevices` the width menu's
+  entries, including custom `{ label, width }` widths (240 to 3840 px, up to 8
+  entries; one entry hides the menu). Both can be set per content type, from
+  Settings (ordered checklists), `PUT /blockscene/settings` or the code
+  `settings`, with strict validation; defaults keep today's full bar (ADU-384).
+- Custom sidebar panels (Strapi 5): `app.getPlugin('blockscene').apis.registerPanel({ id,
+  label, icon, open, contentTypes, Component })` adds a project's or another
+  plugin's own panel to the visual editor sidebar, after the configured field
+  items, in a drawer or a modal. The component gets the document, the live form
+  values and the form's `onChange`, and runs inside its own error boundary
+  (ADU-386).
 - Zone bar: the editing tools moved from the Blockscene side panel into the
   form, right after each zone's native label pill. One "Expand all" / "Collapse
   all" button with text replaces the two icons; it follows the rows' real

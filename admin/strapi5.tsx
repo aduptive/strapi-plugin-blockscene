@@ -29,7 +29,8 @@ import { Gallery } from "./Gallery";
 import { GroupDiagnostics, PagePreview, ZoneBarTools, useEditorState, usePreviewZone } from "./PagePreview";
 import { History, HISTORY_READ } from "./History";
 import { validateGroups } from "./preview.mjs";
-import { Icon } from "./icons";
+import { Icon, ICON_NAMES } from "./icons";
+import { registerPanel } from "./pane.mjs";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults, labelEditLayout, dropField } from "./model.mjs";
 import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
@@ -165,7 +166,8 @@ function Workspace({ scope }: any) {
   const user: any = useAuth("Blockscene", (state: any) => state.user);
   const form = useRowForm(c, formValues ?? c.form?.values, get);
   const editor = { ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
-    sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left" };
+    sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left",
+    previewToolbar: typeSettings.previewToolbar || catalog.editor.previewToolbar, previewDevices: typeSettings.previewDevices || catalog.editor.previewDevices };
   const state = useEditorState(editor);
   const add = (zone: any, uid: string) => {
     const values = formValues ?? c.form.values;
@@ -361,7 +363,9 @@ export default {
   register(app: any) {
     strapiApp = app;
     register(app, SettingsPage, "blockscene");
-    app.registerPlugin({ id: "blockscene", name: "Blockscene" });
+    // Public admin API (README "Custom sidebar panels"): reached from a host's or another plugin's bootstrap, which
+    // Strapi runs after every register.
+    app.registerPlugin({ id: "blockscene", name: "Blockscene", apis: { registerPanel: (panel: any) => registerPanel(panel, ICON_NAMES) } });
   },
   registerTrads,
   bootstrap(app: any) {

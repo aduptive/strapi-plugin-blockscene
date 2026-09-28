@@ -20,7 +20,9 @@ const DEFAULTS = {
     // hidden on the site: 'strip' removes them, 'flag' sends them with the attribute, 'off' hides the eye icon.
     confirmDelete: true, hiddenBlocks: 'strip', duplicate: true, clipboard: true,
     // Edit view labels that are still the raw attribute name read as "Mobile columns count" (see README "Field labels").
-    friendlyLabels: true },
+    friendlyLabels: true,
+    // Page preview pane (Strapi 5): which toolbar controls show, in order, and the width menu's entries.
+    previewToolbar: ['modes', 'history', 'devices', 'status', 'actions'], previewDevices: ['fit', 'mobile', 'tablet', 'desktop'] },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -33,6 +35,18 @@ const ICONS = ['text', 'tag', 'seo', 'settings', 'image', 'link', 'palette', 'li
 const SIDEBAR_POSITIONS = ['left', 'right', 'bottom']
 const OPENS = ['modal', 'drawer']
 const LABEL = /^[^<>]{1,40}$/
+// Pane toolbar: an ordered subset of the known controls (none repeated). Width menu: known devices and custom widths
+// ({ label, width }), 1 to 8 entries, no name or width twice.
+const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
+const DEVICE_NAMES = ['fit', 'mobile', 'tablet', 'desktop']
+const previewToolbar = value => Array.isArray(value) && value.every(id => TOOLBAR.includes(id)) && new Set(value).size === value.length
+const DEVICE_LABEL = /^[^<>]{1,24}$/
+const customDevice = item => item && typeof item === 'object' && !Array.isArray(item) && Object.keys(item).every(key => ['label', 'width'].includes(key)) &&
+  typeof item.label === 'string' && DEVICE_LABEL.test(item.label.trim()) && Number.isInteger(item.width) && item.width >= 240 && item.width <= 3840
+const previewDevices = value => Array.isArray(value) && value.length >= 1 && value.length <= 8 &&
+  value.every(item => DEVICE_NAMES.includes(item) || customDevice(item)) &&
+  new Set(value.map(item => typeof item === 'string' ? item : item.width)).size === value.length
+const cleanDevices = value => value.map(item => typeof item === 'string' ? item : { label: item.label.trim(), width: item.width })
 const sidebarItem = (item, attributes) => item && typeof item === 'object' && !Array.isArray(item) &&
   Object.keys(item).every(key => ['label', 'icon', 'open', 'fields'].includes(key)) &&
   typeof item.label === 'string' && LABEL.test(item.label.trim()) &&
@@ -44,6 +58,8 @@ const TYPE_KEYS = {
   enabled: value => typeof value === 'boolean',
   previewMode: value => PREVIEW_MODES.includes(value),
   sidebarPosition: value => SIDEBAR_POSITIONS.includes(value),
+  previewToolbar,
+  previewDevices,
   sidebar: (value, attributes) => Array.isArray(value) && value.length <= 12 && value.every(item => sidebarItem(item, attributes)),
 }
 // contentTypes: an array of uids, or { uid: [attribute names] } to also check sidebar fields.
@@ -161,9 +177,11 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
     const valid = key === 'initialState' ? INITIAL_STATES.includes(value) : key === 'previewMode' ? PREVIEW_MODES.includes(value)
       : key === 'hiddenBlocks' ? HIDDEN_MODES.includes(value)
       : key === 'previewUrl' ? value === '' || (typeof value === 'string' && PREVIEW_URL.test(value))
-      : key === 'blockPreviewUrl' ? blockPreviewUrl(value) : key === 'lazyFields' ? lazyFields(value) : typeof value === 'boolean'
+      : key === 'blockPreviewUrl' ? blockPreviewUrl(value) : key === 'lazyFields' ? lazyFields(value)
+      : key === 'previewToolbar' ? previewToolbar(value) : key === 'previewDevices' ? previewDevices(value) : typeof value === 'boolean'
     if (!valid) fail(`Invalid value for editor option "${key}"`)
-    out.editor[key] = key === 'previewUrl' && value ? String(new URL(value).href).replace(/\/$/, '') : key === 'lazyFields' ? [...new Set(value)] : value
+    out.editor[key] = key === 'previewUrl' && value ? String(new URL(value).href).replace(/\/$/, '') : key === 'lazyFields' ? [...new Set(value)]
+      : key === 'previewDevices' ? cleanDevices(value) : value
   }
   const components = input.components || {}
   if (typeof components !== 'object' || Array.isArray(components)) fail('components must be an object')
@@ -189,7 +207,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
       if (!(key in TYPE_KEYS)) fail(`Unknown content type setting "${key}"`)
       if (!TYPE_KEYS[key](value, types[uid])) fail(`Invalid value for "${key}" of "${uid}"`)
     }
-    if (Object.keys(entry).length) out.contentTypes[uid] = structuredClone(entry)
+    if (Object.keys(entry).length) out.contentTypes[uid] = { ...structuredClone(entry), ...(entry.previewDevices && { previewDevices: cleanDevices(entry.previewDevices) }) }
   }
   const history = input.history || {}
   if (typeof history !== 'object' || Array.isArray(history)) fail('history must be an object')
@@ -217,6 +235,8 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
     if (key === 'hiddenBlocks' && !HIDDEN_MODES.includes(value)) continue
     if (key === 'previewUrl' && value && !PREVIEW_URL.test(value)) continue
     if (key === 'blockPreviewUrl' && !blockPreviewUrl(value)) continue
+    if (key === 'previewToolbar' && !previewToolbar(value)) continue
+    if (key === 'previewDevices' && !previewDevices(value)) continue
     // A list with a bad uid keeps its valid ones.
     if (key === 'lazyFields') { if (!Array.isArray(value)) continue; out.editor[key] = [...new Set(value.filter(uid => lazyFields([uid])))].slice(0, 20); continue }
     out.editor[key] = value

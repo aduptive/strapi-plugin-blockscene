@@ -285,5 +285,20 @@
  "historyEventDays": "Activiteit bewaren (dagen)",
  "historyRetentionHelp": "Een nachtelijke taak leegt momentopnamen die ouder zijn of boven het maximum per document uitkomen (de nieuwste blijven) en verwijdert activiteit die ouder is dan de limiet. Mediabestanden worden nooit verwijderd.",
  "historyInvalid": "Gehele getallen: 1 tot 3650 dagen (de activiteit minstens zo lang bewaard als de momentopnamen) en 1 tot 1000 momentopnamen.",
- "fieldHelp": "Meer informatie"
+ "fieldHelp": "Meer informatie",
+ "paneTitle": "Werkbalk van het paginavoorbeeld",
+ "paneHelp": "Aangevinkte bedieningselementen staan in deze volgorde op de werkbalk van het paginavoorbeeld. Status en Opslaan/Publiceren blijven samen rechts; niet aangevinkte zijn verborgen.",
+ "toolbar.modes": "Bewerkmodus",
+ "toolbar.history": "Ongedaan maken en opnieuw",
+ "toolbar.devices": "Menu paginabreedte",
+ "toolbar.status": "Documentstatus",
+ "toolbar.actions": "Opslaan en Publiceren",
+ "paneDevices": "Paginabreedtes",
+ "paneDevicesHelp": "Opties van het breedtemenu, op volgorde; de eerste geldt tot een redacteur een andere kiest. Eigen breedtes: 240 tot 3840 px.",
+ "paneAddWidth": "Breedte toevoegen",
+ "paneWidthLabel": "Label",
+ "paneWidth": "Breedte (px)",
+ "paneRemoveWidth": "Breedte verwijderen",
+ "paneInvalid": "Houd 1 tot 8 breedtes, geen dubbele; een eigen breedte heeft een label nodig (tot 24 tekens, zonder < of >) en een geheel getal van 240 tot 3840.",
+ "paneTypeOverride": "Eigen werkbalk van het paginavoorbeeld voor {name}"
 }

@@ -16,8 +16,9 @@ export function useStageSize(el: HTMLElement | null) {
   }, [el]);
   return size;
 }
-export const frameStyle = (device: Device, stage: { width: number; height: number }) => {
-  const width = DEVICES[device];
+// `device`: a built-in name or a width in px (custom widths from editor.previewDevices).
+export const frameStyle = (device: Device | number, stage: { width: number; height: number }) => {
+  const width = typeof device === "number" ? device : DEVICES[device];
   if (!width || !stage.width) return { left: 0, width: "100%", height: "100%" };
   const scale = Math.min(1, stage.width / width);
   return { left: Math.max(0, (stage.width - width * scale) / 2), width, height: stage.height / scale, transform: `scale(${scale})` };

@@ -285,5 +285,20 @@
  "historyEventDays": "Aktivität aufbewahren (Tage)",
  "historyRetentionHelp": "Ein nächtlicher Job leert Snapshots, die älter sind oder das Maximum pro Dokument überschreiten (die neuesten bleiben), und löscht Aktivität, die älter als ihr Limit ist. Mediendateien löscht er nie.",
  "historyInvalid": "Ganze Zahlen: 1 bis 3650 Tage (die Aktivität mindestens so lange wie die Snapshots) und 1 bis 1000 Snapshots.",
- "fieldHelp": "Weitere Informationen"
+ "fieldHelp": "Weitere Informationen",
+ "paneTitle": "Werkzeugleiste der Seitenvorschau",
+ "paneHelp": "Markierte Bedienelemente erscheinen in dieser Reihenfolge in der Werkzeugleiste der Seitenvorschau. Status und Speichern/Veröffentlichen bleiben rechts zusammen; nicht markierte sind ausgeblendet.",
+ "toolbar.modes": "Bearbeitungsmodus",
+ "toolbar.history": "Rückgängig und Wiederholen",
+ "toolbar.devices": "Menü der Seitenbreite",
+ "toolbar.status": "Dokumentstatus",
+ "toolbar.actions": "Speichern und Veröffentlichen",
+ "paneDevices": "Seitenbreiten",
+ "paneDevicesHelp": "Einträge des Breitenmenüs in Reihenfolge; der erste gilt, bis eine Redaktion einen anderen wählt. Eigene Breiten: 240 bis 3840 px.",
+ "paneAddWidth": "Breite hinzufügen",
+ "paneWidthLabel": "Bezeichnung",
+ "paneWidth": "Breite (px)",
+ "paneRemoveWidth": "Breite entfernen",
+ "paneInvalid": "1 bis 8 Breiten, keine doppelt; eine eigene Breite braucht eine Bezeichnung (bis 24 Zeichen, ohne < oder >) und eine ganze Zahl von 240 bis 3840.",
+ "paneTypeOverride": "Eigene Vorschau-Werkzeugleiste für {name}"
 }

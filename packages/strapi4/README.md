@@ -259,8 +259,8 @@ needed for the gallery to pick them up. Reading requires the
   (see "Version history").
 - Content types: every project type with a Dynamic Zone, each with on/off
   (off leaves its edit view fully native) and, on Strapi 5, the mode its edit
-  views open in ("Default" follows the global preview mode) and its visual
-  editor sidebar (see below).
+  views open in ("Default" follows the global preview mode), its visual
+  editor sidebar and optionally its own page preview toolbar (see below).
 - "Restore project defaults" (or "Reset to defaults" when the project has no
   code defaults), after a confirmation, deletes what was saved here
   (`DELETE /blockscene/settings`, same permission as saving).
@@ -324,6 +324,8 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Copy and Paste (`clipboard`) | yes/no | yes |
 | Blocks hidden on the site (`hiddenBlocks`) | `strip` / `flag` / `off` | `strip` |
 | Friendly field labels (`friendlyLabels`, see [Field labels](#field-labels)) | yes/no | yes |
+| Page preview toolbar (`previewToolbar`, Strapi 5, see [Pane toolbar](#pane-toolbar)) | ordered list of `modes`, `history`, `devices`, `status`, `actions` | all five |
+| Page widths (`previewDevices`, Strapi 5) | 1 to 8 of `fit`, `mobile`, `tablet`, `desktop`, `{ label, width }` | the four built-in |
 
 Every edit view opens in its content type's mode, else the initial preview
 mode. Editors can switch while they edit; the switch is not remembered.
@@ -448,6 +450,80 @@ by side focuses the field in the form on the left instead. Media
 fields open the native Media Library. Everything is validated against the schema
 and the zone's edit permission; a published page never receives unsaved values
 by itself. Strapi 4 does not have the page preview yet (see `docs/BACKLOG.md`).
+
+### Pane toolbar
+
+Which controls the toolbar shows, and in which order, is `previewToolbar`:
+`modes` (Fields, Fields + page, Visual editor), `history` (Undo, Redo),
+`devices` (the width menu), `status` (Draft/Modified/Published and the unsaved
+hint) and `actions` (Save, Publish). A missing id is hidden; `status` and
+`actions` stay one group on the right, placed where the first of them is
+listed. The preview's loading or error notice always shows. Without `modes` the
+pane stays in the mode the edit view opened in (for example a visual editor
+only view with `previewMode: 'preview'`); the form's zone bar keeps its own
+Undo, Redo and mode menu.
+
+`previewDevices` lists the width menu's entries in order; the first is used
+until an editor picks another. Besides the four names, `{ label, width }` adds
+a custom width (label up to 24 characters, width a whole number from 240 to
+3840 px; no name or width twice; up to 8 entries). With a single entry the menu
+is hidden.
+
+```js
+// Settings, Blockscene (Editor preferences, or per content type), PUT /blockscene/settings, or the code `settings`:
+editor: {
+  previewToolbar: ['modes', 'devices', 'actions'],
+  previewDevices: ['fit', 'mobile', { label: 'Laptop', width: 1280 }, 'desktop'],
+},
+contentTypes: {
+  'api::landing.landing': { previewToolbar: ['actions'], previewDevices: ['desktop'] },
+}
+```
+
+A content type's value replaces the global one. The Settings page edits both as
+checklists (check to show, arrows to order, "Add a width" for custom widths);
+"Own page preview toolbar" under a content type starts as a copy of the global
+choice, and turning it off goes back to the global one.
+
+### Custom sidebar panels
+
+A project (in its `src/admin/app.tsx`) or another plugin can add its own panel
+to the visual editor sidebar. Registered panels come after the configured field
+items, in registration order; the rail shows in the Visual editor mode as soon
+as there is one item.
+
+```tsx
+// src/admin/app.tsx
+const Notes = ({ values, onChange, disabled, close }) => (
+  <textarea value={values.notes ?? ''} disabled={disabled}
+    onChange={(e) => onChange('notes', e.target.value)} />
+)
+export default {
+  bootstrap(app) {
+    app.getPlugin('blockscene')?.apis.registerPanel({
+      id: 'notes', // 1 to 40 letters, digits, _ or -; the same id again replaces the panel
+      label: 'Notes', // 1 to 40 characters
+      icon: 'info', // optional: an icon name (the sidebar icons above, for example) or a React element
+      open: 'drawer', // 'drawer' (default) or 'modal'
+      contentTypes: ['api::page.page'], // optional: only these types (default: every type)
+      Component: Notes,
+    })
+  },
+}
+```
+
+`Component` receives `model` (content type uid), `documentId` (undefined while
+creating), `locale`, `values` (the live form values), `onChange(name, value)`
+(the form's own setter: the change is unsaved, goes through undo and redo, and
+Save or Publish store it with the usual permission checks), `disabled` (the form
+is read-only) and `close()`. It renders inside the Content Manager edit view, so
+it can also use the admin's hooks (`useForm`, `useFetchClient`...). Strapi runs
+every plugin's `register` before any `bootstrap`, then the host's `bootstrap`:
+calling `registerPanel` from either bootstrap works. An invalid panel is logged
+(`[blockscene] registerPanel: ...`) and ignored; `registerPanel` returns `true`
+or `false`. A panel that throws while rendering shows the plugin's error notice
+in its drawer; the editor keeps working. Strapi 5 only (the Strapi 4 package has
+no visual editor).
 
 ### Undo and redo
 
