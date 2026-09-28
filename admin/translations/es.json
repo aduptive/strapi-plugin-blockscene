@@ -398,5 +398,22 @@
  "groupExpand": "Expandir el grupo {label}",
  "groupBlocks": "{count, plural, one {# bloque} other {# bloques}}",
  "variants": "Variante",
- "variantsFromCode": "Variantes de inserción (desde el código)"
+ "variantsFromCode": "Variantes de inserción (desde el código)",
+ "gridLabel": "Cuadrícula de diseño de {label}",
+ "gridColumns": "{count, plural, one {# columna} other {# columnas}}",
+ "gridColumnsMobile": "{count, plural, one {# columna} other {# columnas}}, {mobile} en móvil",
+ "gridCellHint": "Abrir el bloque. Arrastra o usa Alt con las flechas para reordenar.",
+ "gridCellError": "Tiene errores",
+ "gridCellMenu": "Más acciones para {label}",
+ "removeFromGroup": "Quitar del grupo",
+ "gridAdd": "Añadir un bloque",
+ "gridShowList": "Mostrar el grupo {label} como lista",
+ "gridShowGrid": "Mostrar el grupo {label} como cuadrícula",
+ "layoutColumnsField": "Cuadrícula de diseño: campo de columnas",
+ "layoutMobileField": "Campo de columnas en móvil",
+ "layoutMaxColumns": "Máximo de columnas",
+ "layoutOff": "Sin cuadrícula",
+ "layoutNoMobile": "Ninguno",
+ "layoutHelp": "Los bloques del grupo se muestran en cuadrícula en el formulario, con el número de columnas de este bloque.",
+ "layoutNoFields": "Este bloque no tiene ningún campo que pueda guardar un número de columnas."
 }

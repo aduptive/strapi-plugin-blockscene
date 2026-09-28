@@ -125,7 +125,7 @@ function facetsOf(uid, schema, schemas = {}) {
 
 const safeUrl = (value) => typeof value === 'string' &&
   (/^\/(?!\/)/.test(value) || /^https?:\/\//.test(value)) ? value : undefined
-const { safeGroups } = require('./groups')
+const { safeGroups, validLayout } = require('./groups')
 const safeVersion = (value) => typeof value === 'string' && /^[\w.-]{1,32}$/.test(value) ? value : undefined
 // Strapi maps ValidationError to 400; outside a Strapi host (unit tests) a plain error with the same name is thrown.
 const fail = (message, details) => {
@@ -163,7 +163,8 @@ function catalog(config = {}) {
 
 // Strict validation for PUT: reject instead of silently coercing.
 // historyTypes: every api:: content type uid (history may cover types without a Dynamic Zone); null skips that check.
-function validateSettings(input, componentUids, contentTypeUids = [], historyTypes = null) {
+// schemas: the host's components (uid -> schema), for `layout`; null skips the attribute check.
+function validateSettings(input, componentUids, contentTypeUids = [], historyTypes = null, schemas = null) {
   const types = typeMap(contentTypeUids)
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Settings must be an object')
   if (JSON.stringify(input).length > 64 * 1024) fail('Settings payload too large')
@@ -196,6 +197,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
       else if (key === 'typology') { if (!TYPOLOGIES.includes(entry.typology)) fail(`Unknown typology for "${uid}"`); clean.typology = entry.typology }
       else if (key === 'tags') { if (!validTags(entry.tags)) fail(`Invalid tags for "${uid}": up to 10, each 1 to 24 characters`); clean.tags = cleanTags(entry.tags) }
       else if (key === 'mediaId') { if (!Number.isInteger(entry.mediaId) || entry.mediaId <= 0) fail(`Invalid media for "${uid}"`); clean.mediaId = entry.mediaId }
+      else if (key === 'layout') { if (!validLayout(entry.layout, schemas && (schemas[uid]?.attributes || {}))) fail(`Invalid layout for "${uid}": columnsField (and mobileColumnsField) must name a number, string or numeric enumeration attribute of the component; maxColumns 1 to 12`); clean.layout = structuredClone(entry.layout) }
       else fail(`Unknown component setting "${key}"`)
     }
     if (Object.keys(clean).length) out.components[uid] = clean
@@ -224,7 +226,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
 }
 
 // Lenient read: saved values that no longer apply (deleted component) are dropped.
-function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = null) {
+function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = null, schemas = null) {
   const types = typeMap(contentTypeUids)
   const out = structuredClone(DEFAULTS)
   if (!saved || typeof saved !== 'object') return out
@@ -248,6 +250,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
     const clean = { ...entry }
     if ('typology' in clean && !TYPOLOGIES.includes(clean.typology)) delete clean.typology
     if ('tags' in clean) { clean.tags = cleanTags(clean.tags); if (!clean.tags.length) delete clean.tags }
+    if ('layout' in clean && !validLayout(clean.layout, schemas && (schemas[uid]?.attributes || {}))) delete clean.layout
     if (Object.keys(clean).length) out.components[uid] = clean
   }
   for (const [uid, entry] of Object.entries(saved.contentTypes || {})) {

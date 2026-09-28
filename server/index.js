@@ -1,7 +1,7 @@
 'use strict'
 
 const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
-const { safeGroups, validateGroups } = require('./groups')
+const { safeGroups, validateGroups, layoutFields } = require('./groups')
 const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
 const { trashContentType, trashService, trashController } = require('./trash')
@@ -170,7 +170,7 @@ module.exports = {
       if (project !== undefined) return project
       const code = strapi.plugin(PLUGIN).config('settings')
       project = null
-      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi)) }
+      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components) }
       catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
       return project
     }
@@ -194,11 +194,11 @@ module.exports = {
       for (const note of notes) strapi.log?.warn(`[${PLUGIN}] components variants: ${note}.`)
       return variants
     }
-    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi))
+    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
     return {
       projectDefaults, get, fields: fieldTexts, variants: insertVariants,
       async set(value) {
-        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi))
+        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
         for (const [uid, entry] of Object.entries(next.components)) {
           if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
         }
@@ -233,7 +233,9 @@ module.exports = {
           .map(([uid, schema]) => [uid, [schema.info?.displayName || '', ...Object.keys(schema.attributes || {})]]))
         // history: the content types whose versions are captured (Strapi 5, module on and not bypassed), else null.
         const history = STRAPI5 && strapi.documents?.use && !base.disabled && settings.history.enabled ? { contentTypes: apiUids(strapi).filter(uid => covers(settings.history, uid)) } : null
-        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
+        // Layout grids of the configured OPENs (a layout on any other component does nothing).
+        const layouts = Object.fromEntries(Object.entries(settings.components).filter(([uid, entry]) => entry.layout && base.groups?.[uid]).map(([uid, entry]) => [uid, entry.layout]))
+        ctx.body = { ...base, layouts, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),
@@ -243,7 +245,8 @@ module.exports = {
         // typology: the value without a Settings override (code config, else the guess), shown as "Automatic".
         const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components }).components
         const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
-          displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology }))
+          displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology,
+          layoutFields: layoutFields(schema) }))
         const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
           attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
         ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES, typologies: TYPOLOGIES,

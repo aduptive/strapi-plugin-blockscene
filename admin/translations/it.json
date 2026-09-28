@@ -398,5 +398,22 @@
  "groupExpand": "Espandi il gruppo {label}",
  "groupBlocks": "{count, plural, one {# blocco} other {# blocchi}}",
  "variants": "Variante",
- "variantsFromCode": "Varianti di inserimento (dal codice)"
+ "variantsFromCode": "Varianti di inserimento (dal codice)",
+ "gridLabel": "Griglia di layout di {label}",
+ "gridColumns": "{count, plural, one {# colonna} other {# colonne}}",
+ "gridColumnsMobile": "{count, plural, one {# colonna} other {# colonne}}, {mobile} su mobile",
+ "gridCellHint": "Apri il blocco. Trascina o usa Alt con le frecce per riordinare.",
+ "gridCellError": "Contiene errori",
+ "gridCellMenu": "Altre azioni per {label}",
+ "removeFromGroup": "Rimuovi dal gruppo",
+ "gridAdd": "Aggiungi un blocco",
+ "gridShowList": "Mostra il gruppo {label} come elenco",
+ "gridShowGrid": "Mostra il gruppo {label} come griglia",
+ "layoutColumnsField": "Griglia di layout: campo delle colonne",
+ "layoutMobileField": "Campo delle colonne su mobile",
+ "layoutMaxColumns": "Colonne al massimo",
+ "layoutOff": "Nessuna griglia",
+ "layoutNoMobile": "Nessuno",
+ "layoutHelp": "I blocchi del gruppo appaiono in griglia nel modulo, con il numero di colonne di questo blocco.",
+ "layoutNoFields": "Questo blocco non ha un campo che possa contenere un numero di colonne."
 }

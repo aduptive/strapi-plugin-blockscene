@@ -7,6 +7,7 @@ import { groupOutline, keepGroupsTogether, movedRow } from "./rows.mjs";
 import { endDrag, startDrag } from "./history.mjs";
 import { useMessages } from "./messages";
 import { Icon } from "./icons";
+import { LayoutGrid } from "./LayoutGrid";
 
 // Layout groups in the form: the rows between an OPEN and its CLOSE are indented under it with a guide line per level,
 // the CLOSE reads as the group's end (compact, no drag handle), each OPEN gets a chevron that folds its group, and an
@@ -19,10 +20,16 @@ const DEPTH = "data-blockscene-depth";
 const KIND = "data-blockscene-group";
 const FOLD = "data-blockscene-fold";
 const COUNT = "data-blockscene-fold-count";
+// Layout grid: the box appended to a grid OPEN's <li>, where LayoutGrid is portalled. Its children rows are hidden like
+// a folded group's (FOLDED: Expand all and the zone toggle skip them too) but stay mounted.
+const GRID_BOX = "data-blockscene-grid";
 const STEP = "2.4rem";
 // Folded groups, for the session: per document, zone and OPEN key (memory only, like the rest of the edit view state).
 const folded = new Set<string>();
-type Anchor = { el: HTMLElement; countEl: HTMLElement | null; zone: string; index: number; id: string; count: number; open: boolean; label: string };
+// Grid groups switched to the list view, for the session (same keys as folded).
+const listed = new Set<string>();
+type Anchor = { el: HTMLElement; countEl: HTMLElement | null; zone: string; index: number; id: string; count: number; open: boolean; label: string;
+  layout: any; gridEl: HTMLElement | null };
 const set = (el: HTMLElement, name: string, value: string | null) => {
   if (value === null) el.hasAttribute(name) && el.removeAttribute(name);
   else if (el.getAttribute(name) !== value) el.setAttribute(name, value);
@@ -43,7 +50,7 @@ const Count = styled.span`
   color: ${({ theme }) => theme.colors.primary700}; background: ${({ theme }) => theme.colors.primary100};
 `;
 
-export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
+export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null, components, catalog, openBlock, openInsert }: any) {
   const t = useMessages();
   const theme: any = useTheme();
   const on = Boolean(groups && form);
@@ -61,8 +68,8 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
     endDrag();
     settle();
   }).current;
-  const latest = React.useRef({ zones, form, docKey, labelOf });
-  latest.current = { zones, form, docKey, labelOf };
+  const latest = React.useRef({ zones, form, docKey, labelOf, layouts });
+  latest.current = { zones, form, docKey, labelOf, layouts };
   React.useEffect(() => settled.current.clear(), [docKey]);
   // After every change of a zone (drag, keyboard, arrows, undo, the plugin's own writes), one form change when a moved
   // OPEN left its members behind. A mouse drag is compared once, on drop, with the rows from before it started.
@@ -87,7 +94,8 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
     if (!on) return;
     // The row a pointer or key acts on (Strapi's drag handle, its arrows): it tells a swap of two rows apart.
     const rowKey = (target: any) => {
-      const li = target?.closest?.("ol[aria-describedby] > li");
+      // A grid cell is not a row: its drags and keys are the grid's own.
+      const li = !target?.closest?.(`[${GRID_BOX}]`) && target?.closest?.("ol[aria-describedby] > li");
       if (!li) return null;
       for (const zone of latest.current.zones) {
         const list = findZoneList(zone.label);
@@ -122,7 +130,7 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
   // Frozen while a mouse drag lasts (the rows are mid-move).
   const sync = React.useRef(() => {});
   sync.current = () => {
-    const { zones, form, docKey, labelOf } = latest.current;
+    const { zones, form, docKey, labelOf, layouts } = latest.current;
     if (dragging.current) {
       const placeholder = zones.some((zone: any) => {
         const list = findZoneList(zone.label);
@@ -147,15 +155,29 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
         if (landed.current?.zone === zone.name) unfold.push(rows.findIndex((row: any) => blockKey(row) === landed.current?.key));
         for (const index of unfold) for (const p of outline[index]?.parents || []) folded.delete(idOf(p));
         const isFolded = (i: number) => outline[i].end != null && folded.has(idOf(i));
+        // Per row: whether it shows its group as a grid (a configured layout, the grid view, not folded, not itself inside
+        // a grid or a folded group). Parents come first in the list, so theirs is known when a child is reached.
+        const grid: boolean[] = [];
         lis.forEach((li, i) => {
           const o = outline[i];
           seen.add(li);
           set(li, DEPTH, o.depth ? String(o.depth) : null);
           if (o.depth) li.style.setProperty("--bs-depth", String(o.depth));
           set(li, KIND, o.kind === "block" ? null : o.kind);
-          set(li, FOLDED, o.parents.some(isFolded) ? "" : null);
+          // A CLOSE belongs to its own group but stays visible under that group's grid (it reads as the group's end).
+          const inGrid = (o.kind === "close" ? o.parents.slice(0, -1) : o.parents).some((p) => grid[p]);
+          const hidden = o.parents.some(isFolded) || inGrid;
+          set(li, FOLDED, hidden ? "" : null);
+          const layout = o.kind === "open" && o.end != null ? layouts?.[rows[i].__component] || null : null;
           const toggle = li.querySelector<HTMLElement>("button[aria-expanded]");
+          grid[i] = Boolean(layout && toggle?.parentElement) && !hidden && !isFolded(i) && !listed.has(idOf(i));
           if (o.kind !== "open" || o.end == null || !toggle?.parentElement) return;
+          let gridEl = li.querySelector<HTMLElement>(`:scope > [${GRID_BOX}]`);
+          if (grid[i] && !gridEl) {
+            gridEl = document.createElement("div");
+            gridEl.setAttribute(GRID_BOX, "");
+            li.appendChild(gridEl);
+          } else if (!grid[i]) gridEl = null; // removed below with the other stale anchors
           let el = toggle.parentElement.querySelector<HTMLElement>(`:scope > [${FOLD}]`);
           if (!el) {
             el = document.createElement("span");
@@ -173,15 +195,15 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
             countEl.style.cssText = "display:inline-flex;align-items:center";
             actions.insertBefore(countEl, actions.firstChild);
           }
-          next.push({ el, countEl, zone: zone.name, index: i, id: idOf(i), count: o.count || 0, open: !isFolded(i), label: labelOf(rows[i]) });
+          next.push({ el, countEl, zone: zone.name, index: i, id: idOf(i), count: o.count || 0, open: !isFolded(i), label: labelOf(rows[i]), layout, gridEl });
         });
       }
     landed.current = null;
     for (const li of document.querySelectorAll<HTMLElement>(`li[${DEPTH}], li[${KIND}], li[${FOLDED}]`))
       if (!seen.has(li)) for (const name of [DEPTH, KIND, FOLDED]) li.removeAttribute(name);
-    for (const el of document.querySelectorAll<HTMLElement>(`[${FOLD}], [${COUNT}]`)) if (!next.some((a) => a.el === el || a.countEl === el)) el.remove();
+    for (const el of document.querySelectorAll<HTMLElement>(`[${FOLD}], [${COUNT}], [${GRID_BOX}]`)) if (!next.some((a) => a.el === el || a.countEl === el || a.gridEl === el)) el.remove();
     setAnchors((prev) =>
-      prev.length === next.length && prev.every((a, i) => (["el", "countEl", "id", "index", "count", "open", "label"] as const).every((k) => a[k] === next[i][k])) ? prev : next,
+      prev.length === next.length && prev.every((a, i) => (["el", "countEl", "id", "index", "count", "open", "label", "layout", "gridEl"] as const).every((k) => a[k] === next[i][k])) ? prev : next,
     );
   };
   React.useEffect(() => {
@@ -196,14 +218,14 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
-      for (const el of document.querySelectorAll(`[${FOLD}], [${COUNT}]`)) el.remove();
+      for (const el of document.querySelectorAll(`[${FOLD}], [${COUNT}], [${GRID_BOX}]`)) el.remove();
       for (const li of document.querySelectorAll(`li[${DEPTH}], li[${KIND}], li[${FOLDED}]`)) for (const name of [DEPTH, KIND, FOLDED]) li.removeAttribute(name);
     };
   }, []);
   if (!on) return null;
-  const flip = (id: string) => {
-    if (folded.has(id)) folded.delete(id);
-    else folded.add(id);
+  const flip = (id: string, ids = folded) => {
+    if (ids.has(id)) ids.delete(id);
+    else ids.add(id);
     sync.current();
   };
   const line = theme?.colors?.primary600 || "#4945ff";
@@ -212,7 +234,8 @@ export function GroupRows({ zones, form, groups, docKey, labelOf }: any) {
     <>
       <style>{`
 ${list}[${DEPTH}] { padding-left: calc(var(--bs-depth) * ${STEP}); background: repeating-linear-gradient(to right, ${line} 0 2px, transparent 2px ${STEP}) 1.1rem 0 / calc(var(--bs-depth) * ${STEP}) 100% no-repeat; }
-${list}[${FOLDED}] { display: none !important; }
+${list}[${FOLDED}]:not([data-bp-block-modal]) { display: none !important; }
+${list}[data-bp-block-modal] { padding-left: 0 !important; background-image: none !important; }
 ${list}[${KIND}="close"] [data-handler-id] { display: none !important; }
 ${list}[${KIND}="close"] button[aria-expanded]:first-of-type { min-height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0.7; }
 ${list}[${KIND}="close"] button[aria-expanded]:first-of-type + * { padding-top: 0 !important; padding-bottom: 0 !important; }
@@ -236,8 +259,43 @@ ${list}[${KIND}="close"] button[aria-expanded] [data-blockscene-row-thumb] { dis
       {anchors.map((a) =>
         !a.open && a.countEl
           ? createPortal(<Count data-testid={`group-count-${a.zone}-${a.index}`}>{t.f("groupBlocks", { count: a.count })}</Count>, a.countEl, `count:${a.zone}:${a.index}`)
-          : null,
+          : a.layout && a.countEl
+            ? createPortal(
+                <ViewToggle grid={Boolean(a.gridEl)} testid={`group-view-${a.zone}-${a.index}`} label={a.label} onFlip={() => flip(a.id, listed)} />,
+                a.countEl,
+                `view:${a.zone}:${a.index}`,
+              )
+            : null,
       )}
+      {anchors.map((a) => {
+        const zone = zones.find((z: any) => z.name === a.zone);
+        return a.gridEl && zone
+          ? createPortal(
+              <LayoutGrid zone={zone} open={a.index} form={form} groups={groups} layout={a.layout} components={components} catalog={catalog}
+                labelOf={labelOf} openBlock={openBlock} openInsert={openInsert} />,
+              a.gridEl,
+              `grid:${a.zone}:${a.index}`,
+            )
+          : null;
+      })}
     </>
+  );
+}
+
+// Grid / list on a grid OPEN's header (a span with the button role, like the chevron: see Fold).
+function ViewToggle({ grid, testid, label, onFlip }: any) {
+  const t = useMessages();
+  const text = t.f(grid ? "gridShowList" : "gridShowGrid", { label });
+  return (
+    <Fold role="button" tabIndex={0} $open aria-pressed={!grid} data-testid={testid} data-view={grid ? "grid" : "list"} title={text} aria-label={text}
+      style={{ marginLeft: 0, marginRight: 4 }}
+      onClick={onFlip}
+      onKeyDown={(event: React.KeyboardEvent) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onFlip();
+      }}>
+      <span><Icon name={grid ? "list" : "grid"} size={16} /></span>
+    </Fold>
   );
 }

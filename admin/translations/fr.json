@@ -398,5 +398,22 @@
  "groupExpand": "Déplier le groupe {label}",
  "groupBlocks": "{count, plural, one {# bloc} other {# blocs}}",
  "variants": "Variante",
- "variantsFromCode": "Variantes d'insertion (depuis le code)"
+ "variantsFromCode": "Variantes d'insertion (depuis le code)",
+ "gridLabel": "Grille de mise en page de {label}",
+ "gridColumns": "{count, plural, one {# colonne} other {# colonnes}}",
+ "gridColumnsMobile": "{count, plural, one {# colonne} other {# colonnes}}, {mobile} sur mobile",
+ "gridCellHint": "Ouvrir le bloc. Glissez ou utilisez Alt avec les flèches pour réordonner.",
+ "gridCellError": "Contient des erreurs",
+ "gridCellMenu": "Plus d'actions pour {label}",
+ "removeFromGroup": "Retirer du groupe",
+ "gridAdd": "Ajouter un bloc",
+ "gridShowList": "Afficher le groupe {label} en liste",
+ "gridShowGrid": "Afficher le groupe {label} en grille",
+ "layoutColumnsField": "Grille de mise en page : champ des colonnes",
+ "layoutMobileField": "Champ des colonnes sur mobile",
+ "layoutMaxColumns": "Colonnes au maximum",
+ "layoutOff": "Pas de grille",
+ "layoutNoMobile": "Aucun",
+ "layoutHelp": "Les blocs du groupe s'affichent en grille dans le formulaire, avec le nombre de colonnes de ce bloc.",
+ "layoutNoFields": "Ce bloc n'a aucun champ pouvant contenir un nombre de colonnes."
 }

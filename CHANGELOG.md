@@ -25,6 +25,18 @@
   media and relation values, `id` and `__component` are dropped, so a
   frontend fixture works as is; unknown attributes reject the variant. At
   most 12 variants per block, 16 KB each, 256 KB in all (ADU-383).
+- Layout grid (ADU-408): a group OPEN configured with
+  `components[uid].layout = { columnsField, mobileColumnsField?, maxColumns? }`
+  (Settings or code `settings`, validated against the component's attributes)
+  shows its children inside its row as a grid of its own column count, read
+  live from its form. A cell opens the block's native form in the block dialog
+  (form mode too); drag or Alt+Arrow reorders, "Remove from group" moves a
+  block after the CLOSE, "Add a block" inserts at the end of the group, an
+  error marks its cell, and a header toggle switches to the list. Every change
+  is one form change. Strapi 5 and 4. The preview core now exposes
+  `openBlock(zone, index, field?)` and `openInsert(zone, afterKey)` on the
+  editor state; the catalog returns `layouts` and the Settings components list
+  `layoutFields`.
 
 ## 2.0.0-alpha.7 (Strapi 5) and 1.0.0-alpha.7 (Strapi 4) — 2026-09-28
 

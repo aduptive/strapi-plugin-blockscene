@@ -309,7 +309,8 @@ needed for the gallery to pick them up. Reading requires the
   and "Restore default colors". Colors must be `#RRGGBB`.
 - Component list with the effective source, choose/replace image from the
   Media Library, "Use automatic image", the wireframe template, the gallery
-  typology ("Automatic" shows the guess) and tags (comma separated).
+  typology ("Automatic" shows the guess) and tags (comma separated); a group
+  OPEN also has its layout grid fields (see [Layout grid](#layout-grid)).
 - Editor preferences: enhancements on/off, visibility of each collective
   button, initial accordion state and the initial block mode.
 - Version history (Strapi 5): module switch, covered content types, retention
@@ -721,6 +722,50 @@ The edit view draws the same structure over Strapi's native rows (Strapi 5 and
   moved by other means (the small-screen arrows) ends the group where it lands.
   Unclosed groups and stray markers are indented as the page preview shows them
   but have no chevron and are never moved (the diagnostics list them).
+
+### Layout grid
+
+An OPEN whose component lays its children out in columns (a "grid columns"
+wrapper) can show them that way in the form. Name the OPEN attribute that holds
+its desktop column count, per component, in Settings (the OPEN's card, "Layout
+grid") or in the code `settings`:
+
+```json
+{ "components": { "wrappers.grid-columns": { "layout": { "columnsField": "columnsMd", "mobileColumnsField": "columns", "maxColumns": 3 } } } }
+```
+
+- `columnsField` (required) and `mobileColumnsField` (optional) must be
+  attributes of that component that can hold a count: `integer`, `biginteger`,
+  `float`, `decimal`, `string`, or an `enumeration` whose every value is a whole
+  number (`["1", "2", "3"]`). `maxColumns` is 1 to 12 (default 12). Checked on
+  `PUT` and on the code settings at boot; a saved layout whose attribute was
+  removed is dropped on read. A layout on a component that is not a configured
+  OPEN does nothing.
+- The count is read live from the OPEN's form: its value, else the attribute's
+  default, else 1, capped at `maxColumns` (a value that is not a whole number
+  from 1 counts as missing). The grid shows the desktop count; the mobile one is
+  named in its caption.
+- Each child is a cell under the OPEN's header (its name and the first text of
+  its fields); a nested group is one cell ("N blocks"); the CLOSE stays a row
+  below. The children's own rows are hidden but stay mounted, so the form,
+  validation, Save and the row tools keep working on them; Expand all skips
+  them as it skips a folded group.
+- A cell opens its block's native form in the block dialog (the one of the
+  visual editor), in any mode, with every field type. A validation error inside
+  a child gives its cell a red border; the dialog shows the field.
+- Reorder by dragging a cell onto another, or with Alt+Arrow keys on a focused
+  cell (left/right one cell, up/down one row of the grid); nested groups move
+  whole. "Remove from group" in a cell's "…" menu moves the block right after
+  the CLOSE. "Add a block" opens the gallery (the zone's allowed components) and
+  inserts at the end of the group; an OPEN brings its CLOSE. Each of these is
+  one form change: one undo step on Strapi 5, nothing saved before Save.
+- The icon on the OPEN's header switches that group between grid and list (the
+  native rows) for the session, per document and group. A folded group shows no
+  grid.
+- Dragging a cell out of the grid onto the list is not supported (it would need
+  Strapi's own drag and drop): use "Remove from group", or the list view.
+
+Strapi 5 and 4 (the block dialog is shared by both since the page preview core).
 
 ## Field labels
 

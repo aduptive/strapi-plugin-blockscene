@@ -1426,6 +1426,7 @@ export function Gallery({
       )}
       <RowActions zones={zones} actions={actions} Modal={props.Modal} />
       <GroupRows zones={zones} form={props.form} groups={catalog?.groups || null} docKey={docKey}
+        layouts={catalog?.layouts || null} components={props.components} catalog={catalog} openBlock={props.openBlock} openInsert={props.openInsert}
         labelOf={(row: any) => catalog?.components?.[row?.__component]?.label || props.components?.[row?.__component]?.info?.displayName || row?.__component || ""} />
       {zones.map((zone: any, index: number) => (
         <React.Fragment key={zone.name}>

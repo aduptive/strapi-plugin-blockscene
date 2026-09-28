@@ -343,7 +343,16 @@ export function useEditorState(editor: any, host: PreviewHost) {
   const override = editor?.previewUrl || "";
   const native = host.useNativeBase(Boolean(override), host.model, host.creating ? undefined : host.documentId, host.locale);
   const preview = override ? { base: override, source: "custom" } : native ? { base: native, source: "native" } : { base: null, source: "none" };
-  return { history, mode, setMode, preview, disabled: host.disabled, undo: Boolean(host.history) && !host.disabled, ds: host.ds };
+  // The block dialog and the insertion picker, rendered by PagePreview in every mode. Public API for the rest of the edit
+  // view (the layout grid): openBlock lifts a zone row's native form into the dialog (optionally focusing one of its
+  // fields); openInsert opens the gallery to insert after the row with key `after` (null: at the start), a configured
+  // OPEN bringing its CLOSE. Both resolve rows when used, so they only name a zone and a row.
+  const [block, setBlock] = React.useState<{ zone: string; index: number; field?: string } | null>(null);
+  const [inserting, setInserting] = React.useState<{ zone: string; after: string | null } | null>(null);
+  const openBlock = React.useCallback((zone: string, index: number, field?: string) => setBlock({ zone, index, field }), []);
+  const openInsert = React.useCallback((zone: string, after: string | null) => setInserting({ zone, after }), []);
+  return { history, mode, setMode, preview, disabled: host.disabled, undo: Boolean(host.history) && !host.disabled, ds: host.ds,
+    block, setBlock, openBlock, inserting, setInserting, openInsert };
 }
 export type EditorState = ReturnType<typeof useEditorState>;
 
@@ -473,7 +482,7 @@ export function PagePreview({
 }) {
   const t = useMessages();
   const { values, zone, zoneLabel, canEdit, latest, insertRows } = usePreviewZone(host);
-  const { history, mode, setMode } = state;
+  const { history, mode, setMode, block: blockModal, setBlock: setBlockModal, inserting, setInserting } = state;
   const { onChange, get, put, notify, MediaLibrary: MediaLibraryDialog, Actions, ds } = host;
   // Width menu entries (editor.previewDevices); a remembered width the list no longer offers falls back to its first.
   const deviceList = deviceEntries(editor?.previewDevices, DEVICES);
@@ -515,7 +524,6 @@ export function PagePreview({
     setBlockModal(null);
     setFieldsPanel(null);
   }, [host.documentId, host.locale]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [blockModal, setBlockModal] = React.useState<{ index: number; field?: string } | null>(null);
   // Configured field items, then the panels registered for this content type (apis.registerPanel).
   const sidebar: any[] = [...(editor?.sidebar || []), ...panelsFor(host.model)];
   const sidebarPosition: "left" | "right" | "bottom" = editor?.sidebarPosition || "left";
@@ -539,10 +547,8 @@ export function PagePreview({
     return () => window.removeEventListener("resize", place);
   }, [fieldsPanel, railEl, sidebarPosition]);
   const theme: any = useTheme();
-  const [inserting, setInserting] = React.useState<{
-    after: string | null;
-  } | null>(null);
   const zoneAttr: any = zone ? host.contentType?.attributes?.[zone] : null;
+  const insertAttr: any = inserting ? host.contentType?.attributes?.[inserting.zone] : null;
   const iframe = React.useRef<HTMLIFrameElement>(null);
   const loaded = React.useRef(false);
   const anchor = React.useRef<HTMLDivElement>(null);
@@ -692,8 +698,8 @@ export function PagePreview({
     }, 150);
   };
 
-  const blockLabel = (index: number) => {
-    const uid = latest.current[index]?.__component;
+  const blockLabel = (zoneName: string, index: number) => {
+    const uid = host.values?.[zoneName]?.[index]?.__component;
     return host.components?.[uid]?.info?.displayName || uid || "";
   };
   // Lift the block's native form item over the preview; the field clicked in the page gets focus. Esc, the backdrop
@@ -744,7 +750,7 @@ export function PagePreview({
   }, [mode, active]);
   React.useEffect(() => {
     if (!blockModal) return;
-    const item = findZoneList(live.current.zoneLabel)?.querySelectorAll(":scope > li")[blockModal.index] as HTMLElement | undefined;
+    const item = findZoneList(host.fieldLabel(blockModal.zone))?.querySelectorAll(":scope > li")[blockModal.index] as HTMLElement | undefined;
     if (!item) {
       setBlockModal(null);
       return;
@@ -812,7 +818,7 @@ export function PagePreview({
           notify("info", t.zoneFull);
           return;
         }
-        setInserting({ after });
+        setInserting({ zone: zone!, after });
         return;
       }
       if (is("paste") && canEdit && live.current.clipCount && form) {
@@ -901,7 +907,7 @@ export function PagePreview({
             item.style.outline = "";
           }, 1500);
         }
-        if (mode === "preview" && canEdit) setBlockModal({ index });
+        if (mode === "preview" && canEdit) setBlockModal({ zone: zone!, index });
         else if (mode === "preview") setMode("split");
         iframe.current?.contentWindow?.postMessage(
           { protocol: PROTOCOL, channel, type: "highlight", key },
@@ -911,7 +917,7 @@ export function PagePreview({
         const attr = validateFocus(uid, event.data.field, components);
         if (!attr) return;
         // Mode-aware: the visual editor opens the whole block with this field focused; side by side focuses it on the left.
-        if (mode === "preview" && canEdit) setBlockModal({ index, field: event.data.field });
+        if (mode === "preview" && canEdit) setBlockModal({ zone: zone!, index, field: event.data.field });
         else focusField(index, event.data.field);
       } else if (is("media") && canEdit) {
         const attr = mediaAttribute(uid, event.data.field, components);
@@ -1190,12 +1196,12 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
           </Pane>,
           document.body,
         )}
-      {inserting && zoneAttr && (
+      {inserting && insertAttr && (
         <PickerModal
           zone={{
-            name: zone,
-            components: zoneAttr.components || [],
-            max: zoneAttr.max,
+            name: inserting.zone,
+            components: insertAttr.components || [],
+            max: insertAttr.max,
           }}
           components={host.components}
           Modal={Modal}
@@ -1210,23 +1216,25 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
           }}
           onSelect={(uid: string, values?: any) => {
             // Resolved now, not when the gap was clicked: reorders in between are respected.
-            const index = insertIndex(latest.current, inserting.after);
+            const rows = inserting.zone === zone ? latest.current : Array.isArray(host.values?.[inserting.zone]) ? host.values[inserting.zone] : []; // `values` here is the variant
+            const index = insertIndex(rows, inserting.after);
             setInserting(null);
             const close = groups?.[uid];
             // Zero mutation unless the whole operation fits: position still valid, uid (and its CLOSE) allowed, room for both rows.
             if (
               index < 0 ||
-              !(zoneAttr.components || []).includes(uid) ||
-              (close && !(zoneAttr.components || []).includes(close)) ||
-              latest.current.length + (close ? 2 : 1) >
-                (zoneAttr.max ?? Infinity)
+              !host.editable(inserting.zone) ||
+              !(insertAttr.components || []).includes(uid) ||
+              (close && !(insertAttr.components || []).includes(close)) ||
+              rows.length + (close ? 2 : 1) >
+                (insertAttr.max ?? Infinity)
             ) {
               notify("warning", close ? t.zoneFull : t.insertMoved);
               return;
             }
             // A configured OPEN chosen from the seam picker brings its CLOSE too (same rule as the gallery and "+ Group").
             // values: the chosen insert variant, merged into the row and handed to hosts that build their own row.
-            if (zone) host.insertRows(zone, index, [
+            host.insertRows(inserting.zone, index, [
               { ...variantRow(host.components[uid], host.components, values), __component: uid },
               ...(close ? [{ __component: close }] : []),
             ], values);
@@ -1239,11 +1247,11 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
             <style>{blockModalStyle(theme?.colors?.neutral0 || "#fff")}</style>
             <div data-testid="block-modal-backdrop" onClick={() => setBlockModal(null)}
               style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(33, 33, 52, 0.45)" }} />
-            <Flex data-testid="block-modal-bar" data-bp-chrome="" role="dialog" aria-label={blockLabel(blockModal.index)} background="neutral100"
+            <Flex data-testid="block-modal-bar" data-bp-chrome="" role="dialog" aria-label={blockLabel(blockModal.zone, blockModal.index)} background="neutral100"
               paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
               style={{ position: "fixed", top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)",
                 height: "5.6rem", zIndex: 1001, borderRadius: "8px 8px 0 0", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)" }}>
-              <Typography variant="delta" {...tagProps(ds, "h2")}>{blockLabel(blockModal.index)}</Typography>
+              <Typography variant="delta" {...tagProps(ds, "h2")}>{blockLabel(blockModal.zone, blockModal.index)}</Typography>
               <Button size="S" onClick={() => setBlockModal(null)} data-testid="block-modal-done">{t.blockModalDone}</Button>
             </Flex>
           </>,
