@@ -2,6 +2,93 @@
 
 ## Unreleased
 
+- Row actions in each block header, before the native delete (Strapi 5 and 4):
+  hide on the site (eye), duplicate (deep copy right below, groups whole,
+  relations and media kept), copy one block or a selection and paste it on any
+  page (localStorage `blockscene:clipboard:v1`, all-or-nothing validation
+  against the target zone, also from the page preview seams), and a
+  confirmation before the native delete. Everything goes through the form, so
+  undo/redo covers it. New editor options `confirmDelete`, `duplicate`,
+  `clipboard` (default on) and `hiddenBlocks` (`strip` default, `flag`, `off`),
+  in Settings and code config.
+- Hidden blocks: the plugin adds a boolean attribute (plugin config
+  `hiddenAttribute`, default `bsHidden`, `false` to disable) to every Dynamic
+  Zone component at register time, hidden from the edit view. This creates a
+  column in each of those component tables. In `strip` mode content-API reads
+  (Strapi 5 document service middleware, Strapi 4 entity service) drop hidden
+  rows; admin reads never do. Page preview blocks carry `hidden: true`; the
+  bridge's `update-page` carries `clipboard` and the page may send `paste`.
+
+- Lazy rich-text editors (Strapi 5): fields listed in the new editor option
+  `lazyFields` (default `["plugin::ckeditor5.CKEditor"]`, up to 20 custom field
+  uids) render a sanitized read-only preview and mount the real editor on click,
+  Enter/Space or focus. New option `lazyEditors` (default on) with a Settings
+  toggle and uid list. The page preview's field focus activates it first.
+- Open all opens the rows near the viewport a few per frame and the rest as
+  they approach while scrolling; Close all closes the visible rows first and
+  the rest in idle callbacks. On a 34-block CKEditor page (Strapi 5.31) the
+  longest long task went from 2.9 s to 0.14 s (open all) and 1.6 s to 0.14 s
+  (close all).
+- Hover sync (Strapi 5, side by side): a hovered form row outlines its block in
+  the page and a hovered block outlines its form row (primary color, no
+  scroll); an edge arrow scrolls the form to a row out of view. New bridge
+  message `hover` in both directions (`key` or `null`, sent on change,
+  validated against the current rows); pages that ignore it keep working.
+- Open all / Close all moved from the side panel to beside each zone's native
+  label pill, injected like the row thumbnails.
+- New editor option `showRowThumbnails` (default on) with a Settings toggle.
+- Split divider: always visible, neutral with a grip, primary on hover or drag,
+  12 px hit area; a double click resets it to half.
+
+- Preview canvas: the admin's page background with a faint 24 px grid, both from
+  the theme (a customised admin carries over), behind the page (whole-page pane
+  and the gallery's magnified block).
+- Sidebar drawer/modal: the edit view's cards around the shown fields lose their
+  border and padding; the drawer is the frame.
+
+- Gallery: the detail pane became a magnified block. A click grows the card
+  into a large panel over the grid (FLIP, ~250 ms, none with reduced motion)
+  with a live preview at Fit/Mobile/Tablet/Desktop widths over the instant
+  thumbnail, and a compact strip with Insert. Live source: the new
+  `editor.blockPreviewUrl` (plain page per block, placeholders `{uid}`,
+  `{name}`, `{category}`, `{variant}`, `{locale}`), else the page preview
+  route through the bridge (one block of schema defaults, read-only), else the
+  image. 8 s timeout keeps the image with a note. `DEVICES`/`frameStyle` moved
+  to `admin/devices.ts`, shared with the page preview.
+
+- Block dialog (visual editor): the block's own accordion header and the zone's
+  connector line are hidden while it is open; the dialog bar names the block.
+
+- Undo and redo of the whole edit view (Strapi 5): buttons in the Blockscene
+  panel and the pane toolbar, Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z and Ctrl+Y outside
+  text fields. Steps coalesce within 400 ms, up to 100; the history starts over
+  on another document, locale or after a Save.
+- Project defaults from code: the plugin config `settings` (same shape as the
+  stored settings) is the baseline under what the Settings page saves. Saved
+  palette/editor keys win key by key, saved components/contentTypes entries
+  per uid; only the differences are stored. Invalid code settings are ignored
+  with a warning. `GET /blockscene/settings` returns `projectDefaults`;
+  `DELETE /blockscene/settings` and the "Restore project defaults" / "Reset to
+  defaults" button remove the saved document.
+- Settings: visual editor sidebar editor per content type (Strapi 5): position,
+  items with label, icon, drawer or modal, fields, reorder and remove, up to 12.
+  Invalid items block Save.
+
+- Gallery as a block browser: collapsible sidebar (All, Recently used,
+  Starred, typologies), Tags/Media/Content filter menus with chips, facet
+  badges, stars, hover quick insert and a detail pane. Facets come from the
+  schema; typology is guessed and overridable, with tags, in Settings or the
+  config. Stars and recents are stored per admin user (`/blockscene/me/prefs`).
+  The category select is gone; `category` in the config now acts as a tag.
+
+- Icon buttons with tooltips for the tools: open/close all, the three preview
+  modes and the four widths (accessible names unchanged). Add block, Save and
+  Publish keep their text.
+
+- Visual editor sidebar (per content type, left/right/bottom): buttons that open
+  some of the document's own fields (native inputs, components and repeatables
+  included) in a modal or a drawer. Configured through the settings API for now.
+
 - Page preview widths: Fit, Mobile (390), Tablet (834), Desktop (1440). The
   page renders at the device width and scales down to fit the pane.
 - Settings, Content types: turn the plugin off per content type (its edit view
@@ -13,6 +100,17 @@
   one-field dialog. Done, Esc or the backdrop close it.
 - Fix: focusing a CKEditor field from the page picked CKEditor's hidden helper
   input and never focused (side by side and visual editor).
+- Kill switch: "Blockscene enabled" off in Settings now stops the whole plugin at
+  once, the server publish check for layout groups included (before, only the
+  editor UI); a content type turned off skips the check too. No restart.
+- A render error inside the plugin now unmounts only the plugin and shows a
+  notice; the native edit view keeps working.
+- Several zones: each group of Open all / Close all carries its zone name.
+- No preview route configured: the mode buttons are hidden (only the hint).
+- The edit view panel is titled "Blockscene" (it holds more than the gallery), and
+  the gallery button reads "Add block" instead of "Add block: <field name>".
+- Group diagnostics: readable detail text (dark theme), hints on their own
+  line, the repair button wraps left-aligned.
 
 ## 2.0.0-alpha.4 (Strapi 5) and 1.0.0-alpha.4 (Strapi 4) — 2026-09-24
 

@@ -8,27 +8,31 @@ import {
   Flex,
   SingleSelect,
   SingleSelectOption,
+  TextInput,
 } from "@strapi/design-system";
 import {
   useCMEditViewDataManager,
   useFetchClient,
   useLibrary,
   useRBAC,
+  useNotification,
   auth,
 } from "@strapi/helper-plugin";
 import { Gallery } from "./Gallery";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert } from "./model.mjs";
+import { cloneRow, integerKeys } from "./rows.mjs";
 import { useCatalog } from "./catalog";
 import { registerTrads } from "./messages";
+import { Guard } from "./Guard";
 
-function Modal({ open, onOpenChange, trigger, title, children }: any) {
+function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   const id = React.useId();
   return (
     <>
       {trigger}
       {open && (
-        <ModalLayout onClose={() => onOpenChange(false)} labelledBy={id}>
+        <ModalLayout onClose={() => onOpenChange(false)} labelledBy={id} width={width}>
           <ModalHeader>
             <Typography id={id} variant="beta">
               {title}
@@ -40,11 +44,29 @@ function Modal({ open, onOpenChange, trigger, title, children }: any) {
     </>
   );
 }
+// Row actions write whole zone arrays through the edit view reducer (ON_CHANGE); new rows get integer keys. Relations
+// are copied as the form holds them (the loaded pages of each relation list).
+function useRowForm(c: any, components: any) {
+  const toggleNotification = useNotification();
+  const latest = React.useRef(c.modifiedData);
+  latest.current = c.modifiedData;
+  if (typeof c.onChange !== "function") return null;
+  return {
+    model: c.slug,
+    locale: c.initialData?.locale || undefined,
+    rows: (zone: string) => (Array.isArray(latest.current?.[zone]) ? latest.current[zone] : []),
+    setRows: (zone: string, rows: any[]) => c.onChange({ target: { name: zone, value: rows } }),
+    keys: (rows: any[], _at: number, n: number) => integerKeys(rows, n),
+    notify: (type: string, message: string) => toggleNotification({ type, message }),
+    prepare: async (rows: any[]) => rows.map((row) => cloneRow(row, components)),
+  };
+}
 function Picker() {
   const c: any = useCMEditViewDataManager();
-  const { get } = useFetchClient();
+  const { get, put } = useFetchClient();
   const catalog = useCatalog(get);
   const components = c.allLayoutData?.components || {};
+  const form = useRowForm(c, components);
   const schema = c.layout || c.allLayoutData?.contentType;
   const allowed =
     (c.isCreatingEntry
@@ -95,11 +117,13 @@ function Picker() {
       Modal={Modal}
       Toggle={ToggleField}
       get={get}
+      put={put}
       editor={catalog.editor}
       catalog={catalog}
       docKey={docKey}
       contentType={c.slug}
       userId={auth.getUserInfo?.()?.id}
+      form={form}
     />
   );
 }
@@ -114,6 +138,9 @@ const ToggleField = ({ name, label, value, onChange, disabled }: any) => (
     />
     <Typography>{label}</Typography>
   </Flex>
+);
+const TextField = ({ name, label, value, onChange, disabled, placeholder }: any) => (
+  <TextInput name={name} label={label} value={value} disabled={disabled} placeholder={placeholder} onChange={(e: any) => onChange(e.target.value)} />
 );
 const SelectField = ({
   name,
@@ -161,14 +188,17 @@ function usePermissions() {
   };
 }
 const SettingsPage = () => (
+  <Guard>
   <Settings
     useClient={useFetchClient}
     usePermissions={usePermissions}
     MediaPicker={MediaPicker}
     ToggleField={ToggleField}
     SelectField={SelectField}
+    TextField={TextField}
     previewSupported={false}
   />
+  </Guard>
 );
 export default {
   register(app: any) {
@@ -179,7 +209,11 @@ export default {
   bootstrap(app: any) {
     app.injectContentManagerComponent("editView", "right-links", {
       name: "blockscene",
-      Component: Picker,
+      Component: () => (
+        <Guard>
+          <Picker />
+        </Guard>
+      ),
     });
   },
 };

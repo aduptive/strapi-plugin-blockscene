@@ -1,7 +1,8 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, DEFAULTS, catalog, validateSettings, mergeSaved, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
+const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
 // Settings saved by the plugin under its previous id ("block-picker", alphas before the rename) are copied once.
@@ -27,7 +28,10 @@ async function resolveMedia(strapi, settings) {
 }
 
 // Content types the plugin can act on: the project's own types that have a Dynamic Zone.
-const contentTypeUids = (strapi) => Object.entries(strapi.contentTypes || {}).filter(([uid, schema]) => uid.startsWith('api::') && zonesOf(schema).length).map(([uid]) => uid)
+// uid -> its attribute names (sidebar items may only name fields of their own type).
+const contentTypeUids = (strapi) => Object.fromEntries(Object.entries(strapi.contentTypes || {})
+  .filter(([uid, schema]) => uid.startsWith('api::') && zonesOf(schema).length)
+  .map(([uid, schema]) => [uid, Object.keys(schema.attributes || {})]))
 const zonesOf = (schema) => Object.entries(schema?.attributes || {}).filter(([, attr]) => attr?.type === 'dynamiczone').map(([name]) => name)
 const label = (error) => `row ${error.index + 1}: ${error.code === 'closeBeforeOpen' ? `close marker ${error.uid} has no open marker before it` :
   error.code === 'mismatch' ? `close marker ${error.uid} does not match the open group ${error.open} (expected ${error.expected})` : `group ${error.uid} is not closed (expected ${error.expected})`}`
@@ -45,6 +49,13 @@ function registerPublishGuard(strapi) {
   const groups = safeGroups(plugin.config('groups'), componentUids(strapi))
   if (plugin.config('groups') && !groups) strapi.log.warn(`[${PLUGIN}] "groups" config ignored: expected { "<open component uid>": "<close component uid>" } with existing components; every block is treated as ordinary.`)
   if (!groups) return
+  // The guard follows the same switches as the editor: the env/config bypass, the Settings on/off and the per-type
+  // off. Read on every publish (one store read), so turning the plugin off in the panel takes effect at once.
+  const active = async (uid) => {
+    if (plugin.config('disabled') === true) return false
+    const settings = await plugin.service('settings').get()
+    return settings.editor.enabled && settings.contentTypes?.[uid]?.enabled !== false
+  }
   if (strapi.documents?.use) {
     // Strapi 5. Every publish path of the document service goes through the facade: `publish`, and `create`/`update`
     // with `status: 'published'` (the repository then calls its internal publish, which never re-enters this
@@ -61,7 +72,7 @@ function registerPublishGuard(strapi) {
       if (!publishing || !ctx.uid) return next()
       const model = strapi.getModel(ctx.uid)
       const zones = zonesOf(model)
-      if (!zones.length) return next()
+      if (!zones.length || !(await active(ctx.uid))) return next()
       if (action === 'create') { checkZones(strapi, ctx.uid, params.data || {}, groups); return next() }
       const populate = Object.fromEntries(zones.map(name => [name, true]))
       const localized = Boolean(model?.pluginOptions?.i18n?.localized)
@@ -85,18 +96,18 @@ function registerPublishGuard(strapi) {
   // Strapi 4: publishing sets publishedAt through entityService.update/create (admin, REST) or db updateMany (bulk publish).
   const published = (data) => Boolean(data && data.publishedAt)
   strapi.db.lifecycles.subscribe({
-    async beforeCreate(event) { if (published(event.params?.data)) checkZones(strapi, event.model.uid, event.params.data, groups) },
+    async beforeCreate(event) { if (published(event.params?.data) && await active(event.model.uid)) checkZones(strapi, event.model.uid, event.params.data, groups) },
     async beforeUpdate(event) {
       const { data, where } = event.params || {}
       const zones = zonesOf(strapi.getModel(event.model.uid))
-      if (!published(data) || !zones.length) return
+      if (!published(data) || !zones.length || !(await active(event.model.uid))) return
       const entry = zones.every(name => Array.isArray(data[name])) ? data : { ...(await strapi.entityService.findOne(event.model.uid, where?.id, { populate: zones })), ...data }
       checkZones(strapi, event.model.uid, entry, groups)
     },
     async beforeUpdateMany(event) {
       const { data, where } = event.params || {}
       const zones = zonesOf(strapi.getModel(event.model.uid))
-      if (!published(data) || !zones.length) return
+      if (!published(data) || !zones.length || !(await active(event.model.uid))) return
       for (const entry of await strapi.entityService.findMany(event.model.uid, { filters: where, populate: zones })) checkZones(strapi, event.model.uid, entry, groups)
     },
   })
@@ -111,59 +122,113 @@ module.exports = {
       blockPreview: false,
       // Optional layout groups: OPEN component uid -> its CLOSE uid, e.g. { 'wrappers.join': 'wrappers.close' }.
       // Empty/absent: every Dynamic Zone component is an ordinary block. See README "Layout groups".
-      groups: null },
+      groups: null,
+      // Project defaults from code: same shape as the stored settings, e.g. require('./blockscene.json'). See README "Settings page".
+      settings: null,
+      // "Hide on the site": boolean attribute added to every Dynamic Zone component (a DB column); false adds nothing.
+      hiddenAttribute: 'bsHidden' },
     validator: catalog,
+  },
+  // Before the database schema sync, so the column exists. A name the host already uses with another type is skipped.
+  register({ strapi }) {
+    const plugin = strapi.plugin(PLUGIN)
+    const name = hiddenName(plugin.config('hiddenAttribute'))
+    if (name === null) strapi.log.warn(`[${PLUGIN}] "hiddenAttribute" config ignored: expected a name like "bsHidden" or false. Hiding blocks is off.`)
+    if (!name) return
+    const { skipped } = injectHidden(strapi.components, strapi.contentTypes, name)
+    if (skipped.length) strapi.log.warn(`[${PLUGIN}] "${name}" already exists with another type on ${skipped.join(', ')}; those blocks cannot be hidden.`)
   },
   async bootstrap({ strapi }) {
     await strapi.admin.services.permission.actionProvider.registerMany([
       { section: 'plugins', displayName: 'Read gallery settings', uid: 'settings.read', pluginName: PLUGIN },
       { section: 'plugins', displayName: 'Change gallery settings', uid: 'settings.update', pluginName: PLUGIN },
     ])
+    strapi.plugin(PLUGIN).service('settings').projectDefaults()
     registerPublishGuard(strapi)
+    registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
   },
-  services: { settings: ({ strapi }) => ({
-    async get() { return mergeSaved(await readSettings(strapi), componentUids(strapi), contentTypeUids(strapi)) },
-    async set(value) {
-      const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
-      for (const [uid, entry] of Object.entries(next.components)) {
-        if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
-      }
-      await store(strapi).set({ key: 'settings', value: next })
-      return next
-    },
-  }) },
+  services: { settings: ({ strapi }) => {
+    // Code settings (plugin config `settings`): validated once, strictly; invalid ones are ignored with a warning.
+    let project
+    const projectDefaults = () => {
+      if (project !== undefined) return project
+      const code = strapi.plugin(PLUGIN).config('settings')
+      project = null
+      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi)) }
+      catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
+      return project
+    }
+    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi))
+    return {
+      projectDefaults, get,
+      async set(value) {
+        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
+        for (const [uid, entry] of Object.entries(next.components)) {
+          if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
+        }
+        await store(strapi).set({ key: 'settings', value: overrides(next, projectDefaults()) })
+        return next
+      },
+      // Back to the project defaults (or the built-in ones); the legacy copy goes too, or it would be migrated again.
+      async reset() {
+        await store(strapi).delete({ key: 'settings' })
+        await strapi.store({ type: 'plugin', name: LEGACY_PLUGIN }).delete({ key: 'settings' })
+        return get()
+      },
+    }
+  } },
   controllers: {
     catalog: ({ strapi }) => ({
       async find(ctx) {
         const plugin = strapi.plugin(PLUGIN)
         const base = catalog({ components: plugin.config('components'), previewBaseUrl: plugin.config('previewBaseUrl'),
           previewVersion: plugin.config('previewVersion'), disabled: plugin.config('disabled'), blockPreview: plugin.config('blockPreview'),
-          groups: plugin.config('groups'), componentUids: componentUids(strapi) })
+          groups: plugin.config('groups'), componentUids: componentUids(strapi), schemas: strapi.components })
         const settings = await plugin.service('settings').get()
         const media = await resolveMedia(strapi, settings)
         for (const [uid, entry] of Object.entries(settings.components)) {
-          base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template }
+          base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template,
+            ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }) }
         }
-        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes,
-          editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled } }
+        const hidden = hiddenName(plugin.config('hiddenAttribute')) || null
+        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden,
+          editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),
     settings: ({ strapi }) => ({
       async find(ctx) {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
+        // typology: the value without a Settings override (code config, else the guess), shown as "Automatic".
+        const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components }).components
         const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
-          displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0] }))
-        const contentTypes = contentTypeUids(strapi).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind }))
-        ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES,
-          disabled: strapi.plugin(PLUGIN).config('disabled') === true, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS }
+          displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology }))
+        const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
+          attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
+        ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES, typologies: TYPOLOGIES,
+          disabled: strapi.plugin(PLUGIN).config('disabled') === true, hiddenAttribute: hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')) || null, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS,
+          projectDefaults: strapi.plugin(PLUGIN).service('settings').projectDefaults() }
       },
       async update(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').set(ctx.request?.body) },
+      async reset(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').reset() },
+    }),
+    prefs: ({ strapi }) => ({
+      async find(ctx) {
+        const id = ctx.state?.user?.id; if (!id) return ctx.unauthorized()
+        ctx.body = mergePrefs(await store(strapi).get({ key: `prefs:${id}` }), componentUids(strapi))
+      },
+      async update(ctx) {
+        const id = ctx.state?.user?.id; if (!id) return ctx.unauthorized()
+        const value = validatePrefs(ctx.request?.body, componentUids(strapi))
+        await store(strapi).set({ key: `prefs:${id}`, value })
+        ctx.body = value
+      },
     }),
   },
   routes: { admin: { type: 'admin', routes: [
     { method: 'GET', path: '/catalog', handler: 'catalog.find', config: { policies: ['admin::isAuthenticatedAdmin'] } },
-    ...['find', 'update'].map((handler, index) => ({ method: index ? 'PUT' : 'GET', path: '/settings', handler: `settings.${handler}`,
+    ...['GET', 'PUT'].map(method => ({ method, path: '/me/prefs', handler: `prefs.${method === 'GET' ? 'find' : 'update'}`, config: { policies: ['admin::isAuthenticatedAdmin'] } })),
+    ...[['GET', 'find', 'read'], ['PUT', 'update', 'update'], ['DELETE', 'reset', 'update']].map(([method, handler, action]) => ({ method, path: '/settings', handler: `settings.${handler}`,
       config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions',
-        config: { actions: [`plugin::${PLUGIN}.settings.${index ? 'update' : 'read'}`] } }] } })),
+        config: { actions: [`plugin::${PLUGIN}.settings.${action}`] } }] } })),
   ] } },
 }

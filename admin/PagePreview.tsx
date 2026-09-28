@@ -29,11 +29,16 @@ import {
   validateGroups,
   groupRange,
   getIn,
+  hoverKey,
   projectPage,
   validateEdit,
   validateFocus,
 } from "./preview.mjs";
+import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from "./devices";
 import { useMessages } from "./messages";
+import { Icon, Tool } from "./icons";
+import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
+import { pasteInto, useClipboard } from "./RowActions";
 
 // Whole-page preview of the first Dynamic Zone in one iframe, docked beside
 // (split) or over (preview) the native form, which stays mounted. Works with
@@ -42,9 +47,7 @@ import { useMessages } from "./messages";
 type Mode = "form" | "split" | "preview";
 const RATIO_KEY = "blockscene:page-split-ratio",
   DEVICE_KEY = "blockscene:page-device";
-// Preview widths (CSS px). "fit" fills the pane; a device renders at its own width, scaled down when the pane is narrower.
-const DEVICES = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 } as const;
-type Device = keyof typeof DEVICES;
+const MODE_ICONS: Record<Mode, string> = { form: "list", split: "split", preview: "eye" };
 const MIN_PANE = 360,
   MIN_FORM = 520,
   NARROW = 960,
@@ -109,12 +112,13 @@ function useMainRect() {
   }, []);
   return rect;
 }
+// Split divider: always visible (4 px, neutral) with a grip pill; primary on hover, drag or focus. 12 px hit area.
 const Handle = styled.div`
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -5px;
-  width: 10px;
+  left: -6px;
+  width: 12px;
   cursor: col-resize;
   z-index: 3;
   touch-action: none;
@@ -124,17 +128,53 @@ const Handle = styled.div`
     top: 0;
     bottom: 0;
     left: 4px;
-    width: 2px;
+    width: 4px;
+    background: ${({ theme }) => theme.colors.neutral200};
+  }
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 1px;
+    width: 10px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 5px;
+    background: ${({ theme }) => theme.colors.neutral300} radial-gradient(circle, ${({ theme }) => theme.colors.neutral0} 1px, transparent 1.5px) center / 10px 6px;
   }
   &:hover::after,
+  &:hover::before,
   &[data-dragging="true"]::after,
-  &:focus-visible::after {
-    background: ${({ theme }) => theme.colors.primary600};
+  &[data-dragging="true"]::before,
+  &:focus-visible::after,
+  &:focus-visible::before {
+    background-color: ${({ theme }) => theme.colors.primary600};
   }
   &:focus-visible {
     outline: none;
   }
 `;
+// Form side of the hover sync: the row highlighted from the page is out of view; a click scrolls to it.
+const EdgeButton = styled.button`
+  position: fixed;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  transform: translateX(-50%);
+  color: ${({ theme }) => theme.colors.neutral0};
+  background: ${({ theme }) => theme.colors.primary600};
+  box-shadow: ${({ theme }) => theme.shadows.popupShadow};
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary700}; outline-offset: 2px; }
+`;
+const HOVER_ATTR = "data-blockscene-hover",
+  HOVER_GRACE = 1200;
+// The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
 const Frame = styled.iframe`
   position: absolute;
   top: 0;
@@ -142,25 +182,6 @@ const Frame = styled.iframe`
   background: white;
   transform-origin: top left;
 `;
-// The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
-function useStageSize(el: HTMLDivElement | null) {
-  const [size, setSize] = React.useState({ width: 0, height: 0 });
-  React.useEffect(() => {
-    if (!el) return;
-    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
-    measure();
-    const observer = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
-    observer?.observe(el);
-    return () => observer?.disconnect();
-  }, [el]);
-  return size;
-}
-const frameStyle = (device: Device, stage: { width: number; height: number }) => {
-  const width = DEVICES[device];
-  if (!width || !stage.width) return { left: 0, width: "100%", height: "100%" };
-  const scale = Math.min(1, stage.width / width);
-  return { left: Math.max(0, (stage.width - width * scale) / 2), width, height: stage.height / scale, transform: `scale(${scale})` };
-};
 const SPLIT_STYLE = `
 body.bp-split #main-content { padding-right: calc(var(--bp-pane, 50vw) + 1.6rem) !important; }
 body.bp-split [data-bp-grid] { display: flex !important; flex-direction: column-reverse; gap: 1.6rem; }
@@ -174,7 +195,42 @@ body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${B
   width: min(96rem, 92vw); max-height: calc(88vh - 5.6rem); overflow: auto; z-index: 1001; margin: 0 !important;
   background: ${background}; border-radius: 0 0 8px 8px; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
-body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }`;
+body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }
+body.bp-block-modal [data-bp-modal-hide] { display: none !important; }`;
+// Sidebar item: the native form column itself, lifted as a modal or a drawer with every other field hidden.
+const DRAWER_WIDTH = 640;
+type Box = { top: number; left: number; width: number; height: number };
+const fieldsStyle = (background: string, drawer: Box | null) => `
+body.bp-fields [data-bp-hide] { display: none !important; }
+body.bp-fields [data-bp-show] { grid-column: 1 / -1 !important; }
+body.bp-fields [data-bp-flat] { border: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; }
+body.bp-fields [data-bp-fields] { position: fixed !important; z-index: 1001; overflow: auto; margin: 0 !important;
+  padding: 1.6rem 2.4rem; background: ${background}; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
+body.bp-fields [data-bp-fields="modal"] { top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%); width: min(96rem, 92vw);
+  max-height: calc(88vh - 5.6rem); border-radius: 0 0 8px 8px; }
+${drawer ? `body.bp-fields [data-bp-fields="drawer"] { top: ${drawer.top + 56}px; left: ${drawer.left}px; width: ${drawer.width}px; height: ${drawer.height - 56}px; }` : ""}`;
+// The form column: the grid sibling of the item that holds the plugin panel.
+const formColumn = (anchor: HTMLElement | null) => {
+  let item = anchor;
+  while (item?.parentElement && getComputedStyle(item.parentElement).display !== "grid") item = item.parentElement;
+  return item?.parentElement ? ([...item.parentElement.children].find((child) => child !== item) as HTMLElement | undefined) : undefined;
+};
+// The top-level layout item of an attribute (a component's inner fields climb to the component's own item).
+const fieldItem = (column: HTMLElement, name: string) => {
+  const e = CSS.escape(name);
+  const hit = column.querySelector<HTMLElement>(`[name="${e}"], [name^="${e}."], label[for="${e}"], label[for^="${e}."]`);
+  let top: HTMLElement | null = null;
+  for (let el = hit; el && el !== column; el = el.parentElement) if (el.parentElement && getComputedStyle(el.parentElement).display === "grid") top = el;
+  return top || hit;
+};
+const RailButton = styled.button<{ $active: boolean }>`
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 5.6rem; padding: 6px 4px; border: 0;
+  border-radius: 4px; cursor: pointer; font-size: 1.1rem; line-height: 1.2;
+  color: ${({ theme, $active }) => ($active ? theme.colors.primary600 : theme.colors.neutral700)};
+  background: ${({ theme, $active }) => ($active ? theme.colors.primary100 : "transparent")};
+  &:hover { background: ${({ theme }) => theme.colors.neutral150}; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary600}; }
+`;
 const markLayout = (anchor: HTMLElement | null) => {
   let item: HTMLElement | null = anchor;
   while (
@@ -320,14 +376,86 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
   );
 }
 
+// Undo/redo of the whole edit view: snapshots of the native form values, one step per ~400 ms of continuous change.
+// A new document, locale or loaded initial values (a Save re-initialises the form) starts a fresh history.
+const COALESCE_MS = 400;
+const clone = (value: any) => {
+  try {
+    return structuredClone(value);
+  } catch {
+    return value;
+  }
+};
+// Fields keep their own native undo: the shortcut is ours only when the focus is outside them.
+const inField = (el: any) =>
+  el instanceof Element &&
+  ((el as HTMLElement).isContentEditable ||
+    Boolean(el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .ck')));
+function useFormHistory(docKey: string, enabled: boolean) {
+  const values = useForm("BlocksceneHistory", (state: any) => state.values);
+  const initialValues = useForm("BlocksceneHistory", (state: any) => state.initialValues);
+  const setValues = useForm("BlocksceneHistory", (state: any) => state.setValues);
+  const state = React.useRef<any>(null);
+  const [, rerender] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const s = state.current;
+    if (!s || s.key !== docKey || s.initial !== initialValues) {
+      state.current = { key: docKey, initial: initialValues, h: createHistory(clone(values)), at: 0, applied: null };
+      return rerender();
+    }
+    // Our own undo/redo coming back through the form: already the present step (SET_VALUES keeps the reference).
+    if (values === s.applied) return;
+    const now = Date.now();
+    s.h = record(s.h, clone(values), now - s.at < COALESCE_MS);
+    s.at = now;
+    rerender();
+  }, [values, initialValues, docKey]);
+  const apply = (step: typeof undo) => {
+    const s = state.current;
+    const next = s && step(s.h);
+    if (!enabled || !next || next === s.h || typeof setValues !== "function") return;
+    s.h = next;
+    s.at = 0; // the next change starts a new step
+    s.applied = clone(next.present);
+    setValues(s.applied);
+    rerender();
+  };
+  const live = React.useRef(apply);
+  live.current = apply;
+  React.useEffect(() => {
+    if (!enabled) return;
+    // The preview iframe is cross-origin: shortcuts pressed inside it never reach this document.
+    const onKey = (event: KeyboardEvent) => {
+      const action = historyKey(event);
+      if (!action || event.defaultPrevented || inField(event.target)) return;
+      event.preventDefault();
+      live.current(action === "undo" ? undo : redo);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled]);
+  const h = state.current?.h;
+  return {
+    canUndo: enabled && Boolean(h?.past.length),
+    canRedo: enabled && Boolean(h?.future.length),
+    undo: () => apply(undo),
+    redo: () => apply(redo),
+  };
+}
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
 export function PagePreview({
   editor,
   groups = null,
+  hiddenAttribute = null,
+  form = null,
   Modal,
   Toggle,
 }: {
   editor: any;
   groups?: Record<string, string> | null;
+  hiddenAttribute?: string | null;
+  form?: any;
   Modal: React.ComponentType<any>;
   Toggle?: React.ComponentType<any>;
 }) {
@@ -356,6 +484,10 @@ export function PagePreview({
     (state: any) => state.moveFieldRow,
   );
   const fields = c.layout?.edit?.layout?.flat(3) || [];
+  const history = useFormHistory(
+    `${c.model}:${c.id || "new"}:${c.form?.initialValues?.locale || ""}`,
+    !c.form?.disabled,
+  );
   // Same zone rules as the gallery panel: the first Dynamic Zone the user may read (create: any), never a conditional one;
   // editing additionally needs the update/create permission on the field and an enabled, non-disabled form.
   const readable = (name: string) =>
@@ -399,18 +531,51 @@ export function PagePreview({
   const [failed, setFailed] = React.useState(false);
   const [attempt, retry] = React.useReducer((n: number) => n + 1, 0);
   const [picking, setPicking] = React.useState<any>(null);
+  // Block hovered in the page (key), its form row when out of view, and the grace before a clear lands.
+  const [hovered, setHovered] = React.useState<string | null>(null);
+  const [edge, setEdge] = React.useState<"up" | "down" | null>(null);
+  const hoverRow = React.useRef<HTMLElement | null>(null);
+  const hoverTimer = React.useRef<any>(0);
+  const overEdge = React.useRef(false);
+  // The clear is skipped while the pointer rests on the edge indicator (the page's null can arrive after it got there).
+  const clearHover = () => {
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => !overEdge.current && setHovered(null), HOVER_GRACE);
+  };
   // Another document or locale: every pending dialog of the previous one is dropped (a stale modal must never write into the new form).
   React.useEffect(() => {
     setPicking(null);
     setInserting(null);
     setBlockModal(null);
+    setFieldsPanel(null);
   }, [c.id, c.form?.initialValues?.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [blockModal, setBlockModal] = React.useState<{ index: number; field?: string } | null>(null);
+  const sidebar: any[] = editor?.sidebar || [];
+  const sidebarPosition: "left" | "right" | "bottom" = editor?.sidebarPosition || "left";
+  const [fieldsPanel, setFieldsPanel] = React.useState<any>(null);
+  const [railEl, setRailEl] = React.useState<HTMLDivElement | null>(null);
+  // A drawer slides out of the sidebar itself (beside it, or above a bottom bar); the bar stays visible and clickable.
+  const [drawer, setDrawer] = React.useState<Box | null>(null);
+  React.useLayoutEffect(() => {
+    if (fieldsPanel?.open !== "drawer" || !railEl) return setDrawer(null);
+    const place = () => {
+      const r = railEl.getBoundingClientRect();
+      const pane = (railEl.closest('[data-testid="page-preview-pane"]') as HTMLElement).getBoundingClientRect();
+      const width = Math.min(DRAWER_WIDTH, window.innerWidth * 0.9);
+      if (sidebarPosition === "bottom") {
+        const height = Math.min(window.innerHeight * 0.6, r.top - pane.top);
+        setDrawer({ left: pane.left, width: pane.width, top: r.top - height, height });
+      } else setDrawer({ left: sidebarPosition === "right" ? r.left - width : r.right, width, top: r.top, height: r.height });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [fieldsPanel, railEl, sidebarPosition]);
   const theme: any = useTheme();
   const [inserting, setInserting] = React.useState<{
     after: string | null;
   } | null>(null);
-  const { get } = useFetchClient();
+  const { get, put } = useFetchClient();
   const { toggleNotification } = useNotification();
   const zoneAttr: any = zone ? c.contentType?.attributes?.[zone] : null;
   const iframe = React.useRef<HTMLIFrameElement>(null);
@@ -432,6 +597,9 @@ export function PagePreview({
   const resizable = mode === "split" && !narrow;
   const active = mode !== "form" && Boolean(url) && Boolean(zone);
   const rows: any[] = zone && Array.isArray(values?.[zone]) ? values[zone] : [];
+  // Copied blocks: the page shows a Paste button in its seams while the clipboard holds some (editor.clipboard).
+  const clip = useClipboard();
+  const clipCount = editor?.clipboard !== false && form && canEdit ? clip?.rows?.length || 0 : 0;
   const latest = React.useRef(rows);
   latest.current = rows;
   // Append then move: Strapi < 5.8.1 addFieldRow(field, value, index) overwrites the row at index instead of inserting.
@@ -449,6 +617,8 @@ export function PagePreview({
     components: c.components,
     setMode,
     onChange,
+    clip,
+    clipCount,
   });
   live.current = {
     mode,
@@ -457,6 +627,8 @@ export function PagePreview({
     components: c.components,
     setMode,
     onChange,
+    clip,
+    clipCount,
   };
 
   const send = React.useCallback(() => {
@@ -469,14 +641,16 @@ export function PagePreview({
           latest.current,
           live.current.components,
           window.location.origin,
+          hiddenAttribute,
         ),
         groups,
         locale: t.locale,
         mode: live.current.mode,
+        clipboard: live.current.clipCount,
       },
       origin,
     );
-  }, [channel, origin]);
+  }, [channel, origin, hiddenAttribute]);
   const indexOf = (key: string) =>
     latest.current.findIndex((row) => blockKey(row) === key);
   const path = (key: string, field: string) =>
@@ -526,7 +700,7 @@ export function PagePreview({
       );
       if (!target) return;
       const INPUT =
-        '.ck-editor__editable, textarea, input:not([type="hidden"]), select';
+        '[data-blockscene-lazy], .ck-editor__editable, textarea, input:not([type="hidden"]), select';
       let container: HTMLElement | null = target.matches(INPUT)
         ? target
         : target.parentElement;
@@ -542,9 +716,11 @@ export function PagePreview({
       // CKEditor also renders a hidden helper input (.ck-hidden): prefer its editable, and never a field that is not rendered.
       const editable = container?.matches(INPUT)
         ? container
-        : container?.querySelector<HTMLElement>(".ck-editor__editable") ||
+        : container?.querySelector<HTMLElement>("[data-blockscene-lazy], .ck-editor__editable") ||
           [...(container?.querySelectorAll<HTMLElement>(INPUT) || [])].find((el) => el.getClientRects().length > 0);
       if (!editable) return;
+      // A lazy rich-text field shows a preview until clicked: mount the editor, then focus it on a later tick.
+      if (editable.matches("[data-blockscene-lazy]")) return editable.click();
       if (
         editable.classList.contains("ck-editor__editable") &&
         !editable.isContentEditable
@@ -571,8 +747,46 @@ export function PagePreview({
   };
   // Lift the block's native form item over the preview; the field clicked in the page gets focus. Esc, the backdrop
   // or Done put it back. Escape is left to any dialog opened from inside the block (Media Library, CKEditor).
+  // Sidebar item: lift the form column and hide everything that does not hold one of the item's fields.
   React.useEffect(() => {
-    if (mode !== "preview" || !active) setBlockModal(null);
+    if (!fieldsPanel) return;
+    const column = formColumn(anchor.current);
+    const shown = column ? (fieldsPanel.fields as string[]).map((name) => fieldItem(column, name)).filter(Boolean) as HTMLElement[] : [];
+    if (!column || !shown.length) {
+      setFieldsPanel(null);
+      return;
+    }
+    const marked: HTMLElement[] = [];
+    const walk = (el: HTMLElement) => {
+      for (const child of [...el.children] as HTMLElement[]) {
+        if (shown.includes(child)) { child.setAttribute("data-bp-show", ""); marked.push(child); }
+        // The edit view's cards around the shown fields lose their frame: the drawer or modal is the frame now.
+        else if (shown.some((item) => child.contains(item))) { child.setAttribute("data-bp-flat", ""); marked.push(child); walk(child); }
+        else { child.setAttribute("data-bp-hide", ""); marked.push(child); }
+      }
+    };
+    walk(column);
+    column.setAttribute("data-bp-fields", fieldsPanel.open);
+    column.scrollTop = 0;
+    document.body.classList.add("bp-fields");
+    const later = setTimeout(() => document.querySelector<HTMLElement>('[data-testid="fields-panel-done"]')?.focus(), 250);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-bp-chrome])')) setFieldsPanel(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(later);
+      for (const el of marked) { el.removeAttribute("data-bp-show"); el.removeAttribute("data-bp-hide"); el.removeAttribute("data-bp-flat"); }
+      column.removeAttribute("data-bp-fields");
+      document.body.classList.remove("bp-fields");
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [fieldsPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (mode !== "preview" || !active) {
+      setBlockModal(null);
+      setFieldsPanel(null);
+    }
   }, [mode, active]);
   React.useEffect(() => {
     if (!blockModal) return;
@@ -584,6 +798,10 @@ export function PagePreview({
     const header = toggles(item.parentElement as HTMLElement)[blockModal.index];
     if (header?.getAttribute("aria-expanded") === "false") header.click();
     item.setAttribute("data-bp-block-modal", "");
+    // The dialog bar already names the block: its accordion header (whose click would collapse the form) and the
+    // zone's connector line are hidden while it is lifted. Nested accordions of repeatables keep theirs.
+    const chrome = [header?.closest("h3"), ...[...item.children].filter((child) => header && !child.contains(header))].filter(Boolean) as HTMLElement[];
+    chrome.forEach((el) => el.setAttribute("data-bp-modal-hide", ""));
     document.body.classList.add("bp-block-modal");
     // Focus leaves the iframe either way, so Escape reaches this document. Deferred: the page still owns focus while
     // its click finishes (a site adapter may place the caret there), and would take it back from an immediate focus().
@@ -592,12 +810,13 @@ export function PagePreview({
       else document.querySelector<HTMLElement>('[data-testid="block-modal-done"]')?.focus();
     }, 250);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-testid="block-modal-bar"])')) setBlockModal(null);
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]:not([data-bp-chrome])')) setBlockModal(null);
     };
     document.addEventListener("keydown", onKey);
     return () => {
       clearTimeout(later);
       item.removeAttribute("data-bp-block-modal");
+      chrome.forEach((el) => el.removeAttribute("data-bp-modal-hide"));
       document.body.classList.remove("bp-block-modal");
       document.removeEventListener("keydown", onKey);
     };
@@ -636,6 +855,14 @@ export function PagePreview({
           return;
         }
         setInserting({ after });
+        return;
+      }
+      if (is("paste") && canEdit && live.current.clipCount && form) {
+        // Same rules as the zone label Paste: every block allowed, room for all, groups whole; else a notice, no change.
+        const after = event.data.after === null || event.data.after === undefined ? null : String(event.data.after);
+        const index = insertIndex(latest.current, after);
+        if (index < 0) return;
+        pasteInto(form, { name: zone, components: zoneAttr?.components || [], max: zoneAttr?.max }, live.current.clip, components, groups, t, index);
         return;
       }
       if (is("move-group") && canEdit && groups) {
@@ -687,6 +914,15 @@ export function PagePreview({
           },
           { __component: close },
         );
+        return;
+      }
+      if (is("hover")) {
+        // A clear waits a moment: the pointer leaving the page for the form must still reach the edge indicator.
+        const next = hoverKey(event.data.key, latest.current);
+        if (next === undefined) return;
+        if (next === null) return clearHover();
+        clearTimeout(hoverTimer.current);
+        setHovered(next);
         return;
       }
       const key = typeof event.data?.key === "string" ? event.data.key : "";
@@ -750,7 +986,60 @@ export function PagePreview({
     if (!ready || !active) return;
     const timer = setTimeout(send, 120);
     return () => clearTimeout(timer);
-  }, [values, c.components, ready, active, send, mode]); // mode travels with the update
+  }, [values, c.components, ready, active, send, mode, clipCount]); // mode and the clipboard travel with the update
+  // Form -> page hover: the zone row under the pointer (open or closed), sent only when it changes.
+  React.useEffect(() => {
+    if (!active || !ready) return;
+    let last: string | null = null;
+    const post = (key: string | null) => {
+      if (key === last) return;
+      last = key;
+      iframe.current?.contentWindow?.postMessage({ protocol: PROTOCOL, channel, type: "hover", key }, origin);
+    };
+    const onOver = (event: PointerEvent) => {
+      const list = findZoneList(live.current.zoneLabel);
+      const target = event.target as Node;
+      const index = list?.contains(target)
+        ? [...list.querySelectorAll(":scope > li")].findIndex((li) => li.contains(target))
+        : -1;
+      post(index >= 0 ? blockKey(latest.current[index]) : null);
+    };
+    const onOut = (event: PointerEvent) => {
+      if (!event.relatedTarget) post(null);
+    };
+    document.addEventListener("pointerover", onOver);
+    document.addEventListener("pointerout", onOut);
+    return () => {
+      document.removeEventListener("pointerover", onOver);
+      document.removeEventListener("pointerout", onOut);
+      post(null);
+    };
+  }, [active, ready, channel, origin]);
+  // Page -> form hover: the matching row gets the highlight attribute; out of view, an edge indicator points to it.
+  React.useEffect(() => {
+    const item = hovered && active
+      ? (findZoneList(live.current.zoneLabel)?.querySelectorAll(":scope > li")[indexOf(hovered)] as HTMLElement | undefined)
+      : undefined;
+    hoverRow.current = item || null;
+    if (!item) return setEdge(null);
+    item.setAttribute(HOVER_ATTR, "");
+    const measure = () => {
+      const r = item.getBoundingClientRect();
+      setEdge(r.bottom < 0 ? "up" : r.top > window.innerHeight ? "down" : null);
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      item.removeAttribute(HOVER_ATTR);
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [hovered, active]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (!edge) overEdge.current = false; // an indicator that unmounts under the pointer never gets its pointerleave
+  }, [edge]);
+  React.useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
   if (!zone) return null;
   const modes: Array<[Mode, string]> = [
@@ -758,7 +1047,8 @@ export function PagePreview({
     ["split", t.modeSplit],
     ["preview", t.modePreview],
   ];
-  const switcher = (
+  // No preview route configured: no mode buttons at all (only the hint below), rather than two dead buttons.
+  const switcher = url && (
     <Flex
       gap={1}
       wrap="wrap"
@@ -767,34 +1057,21 @@ export function PagePreview({
       aria-label={t.modeGroup}
     >
       {modes.map(([value, label]) => (
-        <Button
-          key={value}
-          type="button"
-          size="S"
-          variant={mode === value ? "default" : "tertiary"}
-          aria-pressed={mode === value}
-          onClick={() => setMode(value)}
-          disabled={!url && value !== "form"}
-        >
-          {label}
-        </Button>
+        <Tool key={value} icon={MODE_ICONS[value]} label={label} active={mode === value} onClick={() => setMode(value)} />
       ))}
+    </Flex>
+  );
+  const historyTools = !c.form?.disabled && (
+    <Flex gap={1} data-testid="blockscene-history" role="group" aria-label={t.historyGroup}>
+      <Tool icon="undo" label={`${t.undo} (${MAC ? "⌘Z" : "Ctrl+Z"})`} disabled={!history.canUndo} onClick={history.undo} />
+      <Tool icon="redo" label={`${t.redo} (${MAC ? "⇧⌘Z" : "Ctrl+Y"})`} disabled={!history.canRedo} onClick={history.redo} />
     </Flex>
   );
   const devices = (
     <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
       {(Object.keys(DEVICES) as Device[]).map((value) => (
-        <Button
-          key={value}
-          type="button"
-          size="S"
-          variant={device === value ? "secondary" : "tertiary"}
-          aria-pressed={device === value}
-          onClick={() => setDevice(value)}
-          title={DEVICES[value] ? `${DEVICES[value]} px` : undefined}
-        >
-          {t.device[value]}
-        </Button>
+        <Tool key={value} icon={value} label={DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]}
+          active={device === value} onClick={() => setDevice(value)} />
       ))}
     </Flex>
   );
@@ -835,9 +1112,9 @@ export function PagePreview({
           {problems.map((error: any) => (
             <li
               key={`${error.code}-${error.index}`}
-              style={{ marginBottom: 6 }}
+              style={{ marginBottom: 8 }}
             >
-              <Typography variant="pi" textColor="danger700">
+              <Typography variant="pi" textColor="neutral800" tag="p">
                 {t.f(
                   error.code === "closeBeforeOpen"
                     ? "diagCloseBeforeOpen"
@@ -859,6 +1136,8 @@ export function PagePreview({
                     variant="danger-light"
                     data-testid={`diag-insert-close-${error.index}`}
                     onClick={() => insertClose(error)}
+                    // Long labels wrap left-aligned inside a narrow panel instead of a centred three-line block.
+                    style={{ height: "auto", minHeight: 32, whiteSpace: "normal", textAlign: "left", paddingTop: 6, paddingBottom: 6 }}
                   >
                     {t.f("diagInsertClose", {
                       n: error.index + 1,
@@ -868,7 +1147,7 @@ export function PagePreview({
                 </Box>
               )}
               {error.code === "closeBeforeOpen" && (
-                <Typography variant="pi" textColor="neutral600">
+                <Typography variant="pi" textColor="neutral600" tag="p" style={{ marginTop: 2 }}>
                   {t.diagStrayHint}
                 </Typography>
               )}
@@ -880,7 +1159,10 @@ export function PagePreview({
   );
   return (
     <Flex direction="column" alignItems="stretch" gap={2} ref={anchor}>
-      {switcher}
+      <Flex gap={2} wrap="wrap">
+        {switcher}
+        {historyTools}
+      </Flex>
       {diagnostics}
       <Typography variant="pi" textColor="neutral600">
         {url ? t.previewHelp : t.previewNoUrl}
@@ -899,12 +1181,33 @@ export function PagePreview({
               userSelect: dragging ? "none" : undefined,
             }}
           >
-            <style>{SPLIT_STYLE}</style>
+            <style>{`${SPLIT_STYLE}\n[${HOVER_ATTR}] { outline: 2px solid ${theme?.colors?.primary600 || "#4945ff"}; outline-offset: 2px; border-radius: 4px; }`}</style>
+            {resizable && edge && (
+              <EdgeButton
+                type="button"
+                data-testid="page-preview-hover-edge"
+                data-direction={edge}
+                aria-label={t.scrollToHovered}
+                title={t.scrollToHovered}
+                style={{ left: main.left + (main.width - paneWidth) / 2, ...(edge === "up" ? { top: 16 } : { bottom: 16 }) }}
+                onPointerEnter={() => {
+                  overEdge.current = true;
+                }}
+                onPointerLeave={() => {
+                  overEdge.current = false;
+                  clearHover();
+                }}
+                onClick={() => hoverRow.current?.scrollIntoView({ block: "center", behavior: "smooth" })}
+              >
+                <Icon name={edge} size={16} />
+              </EdgeButton>
+            )}
             {resizable && (
               <Handle
                 role="separator"
                 aria-orientation="vertical"
                 aria-label={t.resize}
+                title={t.resizeHint}
                 tabIndex={0}
                 aria-valuemin={MIN_PANE}
                 aria-valuemax={Math.max(MIN_PANE, vw - MIN_FORM)}
@@ -927,6 +1230,7 @@ export function PagePreview({
                   applyWidth(main.left + main.width - e.clientX, true);
                 }}
                 onPointerCancel={() => setDragging(false)}
+                onDoubleClick={() => applyWidth(vw / 2, true)}
                 onKeyDown={onKey}
               />
             )}
@@ -941,6 +1245,7 @@ export function PagePreview({
               style={{ position: "sticky", top: 0, zIndex: 2 }}
             >
               {switcher}
+              {historyTools}
               {devices}
               <Flex
                 gap={2}
@@ -968,8 +1273,24 @@ export function PagePreview({
                 />
               </Flex>
             </Flex>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: sidebarPosition === "bottom" ? "column-reverse" : sidebarPosition === "right" ? "row-reverse" : "row" }}>
+            {mode === "preview" && sidebar.length > 0 && (
+              <div ref={setRailEl} style={{ display: "flex" }}>
+              <Flex data-testid="page-preview-sidebar" data-position={sidebarPosition} role="toolbar" aria-label={t.sidebarLabel}
+                direction={sidebarPosition === "bottom" ? "row" : "column"} gap={1} padding={1} background="neutral100" justifyContent={sidebarPosition === "bottom" ? "center" : "flex-start"}
+                style={{ [sidebarPosition === "bottom" ? "borderTop" : sidebarPosition === "right" ? "borderLeft" : "borderRight"]: `1px solid ${theme?.colors?.neutral200 || "#dcdce4"}`, overflow: "auto" }}>
+                {sidebar.map((item: any, i: number) => (
+                  <RailButton key={`${item.label}-${i}`} type="button" $active={fieldsPanel === item} aria-pressed={fieldsPanel === item}
+                    title={item.label} data-testid={`sidebar-item-${i}`} onClick={() => setFieldsPanel(fieldsPanel === item ? null : item)}>
+                    {item.icon && <Icon name={item.icon} />}
+                    <span>{item.label}</span>
+                  </RailButton>
+                ))}
+              </Flex>
+              </div>
+            )}
             <div ref={setStage} data-testid="page-preview-stage" data-device={device}
-              style={{ position: "relative", flex: 1, overflow: "hidden", background: device === "fit" ? undefined : "#eaeaef" }}>
+              style={{ position: "relative", flex: 1, overflow: "hidden", ...stageBackground(theme) }}>
               <Frame
                 key={attempt}
                 ref={iframe}
@@ -982,6 +1303,7 @@ export function PagePreview({
                 }}
                 style={{ ...frameStyle(device, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
               />
+            </div>
             </div>
           </Pane>,
           document.body,
@@ -997,6 +1319,9 @@ export function PagePreview({
           Modal={Modal}
           Toggle={Toggle}
           get={get}
+          put={put}
+          contentType={c.model}
+          locale={c.form?.initialValues?.locale}
           open
           onOpenChange={(open: boolean) => {
             if (!open) setInserting(null);
@@ -1038,12 +1363,35 @@ export function PagePreview({
             <style>{blockModalStyle(theme?.colors?.neutral0 || "#fff")}</style>
             <div data-testid="block-modal-backdrop" onClick={() => setBlockModal(null)}
               style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(33, 33, 52, 0.45)" }} />
-            <Flex data-testid="block-modal-bar" role="dialog" aria-label={blockLabel(blockModal.index)} background="neutral100"
+            <Flex data-testid="block-modal-bar" data-bp-chrome="" role="dialog" aria-label={blockLabel(blockModal.index)} background="neutral100"
               paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
               style={{ position: "fixed", top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)",
                 height: "5.6rem", zIndex: 1001, borderRadius: "8px 8px 0 0", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)" }}>
               <Typography variant="delta" tag="h2">{blockLabel(blockModal.index)}</Typography>
               <Button size="S" onClick={() => setBlockModal(null)} data-testid="block-modal-done">{t.blockModalDone}</Button>
+            </Flex>
+          </>,
+          document.body,
+        )}
+      {fieldsPanel &&
+        createPortal(
+          <>
+            <style>{fieldsStyle(theme?.colors?.neutral0 || "#fff", drawer)}</style>
+            {/* A drawer dims only the page, so the sidebar stays usable; a modal dims everything. */}
+            <div data-testid="fields-panel-backdrop" onClick={() => setFieldsPanel(null)}
+              style={{ position: "fixed", zIndex: 1000, background: "rgba(33, 33, 52, 0.45)",
+                ...(fieldsPanel.open === "drawer" && stage ? (({ top, left, width, height }) => ({ top, left, width, height }))(stage.getBoundingClientRect()) : { inset: 0 }) }} />
+            <Flex data-testid="fields-panel-bar" data-bp-chrome="" role="dialog" aria-label={fieldsPanel.label} background="neutral100"
+              paddingLeft={4} paddingRight={4} justifyContent="space-between" alignItems="center"
+              style={{ position: "fixed", zIndex: 1001, height: "5.6rem", boxShadow: "0 8px 32px rgba(33, 33, 52, 0.3)",
+                ...(fieldsPanel.open === "modal"
+                  ? { top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)", borderRadius: "8px 8px 0 0" }
+                  : drawer ? { top: drawer.top, left: drawer.left, width: drawer.width } : { display: "none" }) }}>
+              <Flex gap={2} alignItems="center">
+                {fieldsPanel.icon && <Icon name={fieldsPanel.icon} />}
+                <Typography variant="delta" tag="h2">{fieldsPanel.label}</Typography>
+              </Flex>
+              <Button size="S" onClick={() => setFieldsPanel(null)} data-testid="fields-panel-done">{t.blockModalDone}</Button>
             </Flex>
           </>,
           document.body,

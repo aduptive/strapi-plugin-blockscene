@@ -4,10 +4,10 @@ import { rmSync, copyFileSync, readFileSync } from 'node:fs'
 const major = Number(process.argv[2])
 if (![4, 5].includes(major)) throw new Error('Pass 4 or 5')
 if (major === 4 && Number(process.versions.node.split('.')[0]) > 20) throw new Error('Use Node 20 to install the Strapi 4 lab')
-const versions = { blockscene: JSON.parse(readFileSync(`packages/strapi${major}/package.json`)).version, 'image-pipeline': `${major === 4 ? 1 : 2}.0.0-alpha.1` }
-// Repository folders kept their original names (`strapi-plugin-block-picker`, `strapi-plugin-image-optimization`);
-// the packages and artifacts are `blockscene` and `image-pipeline`.
-const packages = [['block-picker', 'blockscene'], ['image-optimization', 'image-pipeline']].map(([dir, slug]) => resolve(`../strapi-plugin-${dir}/artifacts/aduptive-strapi-${slug}-${versions[slug]}.tgz`))
+// Blockscene comes from this repository; Image Pipeline (also installed in the labs) from its sibling repository.
+const pipeline = resolve('../strapi-plugin-image-pipeline')
+const version = (root) => JSON.parse(readFileSync(`${root}/packages/strapi${major}/package.json`)).version
+const packages = [resolve(`artifacts/aduptive-strapi-blockscene-${version('.')}.tgz`), `${pipeline}/artifacts/aduptive-strapi-image-pipeline-${version(pipeline)}.tgz`]
 // Same version, new tarball: npm keeps the installed copy unless it is removed first.
 // The pre-rename package (`strapi-block-picker`) must not stay installed next to the new one: Strapi would load both.
 for (const slug of ['blockscene', 'block-picker', 'image-pipeline']) rmSync(`.local/strapi${major}/node_modules/@aduptive/strapi-${slug}`, { recursive: true, force: true })

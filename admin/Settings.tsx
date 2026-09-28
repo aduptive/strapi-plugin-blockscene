@@ -5,6 +5,7 @@ import { candidatesFor } from './model.mjs'
 import { Thumb } from './Gallery'
 import { Wireframe, TEMPLATES, DEFAULT_PALETTE } from './wireframes'
 import { useMessages } from './messages'
+import { Icon, Tool } from './icons'
 
 const COLOR = /^#[0-9A-Fa-f]{6}$/
 // Components: responsive card grid (several per row, one per row on narrow screens).
@@ -49,11 +50,94 @@ function ColorField({ name, label, value, onChange, disabled }: any) {
   </Label>
 }
 
+// Comma separated tags; the text is kept while typing so a trailing comma or space does not vanish.
+function TagsField({ name, label, hint, value, onChange, disabled }: any) {
+  const [text, setText] = React.useState(value.join(', '))
+  return <Label>
+    <Typography variant="pi" fontWeight="bold" textColor="neutral800">{label}</Typography>
+    <input name={name} value={text} disabled={disabled} onChange={e => {
+      setText(e.target.value)
+      onChange([...new Set(e.target.value.split(',').map(tag => tag.replace(/[<>]/g, '').trim().slice(0, 24)).filter(Boolean))].slice(0, 10))
+    }} style={{ padding: '6px 8px', border: '1px solid #dcdce4', borderRadius: 4, fontSize: 13 }} />
+    <Typography variant="pi" textColor="neutral600">{hint}</Typography>
+  </Label>
+}
+
+// Custom field uids, comma or space separated; same rule as server/settings.js (lazyFields).
+const FIELD_UID = /^(plugin|global)::[\w.-]+$/
+const LAZY_MAX = 20
+const parseUids = (text: string) => [...new Set(text.split(/[\s,]+/).filter(Boolean))]
+const badUids = (uids: string[] = []) => uids.length > LAZY_MAX || uids.some(uid => !FIELD_UID.test(uid))
+function UidListField({ TextField, value, onChange, ...props }: any) {
+  const [text, setText] = React.useState(value.join(', '))
+  // Save or restore replaced the list: show it, unless it is what is being typed.
+  React.useEffect(() => { if (parseUids(text).join() !== value.join()) setText(value.join(', ')) }, [value.join()])
+  return <TextField {...props} value={text} onChange={(v: string) => { setText(v); onChange(parseUids(v)) }} />
+}
+
+// Visual editor sidebar (Strapi 5), same rules as server/settings.js (ICONS, sidebarItem, 12 items).
+const SIDEBAR_ICONS = ['text', 'tag', 'seo', 'settings', 'image', 'link', 'palette', 'list', 'globe', 'info']
+const SIDEBAR_MAX = 12
+const ITEM_LABEL = /^[^<>]{1,40}$/
+const badItem = (item: any) => !ITEM_LABEL.test(String(item.label || '').trim()) || !item.fields?.length
+// Timestamps, authors and i18n bookkeeping have no editable input in the form.
+const SYSTEM_FIELDS = ['createdAt', 'updatedAt', 'publishedAt', 'createdBy', 'updatedBy', 'locale', 'localizations']
+const Item = styled.div`
+  display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.neutral200}; background: ${({ theme }) => theme.colors.neutral100};
+`
+const Checks = styled.fieldset`
+  display: flex; flex-wrap: wrap; gap: 4px 16px; border: 0; padding: 0; margin: 0; font-size: 13px; color: ${({ theme }) => theme.colors.neutral800};
+  legend { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  label { display: inline-flex; align-items: center; gap: 6px; }
+`
+
+// Only overrides are stored: no items removes the key (via `set`).
+function SidebarEditor({ type, entry, set, t, disabled, SelectField, TextField }: any) {
+  const items: any[] = entry.sidebar || []
+  const save = (next: any[]) => set('sidebar', next.length ? next : undefined, undefined)
+  const edit = (index: number, patch: any) => save(items.map((item, i) => i === index ? { ...item, ...patch } : item))
+  const move = (index: number, by: number) => { const next = [...items]; [next[index], next[index + by]] = [next[index + by], next[index]]; save(next) }
+  const fields = (type.attributes || []).filter((attr: any) => !SYSTEM_FIELDS.includes(attr.name))
+  const id = (name: string, index?: number) => `sidebar-${name}-${type.uid}${index === undefined ? '' : `-${index}`}`
+  return <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4} data-testid={`sidebar-editor-${type.uid}`}>
+    <Typography variant="delta" tag="h3">{t.f('sidebarTitle', { name: type.displayName })}</Typography>
+    <Typography variant="pi" textColor="neutral600">{t.sidebarHelp}</Typography>
+    <Box style={{ maxWidth: 240 }}><SelectField name={id('position')} label={t.sidebarPosition} value={entry.sidebarPosition || 'left'} disabled={disabled}
+      options={['left', 'right', 'bottom'].map(value => ({ value, label: t.positions[value] }))} onChange={(v: string) => set('sidebarPosition', v, 'left')} /></Box>
+    {items.map((item, index) => <Item key={index} data-testid={id('item', index)}>
+      <Flex gap={4} alignItems="flex-end" wrap="wrap">
+        <Box style={{ flex: '1 1 200px' }}><TextField name={id('label', index)} label={t.sidebarItemLabel} value={item.label} disabled={disabled} onChange={(v: string) => edit(index, { label: v })} /></Box>
+        <Box style={{ minWidth: 180 }}><SelectField name={id('icon', index)} label={t.sidebarIcon} value={item.icon || 'none'} disabled={disabled}
+          options={[{ value: 'none', label: t.noIcon }, ...SIDEBAR_ICONS.map(value => ({ value, label: t.icons[value], icon: <Icon name={value} size={16} /> }))]}
+          onChange={(v: string) => edit(index, { icon: v === 'none' ? undefined : v })} /></Box>
+        <Box style={{ minWidth: 160 }}><SelectField name={id('open', index)} label={t.sidebarOpens} value={item.open} disabled={disabled}
+          options={['drawer', 'modal'].map(value => ({ value, label: t.opens[value] }))} onChange={(v: string) => edit(index, { open: v })} /></Box>
+        <Flex gap={1} paddingBottom={1}>
+          <Tool icon="up" label={t.moveUp} disabled={disabled || index === 0} onClick={() => move(index, -1)} />
+          <Tool icon="down" label={t.moveDown} disabled={disabled || index === items.length - 1} onClick={() => move(index, 1)} />
+          <Tool icon="close" label={t.sidebarRemove} disabled={disabled} onClick={() => save(items.filter((_, i) => i !== index))} />
+        </Flex>
+      </Flex>
+      <Checks disabled={disabled}><legend>{t.sidebarFields}</legend>
+        {fields.map((attr: any) => <label key={attr.name}><input type="checkbox" name={id(`field-${attr.name}`, index)} checked={item.fields.includes(attr.name)}
+          onChange={e => edit(index, { fields: e.target.checked ? [...item.fields, attr.name] : item.fields.filter((name: string) => name !== attr.name) })} />{attr.name}</label>)}
+      </Checks>
+      {badItem(item) && <Typography role="alert" variant="pi" textColor="danger600">{t.sidebarInvalid}</Typography>}
+    </Item>)}
+    <Flex gap={2} alignItems="center">
+      <Button variant="secondary" size="S" disabled={disabled || items.length >= SIDEBAR_MAX} data-testid={id('add')}
+        onClick={() => save([...items, { label: '', open: 'drawer', fields: [] }])}>{t.sidebarAdd}</Button>
+      {items.length >= SIDEBAR_MAX && <Typography variant="pi" textColor="neutral600">{t.f('sidebarLimit', { max: SIDEBAR_MAX })}</Typography>}
+    </Flex>
+  </Flex>
+}
+
 export const permissions = { read: [{ action: 'plugin::blockscene.settings.read', subject: null }], update: [{ action: 'plugin::blockscene.settings.update', subject: null }] }
 
 export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, previewSupported = false }: any) {
   const t = useMessages()
-  const { get, put } = useClient()
+  const { get, put, del } = useClient()
   const { canRead, canUpdate, isLoading } = usePermissions()
   const [data, setData] = React.useState<any>(null)
   const [catalog, setCatalog] = React.useState<any>(null)
@@ -76,8 +160,11 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
     return () => { active = false }
   }, [get, canRead, isLoading])
   const update = (patch: (current: any) => any) => { setSettings((current: any) => patch(structuredClone(current))); setDirty(true); setStatus('') }
-  const invalid = settings && (Object.values(settings.palette).some((value: any) => !COLOR.test(value)) ||
-    (settings.editor.previewUrl && !/^https?:\/\/\S+$/.test(settings.editor.previewUrl)))
+  const badColor = settings && (Object.values(settings.palette).some((value: any) => !COLOR.test(value)) ||
+    [settings.editor.previewUrl, settings.editor.blockPreviewUrl].some((url: string) => url && !/^https?:\/\/\S+$/.test(url)))
+  const badSidebar = settings && Object.values(settings.contentTypes || {}).some((entry: any) => (entry.sidebar || []).some(badItem))
+  const badLazy = settings && badUids(settings.editor.lazyFields)
+  const invalid = badColor || badSidebar || badLazy
   const save = async () => {
     if (!settings || invalid || !canUpdate) return
     setSaving(true); setStatus('')
@@ -88,6 +175,24 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
     } catch { setStatus(t.saveFailed) }
     finally { setSaving(false) }
   }
+  // Removes the saved document: back to the project defaults (plugin config `settings`) or the built-in ones.
+  const restore = async () => {
+    if (!canUpdate || !window.confirm(data.projectDefaults ? t.restoreProjectConfirm : t.resetAllConfirm)) return
+    setSaving(true); setStatus('')
+    try {
+      const { data: fresh } = await del('/blockscene/settings')
+      setSettings(fresh); setDirty(false); setStatus(t.restored)
+      const refreshed = await get('/blockscene/settings'); setMedia(refreshed.data.media || {})
+    } catch { setStatus(t.saveFailed) }
+    finally { setSaving(false) }
+  }
+  // Only overrides are stored: undefined removes the key, and an empty entry disappears.
+  const setComponent = (uid: string, key: string, value: unknown) => update(s => {
+    const next = { ...s.components[uid] }
+    if (value === undefined) delete next[key]; else next[key] = value
+    if (Object.keys(next).length) s.components[uid] = next; else delete s.components[uid]
+    return s
+  })
   const editor = settings?.editor || {}
   const components = (data?.components || []).filter((c: any) => `${c.displayName} ${c.uid}`.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()))
   const sourceOf = (uid: string, manual: boolean) => {
@@ -108,6 +213,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   const controls = (suffix: string) => ready && <Flex gap={3} alignItems="center" wrap="wrap">
     <Typography role="status" aria-live="polite" textColor={dirty ? 'warning700' : 'neutral600'} data-testid={`${dirty ? 'unsaved-indicator' : 'save-status'}${suffix}`}>
       {dirty ? t.unsaved : status || t.noChanges}</Typography>
+    {!suffix && <Button variant="tertiary" onClick={restore} disabled={!canUpdate || saving} data-testid="restore-blockscene-settings">
+      {data.projectDefaults ? t.restoreProject : t.resetAll}</Button>}
     <Button onClick={save} disabled={!canUpdate || invalid || !dirty} loading={saving} data-testid={`save-blockscene-settings${suffix}`}>{t.save}</Button>
   </Flex>
   return <Box padding={8} background="neutral100"><Flex direction="column" alignItems="stretch" gap={5}>
@@ -133,7 +240,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           {Object.keys(DEFAULT_PALETTE).map(key => <ColorField key={key} name={`palette-${key}`} label={(t as any)[key]} value={settings.palette[key]} disabled={!canUpdate || saving}
             onChange={(value: string) => update(s => { s.palette[key] = value; return s })} />)}
         </Swatches>
-        {invalid && <Typography role="alert" textColor="danger600">{t.invalidColor}</Typography>}
+        {badColor && <Typography role="alert" textColor="danger600">{t.invalidColor}</Typography>}
         <Typography variant="pi" textColor="neutral600">{t.previewLabel}</Typography>
         <Swatches data-testid="palette-preview">
           {TEMPLATES.map(template => <Flex key={template} direction="column" gap={1}>
@@ -149,9 +256,13 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <Typography variant="pi" textColor="neutral600">{t.enabledHelp}</Typography>
         <ToggleField name="editor-showOpenAll" label={t.showOpenAll} value={editor.showOpenAll} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showOpenAll = v; return s })} />
         <ToggleField name="editor-showCloseAll" label={t.showCloseAll} value={editor.showCloseAll} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showCloseAll = v; return s })} />
+        <ToggleField name="editor-showRowThumbnails" label={t.showRowThumbnails} value={editor.showRowThumbnails !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.showRowThumbnails = v; return s })} />
         <SelectField name="editor-initialState" label={t.initialState} value={editor.initialState} disabled={!canUpdate || saving}
           options={['closed', 'open', 'remember'].map(value => ({ value, label: t.states[value] }))} onChange={(v: string) => update(s => { s.editor.initialState = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{t.rememberHelp}</Typography>
+        <TextField name="editor-blockPreviewUrl" label={t.blockPreviewUrl} value={editor.blockPreviewUrl || ''} disabled={!canUpdate || saving}
+          placeholder="http://localhost:3000/block-preview/{name}/{variant}" onChange={(v: string) => update(s => { s.editor.blockPreviewUrl = v.trim(); return s })} />
+        <Typography variant="pi" textColor="neutral600">{t.blockPreviewUrlHelp}</Typography>
         {previewSupported ? <>
           <TextField name="editor-previewUrl" label={t.previewUrl} value={editor.previewUrl || ''} disabled={!canUpdate || saving} placeholder="https://site.test/block-preview/page"
             onChange={(v: string) => update(s => { s.editor.previewUrl = v.trim(); return s })} />
@@ -159,11 +270,24 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <SelectField name="editor-previewMode" label={t.previewMode} value={editor.previewMode || 'form'} disabled={!canUpdate || saving}
             options={['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))} onChange={(v: string) => update(s => { s.editor.previewMode = v; return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewModeHelp}</Typography>
+          <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
+          <UidListField TextField={TextField} name="editor-lazyFields" label={t.lazyFields} value={editor.lazyFields || []} disabled={!canUpdate || saving || editor.lazyEditors === false}
+            placeholder="plugin::ckeditor5.CKEditor" onChange={(uids: string[]) => update(s => { s.editor.lazyFields = uids; return s })} />
+          <Typography variant="pi" textColor={badLazy ? 'danger600' : 'neutral600'} role={badLazy ? 'alert' : undefined}>{badLazy ? t.f('lazyFieldsInvalid', { max: LAZY_MAX }) : t.lazyEditorsHelp}</Typography>
           {data.blockPreviewAvailable && <>
             <ToggleField name="editor-blockPreviewInForm" label={t.blockPreviewInForm} value={editor.blockPreviewInForm} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.blockPreviewInForm = v; return s })} />
             <Typography variant="pi" textColor="neutral600">{t.blockPreviewInFormHelp}</Typography>
           </>}
         </> : <Typography variant="pi" textColor="neutral600">{t.previewV4}</Typography>}
+      </Flex></Box>
+      <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="row-actions-settings">
+        <Typography variant="beta" tag="h2">{t.rowActionsTitle}</Typography>
+        <ToggleField name="editor-confirmDelete" label={t.confirmDeleteOption} value={editor.confirmDelete !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.confirmDelete = v; return s })} />
+        <ToggleField name="editor-duplicate" label={t.duplicateOption} value={editor.duplicate !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.duplicate = v; return s })} />
+        <ToggleField name="editor-clipboard" label={t.clipboardOption} value={editor.clipboard !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.clipboard = v; return s })} />
+        <SelectField name="editor-hiddenBlocks" label={t.hiddenBlocks} value={editor.hiddenBlocks || 'strip'} disabled={!canUpdate || saving || !data.hiddenAttribute}
+          options={['strip', 'flag', 'off'].map(value => ({ value, label: t.hiddenModes[value] }))} onChange={(v: string) => update(s => { s.editor.hiddenBlocks = v; return s })} />
+        <Typography variant="pi" textColor="neutral600">{data.hiddenAttribute ? t.hiddenBlocksHelp : t.hiddenAttributeOff}</Typography>
       </Flex></Box>
       {(data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
         <Typography variant="beta" tag="h2">{t.contentTypes}</Typography>
@@ -178,14 +302,18 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
             if (Object.keys(next).length) s.contentTypes[type.uid] = next; else delete s.contentTypes[type.uid]
             return s
           })
-          return <Flex key={type.uid} gap={6} alignItems="flex-end" wrap="wrap" data-testid={`content-type-${type.uid}`}>
+          return <Flex key={type.uid} direction="column" alignItems="stretch" gap={4}>
+          <Flex gap={6} alignItems="flex-end" wrap="wrap" data-testid={`content-type-${type.uid}`}>
             <Box style={{ minWidth: 220 }}><ToggleField name={`type-enabled-${type.uid}`} label={type.displayName} value={entry.enabled !== false} disabled={!canUpdate || saving}
               onChange={(v: boolean) => set('enabled', v, true)} /></Box>
             {previewSupported && <Box style={{ minWidth: 240 }}><SelectField name={`type-mode-${type.uid}`} label={t.typeMode} value={entry.previewMode || 'default'} disabled={!canUpdate || saving || entry.enabled === false}
               options={[{ value: 'default', label: t.f('modeDefault', { mode: t.modes[editor.previewMode || 'form'] }) }, ...['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))]}
               onChange={(v: string) => set('previewMode', v, 'default')} /></Box>}
           </Flex>
+          {previewSupported && entry.enabled !== false && <SidebarEditor type={type} entry={entry} set={set} t={t} disabled={!canUpdate || saving} SelectField={SelectField} TextField={TextField} />}
+          </Flex>
         })}
+        {badSidebar && <Typography role="alert" textColor="danger600">{t.sidebarInvalidSave}</Typography>}
       </Flex></Box>}
       <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <Typography variant="beta" tag="h2">{t.components}</Typography>
@@ -213,6 +341,11 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
               <SelectField name={`template-${component.uid}`} label={t.template} value={entry.template || 'generic'} disabled={!canUpdate || saving}
                 options={TEMPLATES.map(value => ({ value, label: t.templates[value] }))}
                 onChange={(v: string) => update(s => { s.components[component.uid] = { ...s.components[component.uid], template: v }; return s })} />
+              <SelectField name={`typology-${component.uid}`} label={t.typology} value={entry.typology || 'auto'} disabled={!canUpdate || saving}
+                options={[{ value: 'auto', label: t.f('typologyAuto', { name: t.typologies[component.typology] || component.typology }) }, ...(data.typologies || []).map((value: string) => ({ value, label: t.typologies[value] }))]}
+                onChange={(v: string) => setComponent(component.uid, 'typology', v === 'auto' ? undefined : v)} />
+              <TagsField name={`tags-${component.uid}`} label={t.tags} hint={t.tagsHelp} value={entry.tags || []} disabled={!canUpdate || saving}
+                onChange={(tags: string[]) => setComponent(component.uid, 'tags', tags.length ? tags : undefined)} />
             </Flex>
           </Card>
         })}</Grid>

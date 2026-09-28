@@ -78,14 +78,15 @@ export function mediaFields(uid, row, components) {
   }
   return media
 }
-export function projectPage(rows, components, cmsOrigin) {
+// `hidden`: the "hide on the site" attribute name; a row with it set is sent with `hidden: true` (dimmed by the page).
+export function projectPage(rows, components, cmsOrigin, hidden = null) {
   return (Array.isArray(rows) ? rows : []).slice(0, 200).flatMap((row, index) => {
     const uid = row?.__component
     const key = blockKey(row)
     const schema = components?.[uid]
     if (!uid || key == null || !schema) return []
     return [{ key, index, uid, label: schema.info?.displayName || uid, data: projectRow(row, schema, components, cmsOrigin),
-      fields: editableFields(uid, row, components), media: mediaFields(uid, row, components) }]
+      fields: editableFields(uid, row, components), media: mediaFields(uid, row, components), ...(hidden && row[hidden] === true && { hidden: true }) }]
   })
 }
 export const validateFocus = (uid, field, components) => { const attr = resolveField(uid, field, components); return attr && EDITABLE_TYPES.includes(attr.type) ? attr : null }
@@ -98,6 +99,9 @@ export function validateEdit(uid, field, value, components) {
 export const mediaAttribute = (uid, field, components) => { const attr = resolveField(uid, field, components); return attr?.type === 'media' ? attr : null }
 // Reads a dotted path (repeatable rows included) on a row; undefined when any step is missing.
 export const getIn = (row, path) => String(path).split('.').reduce((value, key) => (value == null ? undefined : value[key]), row)
+// Hover sync (both directions): null clears; otherwise a key of the current rows. undefined means "ignore the message".
+export const hoverKey = (key, rows) => key === null ? null
+  : typeof key === 'string' && key.length <= 200 && (Array.isArray(rows) ? rows : []).some(row => blockKey(row) === key) ? key : undefined
 export function isPreviewMessage(event, origin, source, channel, type) {
   return event.origin === origin && event.source === source && event.data?.protocol === PROTOCOL && event.data?.channel === channel && event.data?.type === type
 }
