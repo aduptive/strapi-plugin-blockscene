@@ -161,13 +161,15 @@ module.exports = {
       catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
       return project
     }
-    // Code field texts (plugin config `fields`): validated once, strictly; invalid ones are ignored with a warning.
+    // Code field texts (plugin config `fields`): validated once; a malformed map is ignored and stale entries skipped, with a warning.
     let fields
     const fieldTexts = () => {
       if (fields !== undefined) return fields
       const schemas = Object.fromEntries(Object.entries({ ...strapi.contentTypes, ...strapi.components }).map(([uid, schema]) => [uid, Object.keys(schema?.attributes || {})]))
-      try { fields = validateFields(strapi.plugin(PLUGIN).config('fields'), schemas) }
+      const stale = []
+      try { fields = validateFields(strapi.plugin(PLUGIN).config('fields'), schemas, stale) }
       catch (error) { fields = {}; strapi.log?.warn(`[${PLUGIN}] "fields" config ignored: ${error.message}. Field labels fall back to the Content Manager's own.`) }
+      if (stale.length) strapi.log?.warn(`[${PLUGIN}] "fields" entries for fields the schema no longer has were skipped: ${stale.slice(0, 20).join(', ')}${stale.length > 20 ? ` and ${stale.length - 20} more` : ''}.`)
       return fields
     }
     const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi))

@@ -9,8 +9,8 @@
   the admin user's interface language), else a label set in "Configure the
   view", else the humanized attribute name (`mobileColumnsCount` → "Mobile
   columns count"). New editor option `friendlyLabels` (default on) with a
-  Settings toggle; `fields` is code only and validated strictly at boot (an
-  invalid map is ignored with a warning). `scripts/fields-skeleton.mjs`
+  Settings toggle; `fields` is code only and validated at boot (a malformed
+  map is ignored, stale entries skipped, with a warning). `scripts/fields-skeleton.mjs`
   generates a starting map from a project's schemas. The catalog now also
   returns `fields` and `types` (display name and attribute names per content
   type, used to identify the Strapi 5 layout).

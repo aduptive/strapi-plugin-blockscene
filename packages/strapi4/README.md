@@ -519,10 +519,12 @@ blockscene: { config: { fields: {
 
 Keys are content type or component uids, then attribute names; each of
 `label` (up to 80 characters), `description` (300) and `placeholder` (120) is a
-string or `{ "<locale>": string }`. The map is validated strictly at boot:
-an unknown uid, attribute or key, an empty or too long text, or a malformed
-locale code logs a warning naming it and the whole `fields` config is ignored
-(labels fall back to the two other steps). It is code only, versioned with the
+string or `{ "<locale>": string }`. The map is validated at boot: an unknown
+key, an empty or too long text, or a malformed locale code logs a warning
+naming it and the whole `fields` config is ignored (labels fall back to the two
+other steps). Entries for a uid or attribute the schema no longer has (a
+renamed or removed field) are skipped with one warning listing them; the rest
+keep working. It is code only, versioned with the
 project; the Settings page has the on/off switch but does not edit texts.
 
 To start the file, generate every field of a project with its humanized English

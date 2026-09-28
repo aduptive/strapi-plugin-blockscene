@@ -240,23 +240,26 @@ const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
 const plain = value => value && typeof value === 'object' && !Array.isArray(value)
 const fieldText = (value, max) => typeof value === 'string' ? value.trim() !== '' && value.length <= max
   : plain(value) && Object.keys(value).length > 0 && Object.keys(value).length <= 30 && Object.entries(value).every(([locale, text]) => LOCALE.test(locale) && fieldText(text, max))
-function validateFields(input, schemas = {}) {
+// Entries naming a uid or attribute the schema no longer has are left out and listed in `stale` (schemas change after
+// the config was written); a malformed entry rejects the whole map.
+function validateFields(input, schemas = {}, stale = []) {
   if (input === null || input === undefined) return {}
   if (!plain(input)) fail('fields must be an object')
   if (JSON.stringify(input).length > 256 * 1024) fail('fields config too large')
+  const out = {}
   for (const [uid, entries] of Object.entries(input)) {
-    if (!Object.hasOwn(schemas, uid)) fail(`Unknown content type or component "${uid}"`)
     if (!plain(entries)) fail(`Invalid entry for "${uid}"`)
     for (const [name, entry] of Object.entries(entries)) {
-      if (!schemas[uid].includes(name)) fail(`Unknown field "${name}" of "${uid}"`)
       if (!plain(entry)) fail(`Invalid entry for "${uid}.${name}"`)
       for (const [key, value] of Object.entries(entry)) {
         if (!(key in FIELD_TEXT)) fail(`Unknown field setting "${key}" of "${uid}.${name}"`)
         if (!fieldText(value, FIELD_TEXT[key])) fail(`Invalid ${key} of "${uid}.${name}": a string of 1 to ${FIELD_TEXT[key]} characters, or { "<locale>": string }`)
       }
+      if (!schemas[uid]?.includes(name)) { stale.push(`${uid}.${name}`); continue }
+      ;(out[uid] ||= {})[name] = structuredClone(entry)
     }
   }
-  return structuredClone(input)
+  return out
 }
 
 // Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.

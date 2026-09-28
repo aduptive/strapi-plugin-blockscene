@@ -67,8 +67,12 @@ test('field labels: code config validated strictly; invalid config ignored with 
   const schemas = { 'api::page.page': ['title', 'blocks'], 'b.hero': ['ctaURL'] }
   const ok = { 'api::page.page': { title: { label: { en: 'Title', 'pt-BR': 'Título' }, description: 'Main heading', placeholder: 'Hello' } }, 'b.hero': { ctaURL: { label: 'Button link' } } }
   assert.deepEqual(validateFields(ok, schemas), ok); assert.deepEqual(validateFields(undefined, schemas), {})
-  for (const [bad, message] of [[[], /must be an object/], [{ 'api::x.x': {} }, /Unknown content type or component "api::x.x"/],
-    [{ 'b.hero': { nope: { label: 'x' } } }, /Unknown field "nope"/], [{ 'b.hero': { ctaURL: { hint: 'x' } } }, /Unknown field setting "hint"/],
+  const stale = []
+  assert.deepEqual(validateFields({ ...ok, 'api::x.x': { a: { label: 'x' } }, 'b.hero': { ctaURL: { label: 'Button link' }, gone: { label: 'x' } } }, schemas, stale),
+    ok, 'renamed or removed fields are skipped, the rest kept')
+  assert.deepEqual(stale.sort(), ['api::x.x.a', 'b.hero.gone'])
+  assert.throws(() => validateFields({ 'api::x.x': { a: { label: '' } } }, schemas), /Invalid label/, 'a stale entry is still validated')
+  for (const [bad, message] of [[[], /must be an object/], [{ 'b.hero': { ctaURL: { hint: 'x' } } }, /Unknown field setting "hint"/],
     [{ 'b.hero': { ctaURL: { label: ' ' } } }, /Invalid label/], [{ 'b.hero': { ctaURL: { label: 'x'.repeat(81) } } }, /1 to 80/],
     [{ 'b.hero': { ctaURL: { label: { EN: 'x' } } } }, /Invalid label/], [{ 'b.hero': { ctaURL: { label: {} } } }, /Invalid label/],
     [{ 'b.hero': { ctaURL: { description: { en: 7 } } } }, /Invalid description/], [{ 'b.hero': { ctaURL: 'Link' } }, /Invalid entry/]])
@@ -91,7 +95,10 @@ test('field labels: code config validated strictly; invalid config ignored with 
   await plugin.controllers.catalog({ strapi }).find(ctx)
   assert.deepEqual(ctx.body.fields, ok); assert.deepEqual(ctx.body.types, { 'api::page.page': ['Page', 'title', 'blocks'] })
   assert.equal(ctx.body.editor.friendlyLabels, true); assert.equal(warnings.length, 0)
-  ;({ strapi, warnings } = make({ 'b.hero': { gone: { label: 'x' } } }))
+  ;({ strapi, warnings } = make({ 'b.hero': { gone: { label: 'x' }, ctaURL: { label: 'Link' } } }))
   await plugin.controllers.catalog({ strapi }).find(ctx)
-  assert.deepEqual(ctx.body.fields, {}); assert.match(warnings[0], /"fields" config ignored: Unknown field "gone" of "b.hero"/)
+  assert.deepEqual(ctx.body.fields, { 'b.hero': { ctaURL: { label: 'Link' } } }); assert.match(warnings[0], /no longer has were skipped: b\.hero\.gone/)
+  ;({ strapi, warnings } = make({ 'b.hero': { ctaURL: { label: '' } } }))
+  await plugin.controllers.catalog({ strapi }).find(ctx)
+  assert.deepEqual(ctx.body.fields, {}); assert.match(warnings[0], /"fields" config ignored: Invalid label of "b\.hero\.ctaURL"/)
 })
