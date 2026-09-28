@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix: an empty `previewUrl` or `blockPreviewUrl` saved from the Settings page
+  (for example before the project added a code default) no longer hides the
+  URL the project sets in code. Empty values of those two keys are not stored
+  as overrides and, when already stored, are read as "not set". Seen on a
+  project whose editors kept getting "No preview URL" until "Restore project
+  defaults".
 - Page preview toolbar (Strapi 5): `editor.previewToolbar` chooses and orders
   the pane toolbar's controls (`modes`, `history`, `devices`, `status`,
   `actions`; missing ones hidden) and `editor.previewDevices` the width menu's

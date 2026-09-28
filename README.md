@@ -292,7 +292,12 @@ module.exports = {
 The effective settings are the built-in defaults, then the code `settings`,
 then what was saved on the page:
 
-- `palette` and `editor`: a saved key wins over the code key by key.
+- `palette` and `editor`: a saved key wins over the code key by key, except
+  an empty `previewUrl` or `blockPreviewUrl`, which means "not set": the code
+  value applies. Clearing either field on the page therefore falls back to the
+  project default (there is no saved "off" for a URL the code provides; remove
+  it from the code settings, or set `previewMode` per content type, to keep a
+  type out of the page preview).
 - `components` and `contentTypes`: a saved entry replaces the code entry for
   that uid as a whole (a saved `api::page.page` entry replaces its code
   sidebar too); other uids keep their code values.
