@@ -284,5 +284,6 @@
  "historyMax": "Snapshots por documento (máximo)",
  "historyEventDays": "Manter a atividade (dias)",
  "historyRetentionHelp": "Uma rotina noturna esvazia snapshots mais antigos que isso ou além do máximo por documento (os mais novos são mantidos) e exclui a atividade mais antiga que o limite. Nunca exclui arquivos de mídia.",
- "historyInvalid": "Números inteiros: 1 a 3650 dias (a atividade mantida pelo menos tanto quanto os snapshots) e 1 a 1000 snapshots."
+ "historyInvalid": "Números inteiros: 1 a 3650 dias (a atividade mantida pelo menos tanto quanto os snapshots) e 1 a 1000 snapshots.",
+ "fieldHelp": "Mais informações"
 }

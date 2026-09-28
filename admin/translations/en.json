@@ -284,5 +284,6 @@
  "historyMax": "Snapshots per document (maximum)",
  "historyEventDays": "Keep the activity (days)",
  "historyRetentionHelp": "A nightly job empties snapshots older than this or beyond the per-document maximum (the newest are kept) and deletes activity older than its limit. It never deletes media files.",
- "historyInvalid": "Whole numbers: 1 to 3650 days (the activity kept at least as long as the snapshots) and 1 to 1000 snapshots."
+ "historyInvalid": "Whole numbers: 1 to 3650 days (the activity kept at least as long as the snapshots) and 1 to 1000 snapshots.",
+ "fieldHelp": "More information"
 }

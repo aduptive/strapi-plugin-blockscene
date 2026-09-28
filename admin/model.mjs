@@ -252,13 +252,13 @@ export function localized(value, locale = "en") {
   return key === undefined ? undefined : value[key];
 }
 // Per field: config text > a label set in "Configure the view" (anything but the raw name) > humanized name (option on).
-// Description and placeholder change only when the config has them. null: nothing to change.
+// Description, placeholder and help change only when the config has them. null: nothing to change.
 function fieldText(fields, owner, name, label, locale, on) {
   const entry = (owner && fields?.[owner]?.[name]) || {};
   const out = {};
   const text = localized(entry.label, locale) ?? (on && label === name ? humanize(name) : undefined);
   if (text !== undefined) out.label = text;
-  for (const key of ["description", "placeholder"]) {
+  for (const key of ["description", "placeholder", "help"]) {
     const value = localized(entry[key], locale);
     if (value !== undefined) out[key] = value;
   }
@@ -273,16 +273,22 @@ export function layoutType(layout, types = {}) {
   return found.length === 1 ? found[0][0] : found.length ? false : null;
 }
 const labelsOff = (catalog) => !catalog?.editor?.enabled || (!catalog.editor.friendlyLabels && !Object.keys(catalog.fields || {}).length);
-// Strapi 5 edit layout: layout = panels > rows > fields ({ name, label, hint, placeholder }), components[uid].layout = rows.
-export function labelEditLayout(layout, catalog, locale) {
+// Where the icon cannot go, the help text follows the description under the input.
+const withHelp = (description, help) => (description ? `${description} ${help}` : help);
+// Strapi 5 edit layout: layout = panels > rows > fields ({ name, label, hint, placeholder, labelAction }),
+// components[uid].layout = rows. `help` becomes the field's labelAction through `helpAction(text, labelAction)` (an info
+// icon next to the label, kept with the action another plugin set, i18n's globe); without it, it joins the hint.
+export function labelEditLayout(layout, catalog, locale, helpAction) {
   if (labelsOff(catalog) || !Array.isArray(layout?.layout) || !layout.layout.length) return layout;
   const uid = layoutType(layout, catalog.types);
   if (uid === false || (uid && catalog.contentTypes?.[uid]?.enabled === false)) return layout;
   const fix = (owner) => (field) => {
     const text = field && fieldText(catalog.fields, owner, field.name, field.label, locale, catalog.editor.friendlyLabels);
     if (!text) return field;
-    const { description, ...rest } = text;
-    return { ...field, ...rest, ...(description !== undefined && { hint: description }) };
+    const { description, help, ...rest } = text;
+    const hint = description ?? field.hint;
+    return { ...field, ...rest, ...(description !== undefined && { hint }),
+      ...(help !== undefined && (helpAction ? { labelAction: helpAction(help, field.labelAction) } : { hint: withHelp(hint, help) })) };
   };
   return {
     ...layout,
@@ -292,12 +298,17 @@ export function labelEditLayout(layout, catalog, locale) {
   };
 }
 // Strapi 4 edit layout: contentType.layouts.edit and components[uid].layouts.edit are rows of { name, metadatas }.
+// Strapi 4 passes a labelAction to top-level fields only (never to component fields, where blocks live): help joins
+// the description under the input.
 export function labelEditLayout4(layout, catalog, locale) {
   const uid = layout?.contentType?.uid;
   if (labelsOff(catalog) || !uid || catalog.contentTypes?.[uid]?.enabled === false) return layout;
   const fix = (owner) => (field) => {
     const text = field?.metadatas && fieldText(catalog.fields, owner, field.name, field.metadatas.label, locale, catalog.editor.friendlyLabels);
-    return text ? { ...field, metadatas: { ...field.metadatas, ...text } } : field;
+    if (!text) return field;
+    const { help, ...rest } = text;
+    const metadatas = { ...field.metadatas, ...rest };
+    return { ...field, metadatas: help === undefined ? metadatas : { ...metadatas, description: withHelp(metadatas.description, help) } };
   };
   const rows = (target, owner) => Array.isArray(target?.layouts?.edit)
     ? { ...target, layouts: { ...target.layouts, edit: target.layouts.edit.map((row) => row.map(fix(owner))) } } : target;

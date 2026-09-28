@@ -265,8 +265,8 @@ function overrides(next, base) {
 }
 
 // Plugin config `fields` (code only): { "<content type or component uid>": { "<attribute>": { label, description,
-// placeholder } } }, each text a string or { "<locale>": string }. `schemas`: uid -> attribute names.
-const FIELD_TEXT = { label: 80, description: 300, placeholder: 120 }
+// placeholder, help } } }, each text a string or { "<locale>": string }. `schemas`: uid -> attribute names.
+const FIELD_TEXT = { label: 80, description: 300, placeholder: 120, help: 500 }
 const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
 const plain = value => value && typeof value === 'object' && !Array.isArray(value)
 const fieldText = (value, max) => typeof value === 'string' ? value.trim() !== '' && value.length <= max

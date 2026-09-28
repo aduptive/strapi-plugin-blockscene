@@ -34,6 +34,13 @@
   `selectDone`, `toggleHelp` and `previewUrlEmpty` added; `add`, `openAll`,
   `closeAll`, `selectMode`, `copySelected`, `previewHelp` and `previewNoUrl`
   removed; `showOpenAll` / `showCloseAll` reworded (8 catalogues).
+- Field help (`fields` config, key `help`, up to 500 characters, string or
+  per-locale map): on Strapi 5 a long explanation shows as an "i" icon next to
+  the field label, with the text in a tooltip on hover and keyboard focus,
+  instead of a long hint under the input. It uses the Content Manager's label
+  action slot and keeps the i18n globe on localized fields. `description` is
+  unchanged. Strapi 4 has no label action on component fields: there the help
+  text follows the description under the input.
 
 ## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
 

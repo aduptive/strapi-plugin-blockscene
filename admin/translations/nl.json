@@ -284,5 +284,6 @@
  "historyMax": "Momentopnamen per document (maximum)",
  "historyEventDays": "Activiteit bewaren (dagen)",
  "historyRetentionHelp": "Een nachtelijke taak leegt momentopnamen die ouder zijn of boven het maximum per document uitkomen (de nieuwste blijven) en verwijdert activiteit die ouder is dan de limiet. Mediabestanden worden nooit verwijderd.",
- "historyInvalid": "Gehele getallen: 1 tot 3650 dagen (de activiteit minstens zo lang bewaard als de momentopnamen) en 1 tot 1000 momentopnamen."
+ "historyInvalid": "Gehele getallen: 1 tot 3650 dagen (de activiteit minstens zo lang bewaard als de momentopnamen) en 1 tot 1000 momentopnamen.",
+ "fieldHelp": "Meer informatie"
 }
