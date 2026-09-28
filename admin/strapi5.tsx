@@ -24,6 +24,7 @@ import {
 } from "@strapi/content-manager/strapi-admin";
 import { Gallery } from "./Gallery";
 import { PagePreview } from "./PagePreview";
+import { History } from "./History";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults, labelEditLayout } from "./model.mjs";
 import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
@@ -141,7 +142,10 @@ function Panel() {
   React.useEffect(() => {
     if (catalog) setLazyConfig({ on: lazy, fields: lazyFields ? lazyFields.split(",") : [] });
   }, [catalog, lazy, lazyFields]);
-  if (!zones.length || !catalog?.editor?.enabled || typeSettings.enabled === false) return null;
+  const gallery = zones.length > 0 && catalog?.editor?.enabled && typeSettings.enabled !== false;
+  // Version history: saved documents of covered types, whether or not the gallery applies to them.
+  const history = !creating && Boolean(c.id) && Boolean(catalog?.history?.contentTypes?.includes(c.model));
+  if (!gallery && !history) return null;
   const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
   return {
     // The panel is the plugin (gallery, accordions, preview modes), so it carries the plugin's name; the dialog stays "Block gallery".
@@ -149,6 +153,7 @@ function Panel() {
     content: (
       <Guard>
       <Flex direction="column" alignItems="stretch" gap={4}>
+        {gallery && <>
         <Gallery
           zones={zones}
           components={c.components}
@@ -173,6 +178,20 @@ function Panel() {
           Modal={Modal}
           Toggle={ToggleField}
         />
+        </>}
+        {history && (
+          <History
+            model={c.model}
+            documentId={c.id}
+            schema={c.contentType}
+            components={c.components}
+            // Component permissions are listed per nested path ("seo.metaTitle"): any of them makes the field editable.
+            editable={(name: string) => (rbac.canUpdateFields || []).some((field: string) => field === name || field.startsWith(`${name}.`))}
+            disabled={Boolean(c.form?.disabled)}
+            get={get}
+            relationsOf={relationsOf}
+          />
+        )}
       </Flex>
       </Guard>
     ),

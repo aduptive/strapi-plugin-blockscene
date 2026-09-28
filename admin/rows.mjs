@@ -74,7 +74,8 @@ export function currentRelations(server, value) {
   for (const r of (value?.connect || []).map(plain)) if (!out.some((o) => o.id === r.id)) out.push(r);
   return out;
 }
-// ... as the `connect` list of a new row (the shape the relation input itself writes when an item is picked).
+// ... as the `connect` list of a new row (the shape the relation input itself writes when an item is picked); the label
+// is the target's main field when known, else its documentId.
 export function toConnect(relations, target) {
   const keys = relations.length ? generateNKeysBetween(null, null, relations.length) : [];
   return {
@@ -82,7 +83,7 @@ export function toConnect(relations, target) {
       id: r.id,
       apiData: { id: r.id, documentId: r.documentId, locale: r.locale, isTemporary: true },
       status: r.status,
-      label: r.documentId,
+      label: r.label ?? r.documentId,
       href: `../collection-types/${target}/${r.documentId}${r.locale ? `?plugins[i18n][locale]=${r.locale}` : ""}`,
       __temp_key__: keys[i],
     })),

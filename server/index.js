@@ -3,6 +3,9 @@
 const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
 const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
+const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
+// Set at build time for the Strapi 4 package; from source (tests) it is Strapi 5. Version history is Strapi 5 only.
+const STRAPI5 = process.env.BLOCKSCENE_STRAPI_MAJOR !== '4'
 
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
 // Settings saved by the plugin under its previous id ("block-picker", alphas before the rename) are copied once.
@@ -32,6 +35,8 @@ async function resolveMedia(strapi, settings) {
 const contentTypeUids = (strapi) => Object.fromEntries(Object.entries(strapi.contentTypes || {})
   .filter(([uid, schema]) => uid.startsWith('api::') && zonesOf(schema).length)
   .map(([uid, schema]) => [uid, Object.keys(schema.attributes || {})]))
+// Every project content type: what version history may cover (with or without a Dynamic Zone).
+const apiUids = (strapi) => Object.keys(strapi.contentTypes || {}).filter(uid => uid.startsWith('api::'))
 const zonesOf = (schema) => Object.entries(schema?.attributes || {}).filter(([, attr]) => attr?.type === 'dynamiczone').map(([name]) => name)
 const label = (error) => `row ${error.index + 1}: ${error.code === 'closeBeforeOpen' ? `close marker ${error.uid} has no open marker before it` :
   error.code === 'mismatch' ? `close marker ${error.uid} does not match the open group ${error.open} (expected ${error.expected})` : `group ${error.uid} is not closed (expected ${error.expected})`}`
@@ -144,12 +149,17 @@ module.exports = {
     await strapi.admin.services.permission.actionProvider.registerMany([
       { section: 'plugins', displayName: 'Read gallery settings', uid: 'settings.read', pluginName: PLUGIN },
       { section: 'plugins', displayName: 'Change gallery settings', uid: 'settings.update', pluginName: PLUGIN },
+      ...(STRAPI5 ? [{ section: 'plugins', displayName: 'Read version history', uid: 'history.read', pluginName: PLUGIN }] : []),
     ])
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
     strapi.plugin(PLUGIN).service('settings').fields()
     registerPublishGuard(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
+    if (STRAPI5) { registerHistory(strapi); registerPurge(strapi) }
   },
+  destroy({ strapi }) { if (STRAPI5) strapi.cron?.remove?.(CRON) },
+  // Version history events (Strapi 5): hidden from the Content Manager and the Content-Type Builder.
+  contentTypes: STRAPI5 ? { event: eventContentType } : {},
   services: { settings: ({ strapi }) => {
     // Code settings (plugin config `settings`): validated once, strictly; invalid ones are ignored with a warning.
     let project
@@ -157,7 +167,7 @@ module.exports = {
       if (project !== undefined) return project
       const code = strapi.plugin(PLUGIN).config('settings')
       project = null
-      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi)) }
+      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi)) }
       catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
       return project
     }
@@ -172,11 +182,11 @@ module.exports = {
       if (stale.length) strapi.log?.warn(`[${PLUGIN}] "fields" entries for fields the schema no longer has were skipped: ${stale.slice(0, 20).join(', ')}${stale.length > 20 ? ` and ${stale.length - 20} more` : ''}.`)
       return fields
     }
-    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi))
+    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi))
     return {
       projectDefaults, get, fields: fieldTexts,
       async set(value) {
-        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
+        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi))
         for (const [uid, entry] of Object.entries(next.components)) {
           if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
         }
@@ -190,7 +200,7 @@ module.exports = {
         return get()
       },
     }
-  } },
+  }, ...(STRAPI5 && { history: historyService }) },
   controllers: {
     catalog: ({ strapi }) => ({
       async find(ctx) {
@@ -208,7 +218,9 @@ module.exports = {
         // types: what the Strapi 5 layout hook matches an edit layout against (it receives no model uid).
         const types = Object.fromEntries(Object.entries(strapi.contentTypes || {}).filter(([uid]) => !uid.startsWith('admin::'))
           .map(([uid, schema]) => [uid, [schema.info?.displayName || '', ...Object.keys(schema.attributes || {})]]))
-        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types,
+        // history: the content types whose versions are captured (Strapi 5, module on and not bypassed), else null.
+        const history = STRAPI5 && strapi.documents?.use && !base.disabled && settings.history.enabled ? { contentTypes: apiUids(strapi).filter(uid => covers(settings.history, uid)) } : null
+        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),
@@ -223,7 +235,9 @@ module.exports = {
           attributes: Object.entries(strapi.contentTypes[uid].attributes || {}).filter(([, attr]) => attr?.type !== 'dynamiczone' && !attr?.private).map(([name, attr]) => ({ name, type: attr.type })) }))
         ctx.body = { settings, components, contentTypes, media: await resolveMedia(strapi, settings), templates: TEMPLATES, typologies: TYPOLOGIES,
           disabled: strapi.plugin(PLUGIN).config('disabled') === true, hiddenAttribute: hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')) || null, blockPreviewAvailable: strapi.plugin(PLUGIN).config('blockPreview') === true, defaults: DEFAULTS,
-          projectDefaults: strapi.plugin(PLUGIN).service('settings').projectDefaults() }
+          projectDefaults: strapi.plugin(PLUGIN).service('settings').projectDefaults(),
+          // Version history (Strapi 5 only): the content types it can cover.
+          historyTypes: STRAPI5 && strapi.documents?.use ? apiUids(strapi).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid })) : null }
       },
       async update(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').set(ctx.request?.body) },
       async reset(ctx) { ctx.body = await strapi.plugin(PLUGIN).service('settings').reset() },
@@ -240,6 +254,7 @@ module.exports = {
         ctx.body = value
       },
     }),
+    ...(STRAPI5 && { history: historyController }),
   },
   routes: { admin: { type: 'admin', routes: [
     { method: 'GET', path: '/catalog', handler: 'catalog.find', config: { policies: ['admin::isAuthenticatedAdmin'] } },
@@ -247,5 +262,7 @@ module.exports = {
     ...[['GET', 'find', 'read'], ['PUT', 'update', 'update'], ['DELETE', 'reset', 'update']].map(([method, handler, action]) => ({ method, path: '/settings', handler: `settings.${handler}`,
       config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions',
         config: { actions: [`plugin::${PLUGIN}.settings.${action}`] } }] } })),
+    ...(STRAPI5 ? [['/history/:uid/:documentId', 'list'], ['/history-events/:id', 'find']].map(([path, handler]) => ({ method: 'GET', path, handler: `history.${handler}`,
+      config: { policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions: [`plugin::${PLUGIN}.history.read`] } }] } })) : []),
   ] } },
 }
