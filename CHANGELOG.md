@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Version history (Strapi 5, off by default; ADU-379). A document service
+  middleware records one event per create, save, publish, unpublish, discard
+  draft and delete of the covered content types (all `api::` types or a list),
+  with the actor, a summary against the previous version and a snapshot
+  (components and Dynamic Zones in full, relations as documentIds, media as
+  ids), deduplicated by hash, in the new hidden content type
+  `plugin::blockscene.event` (`blockscene_events`). A failed capture never
+  blocks a save or publish (logged, event marked missing) and always fails a
+  delete (one transaction; bulk deletes roll back whole). The edit view's
+  Blockscene panel gets a History section: versions per locale, a block diff
+  against the form and "Load this version" into the form (undo reverts it;
+  nothing is saved until the editor saves). New permission `history.read`,
+  admin routes `GET /history/:uid/:documentId` and `GET /history-events/:id`,
+  Settings and code settings `history` (`enabled`, `contentTypes`,
+  `retentionDays` 90, `maxSnapshots` 100, `eventDays` 365, validated) and a
+  nightly purge cron (batches of 500, idempotent). Loaded relations show the
+  target's Content Manager main field.
 - Field labels in the edit view (Strapi 5 and 4), through the Content
   Manager's `mutate-edit-view-layout` hook, no DOM patching: project texts from
   the new plugin config `fields` (label, description, placeholder per content

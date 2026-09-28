@@ -92,6 +92,28 @@ const Checks = styled.fieldset`
   label { display: inline-flex; align-items: center; gap: 6px; }
 `
 
+// Version history (Strapi 5), same rules as server/settings.js (HISTORY_KEYS).
+const DAYS = (n: any) => Number.isInteger(n) && n >= 1 && n <= 3650
+const badRetention = (h: any) => !h || !DAYS(h.retentionDays) || !DAYS(h.eventDays) || h.eventDays < h.retentionDays || !(Number.isInteger(h.maxSnapshots) && h.maxSnapshots >= 1 && h.maxSnapshots <= 1000)
+function HistorySettings({ types, history, set, t, disabled, ToggleField, TextField }: any) {
+  const all = history.contentTypes === 'all'
+  const list: string[] = all ? [] : history.contentTypes
+  const number = (key: string) => <Box style={{ minWidth: 200 }}><TextField name={`history-${key}`} label={t[{ retentionDays: 'historyRetention', maxSnapshots: 'historyMax', eventDays: 'historyEventDays' }[key] as string]}
+    value={Number.isFinite(history[key]) ? String(history[key]) : ''} disabled={disabled} onChange={(v: string) => set(key, /^\d{1,5}$/.test(v.trim()) ? Number(v.trim()) : NaN)} /></Box>
+  return <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="history-settings">
+    <Typography variant="beta" tag="h2">{t.historySettings}</Typography>
+    <Typography variant="pi" textColor="neutral600">{t.historySettingsHelp}</Typography>
+    <ToggleField name="history-enabled" label={t.historyEnabled} value={history.enabled} disabled={disabled} onChange={(v: boolean) => set('enabled', v)} />
+    <ToggleField name="history-all" label={t.historyAll} value={all} disabled={disabled || !history.enabled} onChange={(v: boolean) => set('contentTypes', v ? 'all' : types.map((type: any) => type.uid))} />
+    {!all && <Checks disabled={disabled || !history.enabled}><legend>{t.historyTypes}</legend>
+      {types.map((type: any) => <label key={type.uid}><input type="checkbox" name={`history-type-${type.uid}`} checked={list.includes(type.uid)}
+        onChange={e => set('contentTypes', e.target.checked ? [...list, type.uid] : list.filter(uid => uid !== type.uid))} />{type.displayName}</label>)}
+    </Checks>}
+    <Flex gap={4} wrap="wrap" alignItems="flex-end">{number('retentionDays')}{number('maxSnapshots')}{number('eventDays')}</Flex>
+    <Typography variant="pi" textColor={badRetention(history) ? 'danger600' : 'neutral600'} role={badRetention(history) ? 'alert' : undefined}>{badRetention(history) ? t.historyInvalid : t.historyRetentionHelp}</Typography>
+  </Flex></Box>
+}
+
 // Only overrides are stored: no items removes the key (via `set`).
 function SidebarEditor({ type, entry, set, t, disabled, SelectField, TextField }: any) {
   const items: any[] = entry.sidebar || []
@@ -164,7 +186,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
     [settings.editor.previewUrl, settings.editor.blockPreviewUrl].some((url: string) => url && !/^https?:\/\/\S+$/.test(url)))
   const badSidebar = settings && Object.values(settings.contentTypes || {}).some((entry: any) => (entry.sidebar || []).some(badItem))
   const badLazy = settings && badUids(settings.editor.lazyFields)
-  const invalid = badColor || badSidebar || badLazy
+  const badHistory = settings && data?.historyTypes && badRetention(settings.history)
+  const invalid = badColor || badSidebar || badLazy || badHistory
   const save = async () => {
     if (!settings || invalid || !canUpdate) return
     setSaving(true); setStatus('')
@@ -291,6 +314,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           options={['strip', 'flag', 'off'].map(value => ({ value, label: t.hiddenModes[value] }))} onChange={(v: string) => update(s => { s.editor.hiddenBlocks = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{data.hiddenAttribute ? t.hiddenBlocksHelp : t.hiddenAttributeOff}</Typography>
       </Flex></Box>
+      {data.historyTypes && settings.history && <HistorySettings types={data.historyTypes} history={settings.history} t={t} disabled={!canUpdate || saving} ToggleField={ToggleField} TextField={TextField}
+        set={(key: string, value: unknown) => update(s => { s.history = { ...s.history, [key]: value }; return s })} />}
       {(data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
         <Typography variant="beta" tag="h2">{t.contentTypes}</Typography>
         <Typography variant="pi" textColor="neutral600">{t.contentTypesHelp}</Typography>

@@ -218,6 +218,8 @@ needed for the gallery to pick them up. Reading requires the
   typology ("Automatic" shows the guess) and tags (comma separated).
 - Editor preferences: enhancements on/off, visibility of each collective
   button, initial accordion state and the initial block mode.
+- Version history (Strapi 5): module switch, covered content types, retention
+  (see "Version history").
 - Content types: every project type with a Dynamic Zone, each with on/off
   (off leaves its edit view fully native) and, on Strapi 5, the mode its edit
   views open in ("Default" follows the global preview mode) and its visual
@@ -546,6 +548,76 @@ content type turned off all leave the native labels; any error leaves the
 layout untouched. Changing the interface language applies from the next edit
 view.
 
+## Version history (Strapi 5)
+
+Off by default. Turn it on in Settings, Blockscene, "Version history" (or from
+code, `settings.history`, see below). Strapi Community has no content history
+(it is a Growth feature); this module records one event per content change and
+keeps a snapshot of the content, so an editor can see what changed and load an
+earlier version back into the form.
+
+**What it captures.** Every create, save, publish, unpublish, discard draft and
+delete of the covered content types (all `api::` types by default, or a list)
+made through Strapi's document service: the admin (single and bulk actions),
+the REST and GraphQL APIs, and any plugin or custom code that uses
+`strapi.documents`. One event per affected locale, with who (admin user, API
+token, Users & Permissions user, or `system`), when, the action and a summary
+(blocks added, removed and changed per Dynamic Zone, top-level fields changed)
+against the previous snapshot of the same locale. The snapshot is the stored
+entry with components and Dynamic Zones in full, relations as documentIds and
+media as file ids (a 34-block page is a few KB; the capture adds a few
+milliseconds to a save). A snapshot identical to the previous one is not stored
+again (the event is, with the same hash).
+
+**What it does not see.** Writes that bypass the document service: raw
+`strapi.db.query`, knex or SQL, imports that write the database directly. This
+is content activity for editors, not a security audit log.
+
+**Failure policy.** A failed capture never blocks a save or a publish: the
+change goes through, the error is logged and the event is marked "Not
+recorded". A failed capture fails a delete: the delete runs in one transaction
+with its events, so nothing is deleted without its last version (a bulk delete
+is rolled back whole). `BLOCKSCENE_DISABLED=true` or the module switch off stop
+all capture. The plugin never records its own content types.
+
+**In the edit view.** The Blockscene side panel gets a History section (saved
+documents of covered types, also on types without a Dynamic Zone): the
+versions of the document in the current locale, newest first. Selecting one
+shows a block-level diff against the form (relations are not compared) and
+"Load this version", which puts the version into the form the way undo does:
+nothing is written until the editor saves, so validation, permissions and
+lifecycles apply as for any edit, and undo reverts the load. Components and
+blocks come back as new rows; relations become the connect/disconnect change
+from what the document has now; fields the editor may not update, fields the
+schema no longer has, blocks whose component is no longer allowed, and media or
+related entries that no longer exist are left out and listed.
+
+**Permission.** `Blockscene: Read version history` (`history.read`), plus read
+access to the content type in the Content Manager. Snapshots hold removed and
+unpublished text, so the section is hidden without it. Admin API:
+`GET /blockscene/history/:uid/:documentId?locale=` (the latest 100 events, no
+snapshots) and `GET /blockscene/history-events/:id` (one event, its snapshot and
+the media and relation targets that still exist).
+
+**Retention.** Snapshots are kept `retentionDays` (90) and at most
+`maxSnapshots` (100) per document, newest first; events without a snapshot are
+kept `eventDays` (365, at least `retentionDays`). A cron job added by the plugin
+runs nightly at 03:00 server time, in batches of 500; it only empties snapshots
+and deletes events, never media files, and running it on several instances is
+harmless.
+
+```js
+// config/plugins.js
+blockscene: { config: { settings: { history: { enabled: true, contentTypes: ['api::page.page', 'api::post.post'],
+  retentionDays: 90, maxSnapshots: 100, eventDays: 365 } } } }
+```
+
+Events live in the `blockscene_events` table (content type
+`plugin::blockscene.event`, hidden from the Content Manager and the Content-Type
+Builder). Removing the plugin, or installing a Blockscene version older than
+the one that added history, lets Strapi drop that table and every recorded
+version on the next start: back up `blockscene_events` first if you need it.
+
 ## Languages
 
 All plugin chrome (gallery, settings, page preview, editor dialogs, diagnostics)
@@ -646,7 +718,7 @@ uploads share an origin.
 ## Development
 
 - `admin/`: shared gallery, settings page, wireframes and version-specific adapters.
-- `server/`: settings store, validation, permissions, the catalog endpoint and the layout-group publish guard (`groups.js` is shared with the admin).
+- `server/`: settings store, validation, permissions, the catalog endpoint and the layout-group publish guard (`groups.js` is shared with the admin); `history.js` and `diff.js` for version history (`diff.js` is shared with the admin).
 - `admin/translations/`: one flat catalogue per admin locale (English is the source of truth).
 - `scripts/capture-previews.mjs`: local thumbnail capture.
 - `packages/strapi4`, `packages/strapi5`: independently installable distributions.

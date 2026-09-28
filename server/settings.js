@@ -24,6 +24,9 @@ const DEFAULTS = {
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
+  // Version history (Strapi 5, see README "Version history"): off until turned on. contentTypes: 'all' (every api:: type)
+  // or a list of uids. Snapshots are kept retentionDays and at most maxSnapshots per document; events eventDays.
+  history: { enabled: false, contentTypes: 'all', retentionDays: 90, maxSnapshots: 100, eventDays: 365 },
 }
 // Visual editor sidebar: each item opens some of the document's own fields (its native inputs) in a modal or drawer.
 const ICONS = ['text', 'tag', 'seo', 'settings', 'image', 'link', 'palette', 'list', 'globe', 'info']
@@ -53,6 +56,17 @@ const COLOR = /^#[0-9A-Fa-f]{6}$/
 const FIELD_UID = /^(plugin|global)::[\w.-]+$/
 const lazyFields = value => Array.isArray(value) && value.length <= 20 && value.every(uid => typeof uid === 'string' && FIELD_UID.test(uid))
 const UID = /^[a-z0-9-]+\.[a-z0-9-]+$/
+
+// history: each predicate receives the value and the api:: uids that exist (null when unknown: no existence check).
+const API_UID = /^api::[\w-]+\.[\w-]+$/
+const days = value => Number.isInteger(value) && value >= 1 && value <= 3650
+const HISTORY_KEYS = {
+  enabled: value => typeof value === 'boolean',
+  contentTypes: (value, uids) => value === 'all' || (Array.isArray(value) && value.length <= 500 && value.every(uid => typeof uid === 'string' && API_UID.test(uid) && (!uids || uids.includes(uid)))),
+  retentionDays: days,
+  maxSnapshots: value => Number.isInteger(value) && value >= 1 && value <= 1000,
+  eventDays: days,
+}
 
 // Gallery taxonomy. Facets are read from the schema; the typology is guessed from the name unless overridden.
 const TYPOLOGIES = ['hero', 'text', 'media', 'listing', 'cards', 'cta', 'form', 'layout']
@@ -130,7 +144,8 @@ function catalog(config = {}) {
 }
 
 // Strict validation for PUT: reject instead of silently coercing.
-function validateSettings(input, componentUids, contentTypeUids = []) {
+// historyTypes: every api:: content type uid (history may cover types without a Dynamic Zone); null skips that check.
+function validateSettings(input, componentUids, contentTypeUids = [], historyTypes = null) {
   const types = typeMap(contentTypeUids)
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Settings must be an object')
   if (JSON.stringify(input).length > 64 * 1024) fail('Settings payload too large')
@@ -176,11 +191,20 @@ function validateSettings(input, componentUids, contentTypeUids = []) {
     }
     if (Object.keys(entry).length) out.contentTypes[uid] = structuredClone(entry)
   }
+  const history = input.history || {}
+  if (typeof history !== 'object' || Array.isArray(history)) fail('history must be an object')
+  for (const [key, value] of Object.entries(history)) {
+    if (!(key in HISTORY_KEYS)) fail(`Unknown history option "${key}"`)
+    if (!HISTORY_KEYS[key](value, historyTypes)) fail(`Invalid value for history option "${key}"`)
+    out.history[key] = Array.isArray(value) ? [...new Set(value)] : value
+  }
+  // Purging an event takes its snapshot with it: events must outlive the snapshot retention.
+  if (out.history.eventDays < out.history.retentionDays) fail('history.eventDays must be at least history.retentionDays')
   return out
 }
 
 // Lenient read: saved values that no longer apply (deleted component) are dropped.
-function mergeSaved(saved, componentUids, contentTypeUids = []) {
+function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = null) {
   const types = typeMap(contentTypeUids)
   const out = structuredClone(DEFAULTS)
   if (!saved || typeof saved !== 'object') return out
@@ -211,6 +235,13 @@ function mergeSaved(saved, componentUids, contentTypeUids = []) {
     const clean = Object.fromEntries(Object.entries(entry).map(([key, value]) => [key, fix(key, value)]).filter(([key, value]) => TYPE_KEYS[key]?.(value, types[uid])))
     if (Object.keys(clean).length) out.contentTypes[uid] = clean
   }
+  for (const key of Object.keys(HISTORY_KEYS)) {
+    let value = saved.history?.[key]
+    // A list naming a removed content type keeps the others.
+    if (key === 'contentTypes' && Array.isArray(value)) value = value.filter(uid => HISTORY_KEYS.contentTypes([uid], historyTypes))
+    if (value !== undefined && HISTORY_KEYS[key](value, historyTypes)) out.history[key] = value
+  }
+  out.history.eventDays = Math.max(out.history.eventDays, out.history.retentionDays)
   return out
 }
 
