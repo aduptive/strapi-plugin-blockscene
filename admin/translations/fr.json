@@ -285,5 +285,20 @@
  "historyEventDays": "Conserver l'activité (jours)",
  "historyRetentionHelp": "Une tâche nocturne vide les instantanés plus anciens que cela ou au-delà du maximum par document (les plus récents sont gardés) et supprime l'activité plus ancienne que sa limite. Elle ne supprime jamais de fichiers média.",
  "historyInvalid": "Nombres entiers : 1 à 3650 jours (l'activité conservée au moins aussi longtemps que les instantanés) et 1 à 1000 instantanés.",
- "fieldHelp": "Plus d'informations"
+ "fieldHelp": "Plus d'informations",
+ "paneTitle": "Barre de l'aperçu de page",
+ "paneHelp": "Les contrôles cochés apparaissent dans la barre de l'aperçu de page, dans cet ordre. Statut et Enregistrer/Publier restent ensemble à droite ; les autres sont masqués.",
+ "toolbar.modes": "Mode d'édition",
+ "toolbar.history": "Annuler et rétablir",
+ "toolbar.devices": "Menu de largeur de page",
+ "toolbar.status": "Statut du document",
+ "toolbar.actions": "Enregistrer et Publier",
+ "paneDevices": "Largeurs de page",
+ "paneDevicesHelp": "Entrées du menu de largeur, dans l'ordre ; la première s'applique tant que l'éditeur n'en choisit pas une autre. Largeurs personnalisées : de 240 à 3840 px.",
+ "paneAddWidth": "Ajouter une largeur",
+ "paneWidthLabel": "Libellé",
+ "paneWidth": "Largeur (px)",
+ "paneRemoveWidth": "Retirer la largeur",
+ "paneInvalid": "Gardez de 1 à 8 largeurs, sans doublon ; une largeur personnalisée demande un libellé (24 caractères au plus, sans < ni >) et un nombre entier de 240 à 3840.",
+ "paneTypeOverride": "Barre d'aperçu propre à {name}"
 }

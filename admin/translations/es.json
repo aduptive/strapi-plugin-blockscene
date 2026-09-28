@@ -285,5 +285,20 @@
  "historyEventDays": "Conservar la actividad (días)",
  "historyRetentionHelp": "Una tarea nocturna vacía las instantáneas más antiguas que esto o por encima del máximo por documento (se conservan las más recientes) y elimina la actividad más antigua que su límite. Nunca elimina archivos multimedia.",
  "historyInvalid": "Números enteros: de 1 a 3650 días (la actividad se conserva al menos tanto como las instantáneas) y de 1 a 1000 instantáneas.",
- "fieldHelp": "Más información"
+ "fieldHelp": "Más información",
+ "paneTitle": "Barra de la vista previa de página",
+ "paneHelp": "Los controles marcados aparecen en la barra de la vista previa de página, en este orden. Estado y Guardar/Publicar van juntos a la derecha; los desmarcados se ocultan.",
+ "toolbar.modes": "Modo de edición",
+ "toolbar.history": "Deshacer y rehacer",
+ "toolbar.devices": "Menú de ancho de página",
+ "toolbar.status": "Estado del documento",
+ "toolbar.actions": "Guardar y Publicar",
+ "paneDevices": "Anchos de página",
+ "paneDevicesHelp": "Opciones del menú de ancho, en orden; la primera se usa hasta que el editor elija otra. Anchos personalizados: de 240 a 3840 px.",
+ "paneAddWidth": "Añadir ancho",
+ "paneWidthLabel": "Nombre",
+ "paneWidth": "Ancho (px)",
+ "paneRemoveWidth": "Quitar ancho",
+ "paneInvalid": "Mantén de 1 a 8 anchos, sin repetir; un ancho personalizado necesita nombre (hasta 24 caracteres, sin < ni >) y un número entero de 240 a 3840.",
+ "paneTypeOverride": "Barra de vista previa propia para {name}"
 }

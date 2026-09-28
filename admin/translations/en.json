@@ -285,5 +285,20 @@
  "historyEventDays": "Keep the activity (days)",
  "historyRetentionHelp": "A nightly job empties snapshots older than this or beyond the per-document maximum (the newest are kept) and deletes activity older than its limit. It never deletes media files.",
  "historyInvalid": "Whole numbers: 1 to 3650 days (the activity kept at least as long as the snapshots) and 1 to 1000 snapshots.",
- "fieldHelp": "More information"
+ "fieldHelp": "More information",
+ "paneTitle": "Page preview toolbar",
+ "paneHelp": "Checked controls show on the page preview toolbar, in this order. Status and Save/Publish stay together on the right; unchecked controls are hidden.",
+ "toolbar.modes": "Editing mode",
+ "toolbar.history": "Undo and redo",
+ "toolbar.devices": "Page width menu",
+ "toolbar.status": "Document status",
+ "toolbar.actions": "Save and Publish",
+ "paneDevices": "Page widths",
+ "paneDevicesHelp": "Entries of the page width menu, in order; the first one is used until an editor picks another. Custom widths: 240 to 3840 px.",
+ "paneAddWidth": "Add a width",
+ "paneWidthLabel": "Label",
+ "paneWidth": "Width (px)",
+ "paneRemoveWidth": "Remove width",
+ "paneInvalid": "Keep 1 to 8 widths, none twice; a custom width needs a label (up to 24 characters, no < or >) and a whole number from 240 to 3840.",
+ "paneTypeOverride": "Own page preview toolbar for {name}"
 }

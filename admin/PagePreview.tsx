@@ -34,7 +34,9 @@ import {
   validateEdit,
   validateFocus,
 } from "./preview.mjs";
-import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from "./devices";
+import { DEVICES, frameStyle, useStageSize, stageBackground } from "./devices";
+import { deviceEntries, panelsFor, toolbarLayout } from "./pane.mjs";
+import { Guard } from "./Guard";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 import { createHistory, record, undo, redo, historyKey } from "./history.mjs";
@@ -290,7 +292,8 @@ const nativeButtons = () =>
   document.querySelectorAll<HTMLButtonElement>(
     '#main-content button:not([data-testid="page-preview-pane"] button)',
   );
-function ToolbarActions({ model, collectionType, documentId, locale }: any) {
+// `parts`: "status" (document state and the unsaved hint) and "actions" (Save, Publish), in the order they show.
+function ToolbarActions({ model, collectionType, documentId, locale, parts }: any) {
   const plugins: any = useStrapiApp(
     "BlocksceneToolbar",
     (state: any) => state.plugins,
@@ -347,6 +350,7 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
     <DescriptionComponentRenderer props={props} descriptions={descriptions}>
       {(actions: any[]) => (
         <Flex gap={2} alignItems="center" data-testid="page-preview-actions">
+          {parts.includes("status") && (status || modified) && <Flex gap={2} alignItems="center" style={{ order: parts.indexOf("status") }}>
           {status && (
             <Status size="S" role="status" data-testid="page-preview-status"
               variant={status === "draft" ? "secondary" : status === "published" ? "success" : "alternative"}>
@@ -356,7 +360,8 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
             </Status>
           )}
           {modified && <Typography variant="pi" textColor="neutral600">{t.unsaved}</Typography>}
-          {[...actions]
+          </Flex>}
+          {parts.includes("actions") && [...actions]
             .sort(
               (a, b) =>
                 ACTION_TYPES.indexOf(typeOf(a)) -
@@ -370,7 +375,7 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
                   : t.saveDisabledHint
                 : undefined;
               return (
-                <span key={action.id} title={reason}>
+                <span key={action.id} title={reason} style={{ order: parts.indexOf("actions") }}>
                   <Button
                     size="S"
                     // Publish is the primary action, Save the secondary one (as in the edit view's panel).
@@ -624,11 +629,11 @@ export function PagePreview({
     (state: any) => state.components,
   );
   const MediaLibraryDialog = components?.["media-library"];
-  const [device, setDeviceState] = React.useState<Device>(() => {
-    const v = read(DEVICE_KEY);
-    return v && v in DEVICES ? (v as Device) : "fit";
-  });
-  const setDevice = (next: Device) => {
+  // Width menu entries (editor.previewDevices); a remembered width the list no longer offers falls back to its first.
+  const deviceList = deviceEntries(editor?.previewDevices, DEVICES);
+  const [deviceId, setDeviceState] = React.useState<string | null>(() => read(DEVICE_KEY));
+  const device = deviceList.find((entry) => entry.id === deviceId) || deviceList[0];
+  const setDevice = (next: string) => {
     setDeviceState(next);
     write(DEVICE_KEY, next);
   };
@@ -665,7 +670,8 @@ export function PagePreview({
     setFieldsPanel(null);
   }, [c.id, c.form?.initialValues?.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [blockModal, setBlockModal] = React.useState<{ index: number; field?: string } | null>(null);
-  const sidebar: any[] = editor?.sidebar || [];
+  // Configured field items, then the panels registered for this content type (apis.registerPanel).
+  const sidebar: any[] = [...(editor?.sidebar || []), ...panelsFor(c.model)];
   const sidebarPosition: "left" | "right" | "bottom" = editor?.sidebarPosition || "left";
   const [fieldsPanel, setFieldsPanel] = React.useState<any>(null);
   const [railEl, setRailEl] = React.useState<HTMLDivElement | null>(null);
@@ -850,9 +856,10 @@ export function PagePreview({
   // Sidebar item: lift the form column and hide everything that does not hold one of the item's fields.
   React.useEffect(() => {
     if (!fieldsPanel) return;
-    const column = formColumn(anchor.current);
+    // A registered panel renders its own component: nothing of the form is lifted.
+    const column = fieldsPanel.custom ? undefined : formColumn(anchor.current);
     const shown = column ? (fieldsPanel.fields as string[]).map((name) => fieldItem(column, name)).filter(Boolean) as HTMLElement[] : [];
-    if (!column || !shown.length) {
+    if (!fieldsPanel.custom && (!column || !shown.length)) {
       setFieldsPanel(null);
       return;
     }
@@ -865,9 +872,11 @@ export function PagePreview({
         else { child.setAttribute("data-bp-hide", ""); marked.push(child); }
       }
     };
-    walk(column);
-    column.setAttribute("data-bp-fields", fieldsPanel.open);
-    column.scrollTop = 0;
+    if (column) {
+      walk(column);
+      column.setAttribute("data-bp-fields", fieldsPanel.open);
+      column.scrollTop = 0;
+    }
     document.body.classList.add("bp-fields");
     const later = setTimeout(() => document.querySelector<HTMLElement>('[data-testid="fields-panel-done"]')?.focus(), 250);
     const onKey = (event: KeyboardEvent) => {
@@ -877,7 +886,7 @@ export function PagePreview({
     return () => {
       clearTimeout(later);
       for (const el of marked) { el.removeAttribute("data-bp-show"); el.removeAttribute("data-bp-hide"); el.removeAttribute("data-bp-flat"); }
-      column.removeAttribute("data-bp-fields");
+      column?.removeAttribute("data-bp-fields");
       document.body.classList.remove("bp-fields");
       document.removeEventListener("keydown", onKey);
     };
@@ -1162,19 +1171,25 @@ export function PagePreview({
     </Flex>
   );
   // One menu instead of four buttons: the toolbar stays on one line in a narrow pane; the icons stay.
-  const deviceLabel = (value: Device) => (DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]);
-  const devices = (
+  const deviceName = (entry: any) => (entry.name ? t.device[entry.name] : entry.label);
+  const deviceLabel = (entry: any) => (entry.width ? `${deviceName(entry)} · ${entry.width} px` : deviceName(entry));
+  // A single width leaves nothing to choose: no menu.
+  const devices = deviceList.length > 1 && (
     <Box data-testid="page-preview-devices">
       <SimpleMenu variant="tertiary" size="S" aria-label={`${t.deviceGroup}: ${deviceLabel(device)}`}
-        label={<Flex gap={2} alignItems="center"><Icon name={device} size={16} />{t.device[device]}</Flex>}>
-        {(Object.keys(DEVICES) as Device[]).map((value) => (
-          <MenuItem key={value} onSelect={() => setDevice(value)} aria-checked={device === value}>
-            <Flex gap={2} alignItems="center"><Icon name={value} size={16} />{deviceLabel(value)}</Flex>
+        label={<Flex gap={2} alignItems="center"><Icon name={device.icon} size={16} />{deviceName(device)}</Flex>}>
+        {deviceList.map((entry) => (
+          <MenuItem key={entry.id} onSelect={() => setDevice(entry.id)} aria-checked={device.id === entry.id} data-testid={`page-preview-device-${entry.id}`}>
+            <Flex gap={2} alignItems="center"><Icon name={entry.icon} size={16} />{deviceLabel(entry)}</Flex>
           </MenuItem>
         ))}
       </SimpleMenu>
     </Box>
   );
+  // editor.previewToolbar: which controls show and in which order (status and actions stay together, on the right).
+  const layout = toolbarLayout(editor?.previewToolbar);
+  const tools: Record<string, React.ReactNode> = { modes: switcher, history: historyTools, devices };
+  const toolbarShown = !ready || layout.before.length + layout.right.length + layout.after.length > 0;
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const map: Record<string, number> = {
       ArrowLeft: paneWidth + KEY_STEP,
@@ -1257,8 +1272,9 @@ export function PagePreview({
                 onKeyDown={onKey}
               />
             )}
-            {/* Compact sticky header: mode control left; status, then native Save and Publish grouped right. */}
-            <Flex
+            {/* Compact sticky header: by default the mode control left; status, then native Save and Publish grouped right. */}
+            {toolbarShown && <Flex
+              data-testid="page-preview-toolbar"
               padding={2}
               gap={2}
               justifyContent="space-between"
@@ -1267,9 +1283,7 @@ export function PagePreview({
               wrap="wrap"
               style={{ position: "sticky", top: 0, zIndex: 2 }}
             >
-              {switcher}
-              {historyTools}
-              {devices}
+              {layout.before.map((id) => <React.Fragment key={id}>{tools[id]}</React.Fragment>)}
               <Flex
                 gap={2}
                 alignItems="center"
@@ -1286,14 +1300,16 @@ export function PagePreview({
                     {t.retry}
                   </Button>
                 )}
-                <ToolbarActions
+                {layout.right.length > 0 && <ToolbarActions
                   model={c.model}
                   collectionType={c.collectionType}
                   documentId={c.isCreatingEntry ? undefined : c.id}
                   locale={c.form?.initialValues?.locale}
-                />
+                  parts={layout.right}
+                />}
               </Flex>
-            </Flex>
+              {layout.after.map((id) => <React.Fragment key={id}>{tools[id]}</React.Fragment>)}
+            </Flex>}
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: sidebarPosition === "bottom" ? "column-reverse" : sidebarPosition === "right" ? "row-reverse" : "row" }}>
             {mode === "preview" && sidebar.length > 0 && (
               <div ref={setRailEl} style={{ display: "flex" }}>
@@ -1302,15 +1318,15 @@ export function PagePreview({
                 style={{ [sidebarPosition === "bottom" ? "borderTop" : sidebarPosition === "right" ? "borderLeft" : "borderRight"]: `1px solid ${theme?.colors?.neutral200 || "#dcdce4"}`, overflow: "auto" }}>
                 {sidebar.map((item: any, i: number) => (
                   <RailButton key={`${item.label}-${i}`} type="button" $active={fieldsPanel === item} aria-pressed={fieldsPanel === item}
-                    title={item.label} data-testid={`sidebar-item-${i}`} onClick={() => setFieldsPanel(fieldsPanel === item ? null : item)}>
-                    {item.icon && <Icon name={item.icon} />}
+                    title={item.label} data-testid={item.custom ? `sidebar-panel-${item.id}` : `sidebar-item-${i}`} onClick={() => setFieldsPanel(fieldsPanel === item ? null : item)}>
+                    {typeof item.icon === "string" ? item.icon && <Icon name={item.icon} /> : item.icon}
                     <span>{item.label}</span>
                   </RailButton>
                 ))}
               </Flex>
               </div>
             )}
-            <div ref={setStage} data-testid="page-preview-stage" data-device={device}
+            <div ref={setStage} data-testid="page-preview-stage" data-device={device.id}
               style={{ position: "relative", flex: 1, overflow: "hidden", ...stageBackground(theme) }}>
               <Frame
                 key={attempt}
@@ -1322,7 +1338,7 @@ export function PagePreview({
                 onLoad={() => {
                   loaded.current = true;
                 }}
-                style={{ ...frameStyle(device, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
+                style={{ ...frameStyle(device.width, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
               />
             </div>
             </div>
@@ -1409,11 +1425,27 @@ export function PagePreview({
                   ? { top: "6vh", left: "50%", transform: "translateX(-50%)", width: "min(96rem, 92vw)", borderRadius: "8px 8px 0 0" }
                   : drawer ? { top: drawer.top, left: drawer.left, width: drawer.width } : { display: "none" }) }}>
               <Flex gap={2} alignItems="center">
-                {fieldsPanel.icon && <Icon name={fieldsPanel.icon} />}
+                {typeof fieldsPanel.icon === "string" ? fieldsPanel.icon && <Icon name={fieldsPanel.icon} /> : fieldsPanel.icon}
                 <Typography variant="delta" tag="h2">{fieldsPanel.label}</Typography>
               </Flex>
               <Button size="S" onClick={() => setFieldsPanel(null)} data-testid="fields-panel-done">{t.blockModalDone}</Button>
             </Flex>
+            {/* A registered panel sits where the lifted form would; its own error boundary keeps the editor alive. */}
+            {fieldsPanel.custom && (fieldsPanel.open === "modal" || drawer) && (
+              <div data-bp-fields={fieldsPanel.open} data-testid={`custom-panel-${fieldsPanel.id}`}>
+                <Guard key={fieldsPanel.id}>
+                  <fieldsPanel.Component
+                    model={c.model}
+                    documentId={c.isCreatingEntry ? undefined : c.id}
+                    locale={c.form?.initialValues?.locale}
+                    values={values}
+                    onChange={onChange}
+                    disabled={state.disabled}
+                    close={() => setFieldsPanel(null)}
+                  />
+                </Guard>
+              </div>
+            )}
           </>,
           document.body,
         )}

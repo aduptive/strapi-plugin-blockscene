@@ -285,5 +285,20 @@
  "historyEventDays": "Conserva l'attività (giorni)",
  "historyRetentionHelp": "Un'attività notturna svuota le istantanee più vecchie di così o oltre il massimo per documento (le più recenti restano) ed elimina l'attività più vecchia del suo limite. Non elimina mai file multimediali.",
  "historyInvalid": "Numeri interi: da 1 a 3650 giorni (l'attività conservata almeno quanto le istantanee) e da 1 a 1000 istantanee.",
- "fieldHelp": "Maggiori informazioni"
+ "fieldHelp": "Maggiori informazioni",
+ "paneTitle": "Barra dell'anteprima pagina",
+ "paneHelp": "I controlli selezionati compaiono nella barra dell'anteprima pagina, in questo ordine. Stato e Salva/Pubblica restano insieme a destra; quelli non selezionati sono nascosti.",
+ "toolbar.modes": "Modalità di modifica",
+ "toolbar.history": "Annulla e ripeti",
+ "toolbar.devices": "Menu della larghezza pagina",
+ "toolbar.status": "Stato del documento",
+ "toolbar.actions": "Salva e Pubblica",
+ "paneDevices": "Larghezze della pagina",
+ "paneDevicesHelp": "Voci del menu della larghezza, in ordine; la prima vale finché l'editor non ne sceglie un'altra. Larghezze personalizzate: da 240 a 3840 px.",
+ "paneAddWidth": "Aggiungi larghezza",
+ "paneWidthLabel": "Etichetta",
+ "paneWidth": "Larghezza (px)",
+ "paneRemoveWidth": "Rimuovi larghezza",
+ "paneInvalid": "Tieni da 1 a 8 larghezze, senza ripetizioni; una larghezza personalizzata richiede un'etichetta (fino a 24 caratteri, senza < o >) e un numero intero da 240 a 3840.",
+ "paneTypeOverride": "Barra dell'anteprima propria per {name}"
 }

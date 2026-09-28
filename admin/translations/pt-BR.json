@@ -285,5 +285,20 @@
  "historyEventDays": "Manter a atividade (dias)",
  "historyRetentionHelp": "Uma rotina noturna esvazia snapshots mais antigos que isso ou além do máximo por documento (os mais novos são mantidos) e exclui a atividade mais antiga que o limite. Nunca exclui arquivos de mídia.",
  "historyInvalid": "Números inteiros: 1 a 3650 dias (a atividade mantida pelo menos tanto quanto os snapshots) e 1 a 1000 snapshots.",
- "fieldHelp": "Mais informações"
+ "fieldHelp": "Mais informações",
+ "paneTitle": "Barra da pré-visualização da página",
+ "paneHelp": "Os controles marcados aparecem na barra da pré-visualização da página, nesta ordem. Status e Salvar/Publicar ficam juntos à direita; os desmarcados ficam ocultos.",
+ "toolbar.modes": "Modo de edição",
+ "toolbar.history": "Desfazer e refazer",
+ "toolbar.devices": "Menu de largura da página",
+ "toolbar.status": "Status do documento",
+ "toolbar.actions": "Salvar e Publicar",
+ "paneDevices": "Larguras da página",
+ "paneDevicesHelp": "Opções do menu de largura, em ordem; a primeira vale até o editor escolher outra. Larguras personalizadas: de 240 a 3840 px.",
+ "paneAddWidth": "Adicionar largura",
+ "paneWidthLabel": "Nome",
+ "paneWidth": "Largura (px)",
+ "paneRemoveWidth": "Remover largura",
+ "paneInvalid": "Mantenha de 1 a 8 larguras, sem repetir; uma largura personalizada precisa de nome (até 24 caracteres, sem < ou >) e de um número inteiro de 240 a 3840.",
+ "paneTypeOverride": "Barra própria da pré-visualização para {name}"
 }

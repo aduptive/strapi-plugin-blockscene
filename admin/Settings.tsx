@@ -92,6 +92,49 @@ const Checks = styled.fieldset`
   label { display: inline-flex; align-items: center; gap: 6px; }
 `
 
+// Page preview toolbar and widths (Strapi 5), same rules as server/settings.js (previewToolbar, previewDevices).
+const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
+const DEVICE_NAMES = ['fit', 'mobile', 'tablet', 'desktop']
+const DEVICE_LABEL = /^[^<>]{1,24}$/
+const badDevices = (list: any[] = []) => list.length < 1 || list.length > 8 ||
+  list.some(item => typeof item !== 'string' && (!DEVICE_LABEL.test(String(item.label || '').trim()) || !(Number.isInteger(item.width) && item.width >= 240 && item.width <= 3840))) ||
+  new Set(list.map(item => typeof item === 'string' ? item : item.width)).size !== list.length
+const Row = styled.div` display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 13px; color: ${({ theme }) => theme.colors.neutral800}; `
+// Ordered checklists: checked entries first, in their order (up/down), the unchecked ones after them.
+function PaneEditor({ id, toolbar, devices, set, t, disabled, TextField }: any) {
+  const move = (list: any[], index: number, by: number) => { const next = [...list]; [next[index], next[index + by]] = [next[index + by], next[index]]; return next }
+  const arrows = (list: any[], index: number, key: string) => <>
+    <Tool icon="up" label={t.moveUp} disabled={disabled || index < 0 || index === 0} onClick={() => set(key, move(list, index, -1))} />
+    <Tool icon="down" label={t.moveDown} disabled={disabled || index < 0 || index === list.length - 1} onClick={() => set(key, move(list, index, 1))} />
+  </>
+  const check = (list: any[], item: string, key: string) => <input type="checkbox" name={`${id}-${key}-${item}`} checked={list.includes(item)} disabled={disabled}
+    onChange={e => set(key, e.target.checked ? [...list, item] : list.filter(entry => entry !== item))} />
+  const width = (index: number, patch: any) => set('previewDevices', devices.map((item: any, i: number) => i === index ? { ...item, ...patch } : item))
+  return <Flex direction="column" alignItems="stretch" gap={3} data-testid={`pane-editor-${id}`}>
+    <Typography variant="pi" textColor="neutral600">{t.paneHelp}</Typography>
+    <Box>{[...toolbar, ...TOOLBAR.filter(item => !toolbar.includes(item))].map(item => <Row key={item} data-testid={`${id}-toolbar-${item}`}>
+      {arrows(toolbar, toolbar.indexOf(item), 'previewToolbar')}<label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{check(toolbar, item, 'previewToolbar')}{t.toolbar[item]}</label>
+    </Row>)}</Box>
+    <Typography variant="delta" tag="h3">{t.paneDevices}</Typography>
+    <Typography variant="pi" textColor="neutral600">{t.paneDevicesHelp}</Typography>
+    <Box>{[...devices, ...DEVICE_NAMES.filter(item => !devices.includes(item))].map((item: any) => {
+      const index = devices.indexOf(item)
+      return <Row key={typeof item === 'string' ? item : `px-${index}`} data-testid={`${id}-device-${typeof item === 'string' ? item : index}`}>
+        {arrows(devices, index, 'previewDevices')}
+        {typeof item === 'string' ? <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{check(devices, item, 'previewDevices')}{t.device[item]}</label> : <>
+          <Box style={{ flex: '1 1 160px' }}><TextField name={`${id}-device-label-${index}`} label={t.paneWidthLabel} value={item.label} disabled={disabled} onChange={(v: string) => width(index, { label: v })} /></Box>
+          <Box style={{ width: 140 }}><TextField name={`${id}-device-width-${index}`} label={t.paneWidth} value={Number.isFinite(item.width) ? String(item.width) : ''} disabled={disabled}
+            onChange={(v: string) => width(index, { width: /^\d{1,4}$/.test(v.trim()) ? Number(v.trim()) : NaN })} /></Box>
+          <Tool icon="close" label={t.paneRemoveWidth} disabled={disabled} onClick={() => set('previewDevices', devices.filter((_: any, i: number) => i !== index))} />
+        </>}
+      </Row>
+    })}</Box>
+    <Flex><Button variant="secondary" size="S" disabled={disabled || devices.length >= 8} data-testid={`${id}-add-width`}
+      onClick={() => set('previewDevices', [...devices, { label: '', width: 1280 }])}>{t.paneAddWidth}</Button></Flex>
+    {badDevices(devices) && <Typography role="alert" variant="pi" textColor="danger600">{t.paneInvalid}</Typography>}
+  </Flex>
+}
+
 // Version history (Strapi 5), same rules as server/settings.js (HISTORY_KEYS).
 const DAYS = (n: any) => Number.isInteger(n) && n >= 1 && n <= 3650
 const badRetention = (h: any) => !h || !DAYS(h.retentionDays) || !DAYS(h.eventDays) || h.eventDays < h.retentionDays || !(Number.isInteger(h.maxSnapshots) && h.maxSnapshots >= 1 && h.maxSnapshots <= 1000)
@@ -187,7 +230,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   const badSidebar = settings && Object.values(settings.contentTypes || {}).some((entry: any) => (entry.sidebar || []).some(badItem))
   const badLazy = settings && badUids(settings.editor.lazyFields)
   const badHistory = settings && data?.historyTypes && badRetention(settings.history)
-  const invalid = badColor || badSidebar || badLazy || badHistory
+  const badPane = settings && [settings.editor, ...Object.values(settings.contentTypes || {})].some((entry: any) => entry.previewDevices && badDevices(entry.previewDevices))
+  const invalid = badColor || badSidebar || badLazy || badHistory || badPane
   const save = async () => {
     if (!settings || invalid || !canUpdate) return
     setSaving(true); setStatus('')
@@ -298,6 +342,9 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <SelectField name="editor-previewMode" label={t.previewMode} value={editor.previewMode || 'form'} disabled={!canUpdate || saving}
             options={['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))} onChange={(v: string) => update(s => { s.editor.previewMode = v; return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewModeHelp}</Typography>
+          <Typography variant="delta" tag="h3">{t.paneTitle}</Typography>
+          <PaneEditor id="editor" toolbar={editor.previewToolbar || TOOLBAR} devices={editor.previewDevices || DEVICE_NAMES} t={t} disabled={!canUpdate || saving} TextField={TextField}
+            set={(key: string, value: unknown) => update(s => { s.editor[key] = value; return s })} />
           <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
           <UidListField TextField={TextField} name="editor-lazyFields" label={t.lazyFields} value={editor.lazyFields || []} disabled={!canUpdate || saving || editor.lazyEditors === false}
             placeholder="plugin::ckeditor5.CKEditor" onChange={(uids: string[]) => update(s => { s.editor.lazyFields = uids; return s })} />
@@ -341,6 +388,13 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
               onChange={(v: string) => set('previewMode', v, 'default')} /></Box>}
           </Flex>
           {previewSupported && entry.enabled !== false && <SidebarEditor type={type} entry={entry} set={set} t={t} disabled={!canUpdate || saving} SelectField={SelectField} TextField={TextField} />}
+          {/* Own toolbar: starts as a copy of the global one; off removes both keys (the global ones apply again). */}
+          {previewSupported && entry.enabled !== false && <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4}>
+            <ToggleField name={`type-pane-${type.uid}`} label={t.f('paneTypeOverride', { name: type.displayName })} value={Boolean(entry.previewToolbar || entry.previewDevices)} disabled={!canUpdate || saving}
+              onChange={(v: boolean) => { set('previewToolbar', v ? [...(editor.previewToolbar || TOOLBAR)] : undefined, undefined); set('previewDevices', v ? structuredClone(editor.previewDevices || DEVICE_NAMES) : undefined, undefined) }} />
+            {(entry.previewToolbar || entry.previewDevices) && <PaneEditor id={`type-${type.uid}`} toolbar={entry.previewToolbar || editor.previewToolbar || TOOLBAR} devices={entry.previewDevices || editor.previewDevices || DEVICE_NAMES}
+              t={t} disabled={!canUpdate || saving} TextField={TextField} set={(key: string, value: unknown) => set(key, value, undefined)} />}
+          </Flex>}
           </Flex>
         })}
         {badSidebar && <Typography role="alert" textColor="danger600">{t.sidebarInvalidSave}</Typography>}

@@ -49,6 +49,7 @@ const PATHS: Record<string, string> = {
   // Zone bar: the "…" menu.
   more: 'M5 11.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6zM12 11.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6zM19 11.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6z',
 }
+export const ICON_NAMES = Object.keys(PATHS)
 export function Icon({ name, size = 18, filled }: { name: string; size?: number; filled?: boolean }) {
   const d = PATHS[name]
   if (!d) return null
