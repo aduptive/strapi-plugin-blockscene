@@ -349,7 +349,7 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
       {(actions: any[]) => (
         <Flex gap={2} alignItems="center" data-testid="page-preview-actions">
           {status && (
-            <Status size="S" showBullet={false} role="status" data-testid="page-preview-status"
+            <Status size="S" role="status" data-testid="page-preview-status"
               variant={status === "draft" ? "secondary" : status === "published" ? "success" : "alternative"}>
               <Typography tag="span" variant="omega" fontWeight="bold">
                 {formatMessage({ id: `content-manager.containers.List.${status}`, defaultMessage: status.charAt(0).toUpperCase() + status.slice(1) })}
