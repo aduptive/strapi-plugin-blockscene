@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
 
 - Page preview toolbar (Strapi 5): the document's state as the edit view header
   shows it (Draft / Modified / Published, same colours and Content Manager
@@ -9,9 +9,6 @@
   Publish the primary one, as in the edit view's panel; the four width buttons
   became one menu that keeps their icons (the toolbar stays on one line in a
   narrow pane).
-
-## 2.0.0-alpha.6 (Strapi 5) and 1.0.0-alpha.6 (Strapi 4) — 2026-09-28
-
 - Fix (Strapi 5.0 to 5.44): the edit view crashed ("Cannot read properties of
   undefined (reading 'type')") on any document with a block whose hidden-on-site
   value had been set. The attribute was `visible: false`, so the Content
