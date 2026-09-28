@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Hover sync: a block hovered in the page now highlights its form row with the
+  native accordion hover look (Strapi 5: the primary 1 px ring on the accordion
+  item; Strapi 4: the primary border of the accordion wrapper) instead of an
+  offset outline around the whole row and its connector line.
+
 ## 2.0.0-alpha.8 (Strapi 5) and 1.0.0-alpha.8 (Strapi 4) — 2026-09-28
 
 - Page preview on Strapi 4 (ADU-387): the Strapi 4 package gets the whole-page

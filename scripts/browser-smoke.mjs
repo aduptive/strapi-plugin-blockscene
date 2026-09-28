@@ -578,7 +578,8 @@ try {
     await page.screenshot({ path: `artifacts/strapi${major}-split-hover-form.png`, animations: 'disabled' })
     // Page -> form: the matching row gets the highlight attribute; the form row under the pointer is cleared on the page.
     await frame.locator('[data-block-key]').first().hover()
-    await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li')[0]?.hasAttribute('data-blockscene-hover'))
+    // The highlight sits on the block's own accordion card (the native hover look), not on the row with its connector.
+    await page.waitForFunction(() => { const row = document.querySelectorAll('ol[aria-describedby] > li')[0], card = row?.querySelector('[data-blockscene-hover]'); return Boolean(card && !row.hasAttribute('data-blockscene-hover') && card.querySelector('button[aria-expanded]')) })
     await frame.locator('[data-hovered]').waitFor({ state: 'detached' })
     await page.screenshot({ path: `artifacts/strapi${major}-split-hover-page.png`, animations: 'disabled' })
     await frame.locator('main').hover({ position: { x: 40, y: 4 } })
