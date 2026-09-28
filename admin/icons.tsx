@@ -46,6 +46,8 @@ const PATHS: Record<string, string> = {
   clipboard: 'M9 3h6v3H9zM7 4.5H5v16h14v-16h-2',
   paste: 'M9 3h6v3H9zM7 4.5H5v16h14v-16h-2M12 10v7M9 14l3 3 3-3',
   select: 'M4 4h16v16H4zM8 12l3 3 5-6',
+  // Zone bar: the "…" menu.
+  more: 'M5 11.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6zM12 11.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6zM19 11.2a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6z',
 }
 export function Icon({ name, size = 18, filled }: { name: string; size?: number; filled?: boolean }) {
   const d = PATHS[name]

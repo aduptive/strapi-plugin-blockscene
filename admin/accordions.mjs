@@ -98,15 +98,22 @@ export function setAll(list, open, batch = (run) => run()) {
   return changed
 }
 // The native "Add a component to <name>" button of a zone: a plain button (no accordion header, no block row, not
-// inside a dialog or our own gallery button) whose label ends with the zone's label as the edit view renders it (the raw
+// inside a dialog, a menu or our own zone bar) whose label ends with the zone's label as the edit view renders it (the raw
 // name unless "Configure the view" or the field labels hook renamed it), which Strapi's message carries in every locale.
 // An empty zone renders nothing but this button, so the zone is identified by its name or label only; Dynamic Zones
 // cannot nest, so a button inside a block row is never one.
 export function isNativeAddButton(button, zone) {
-  // Our own controls ("Open all blocks", "Paste 2 blocks", the gallery trigger, the preview toolbar) also end with the zone name.
-  if (!button || button.getAttribute('aria-expanded') || button.closest('ol[aria-describedby] > li, [role="dialog"], [data-testid^="open-gallery-"], [data-testid^="block-"], [data-testid^="page-preview"], [data-testid^="bp-"], [data-testid^="zone-"], [data-blockscene-row-actions]')) return false
+  // Our own controls ("Paste 2 blocks" in the zone bar's menu, the preview toolbar) may also end with the zone name.
+  if (!button || button.getAttribute('aria-expanded') || button.closest('ol[aria-describedby] > li, [role="dialog"], [role="menu"], [data-testid^="block-"], [data-testid^="page-preview"], [data-testid^="bp-"], [data-testid^="zone-"], [data-blockscene-row-actions]')) return false
   const text = (button.textContent || '').trim()
   const escape = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const names = [...new Set([zone.name, zone.label].filter(Boolean))].map(escape).join('|')
   return Boolean(text) && new RegExp(`(^|\\s)(${names})$`).test(text)
+}
+// The zone bar's one Expand all / Collapse all button. `closed` / `open`: some row of the zone is collapsed / expanded.
+// Both options on: it expands while any row is collapsed, else it collapses. Only one on: it offers that action alone,
+// disabled while there is nothing to do. Neither: no button (null).
+export function accordionToggle(closed, open, { showOpenAll, showCloseAll }) {
+  const action = showOpenAll && (closed || !showCloseAll) ? 'open' : showCloseAll ? 'close' : null
+  return action && { action, disabled: action === 'open' ? !closed : !open }
 }

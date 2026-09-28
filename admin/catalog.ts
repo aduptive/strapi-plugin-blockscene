@@ -4,7 +4,9 @@ import * as React from 'react'
 // The last catalog is also kept for the synchronous edit-layout hook (field labels).
 let cached: any = null
 let pending: Promise<void> | null = null
-const load = (get: any) => get('/blockscene/catalog').then(({ data }: any) => { cached = data; return data })
+// The side panel and the injected editor ask at the same time: one request in flight serves both.
+let flight: Promise<any> | null = null
+const load = (get: any) => (flight ||= get('/blockscene/catalog').then(({ data }: any) => { cached = data; return data }).finally(() => { flight = null }))
 export function useCatalog(get: any) {
   const [catalog, setCatalog] = React.useState<any>(null)
   React.useEffect(() => {

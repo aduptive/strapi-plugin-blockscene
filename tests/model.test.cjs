@@ -213,6 +213,19 @@ test('native "Add a component" button is matched by its zone name only, never an
   assert.equal(isNativeAddButton(button('Add a component to blocks', { inside: 'ol[aria-describedby] > li' }), { name: 'blocks' }), false)
   assert.equal(isNativeAddButton(button('Add a component to blocks', { inside: '[role="dialog"]' }), { name: 'blocks' }), false)
   assert.equal(isNativeAddButton(button('Open all blocks', { inside: '[data-testid^="block-"]' }), { name: 'blocks' }), false, 'the plugin\'s own accordion controls are not the native button')
+  assert.equal(isNativeAddButton(button('Paste 2 blocks', { inside: '[role="menu"]' }), { name: 'blocks' }), false, 'the zone bar menu (portalled out of the bar) is not the native button')
+})
+
+test('zone bar toggle: one button, the action follows the rows, a single option offers only its action', async () => {
+  const { accordionToggle } = await import('../admin/accordions.mjs')
+  const both = { showOpenAll: true, showCloseAll: true }
+  assert.deepEqual(accordionToggle(true, true, both), { action: 'open', disabled: false }, 'some collapsed: expand')
+  assert.deepEqual(accordionToggle(false, true, both), { action: 'close', disabled: false }, 'all expanded: collapse')
+  assert.deepEqual(accordionToggle(true, false, both), { action: 'open', disabled: false })
+  assert.deepEqual(accordionToggle(false, true, { showOpenAll: true, showCloseAll: false }), { action: 'open', disabled: true }, 'only expand: nothing to do')
+  assert.deepEqual(accordionToggle(true, false, { showOpenAll: false, showCloseAll: true }), { action: 'close', disabled: true }, 'only collapse: nothing to do')
+  assert.deepEqual(accordionToggle(true, true, { showOpenAll: false, showCloseAll: true }), { action: 'close', disabled: false })
+  assert.equal(accordionToggle(true, true, { showOpenAll: false, showCloseAll: false }), null, 'both off: no button')
 })
 
 test('per content type settings: only types with a zone, only known keys; stale types dropped on read', () => {

@@ -1,6 +1,9 @@
 import * as React from "react";
 import {
+  Box,
   Modal as Dialog,
+  MenuItem,
+  SimpleMenu,
   Switch,
   Flex,
   Typography,
@@ -23,8 +26,10 @@ import {
   useDocumentRBAC,
 } from "@strapi/content-manager/strapi-admin";
 import { Gallery } from "./Gallery";
-import { PagePreview } from "./PagePreview";
-import { History } from "./History";
+import { GroupDiagnostics, PagePreview, ZoneBarTools, useEditorState, usePreviewZone } from "./PagePreview";
+import { History, HISTORY_READ } from "./History";
+import { validateGroups } from "./preview.mjs";
+import { Icon } from "./icons";
 import { Settings, permissions, register } from "./Settings";
 import { editableZones, canInsert, componentDefaults, labelEditLayout, dropField } from "./model.mjs";
 import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
@@ -84,15 +89,15 @@ function useRowForm(c: any, values: any, get: any) {
       })),
   };
 }
-function Panel() {
+// What this edit view gets: the editable zones, and whether the gallery (with the zone bars and the page preview) and
+// the version history apply. Shared by the injected editor and the side panel.
+function useScope() {
   const c: any = useContext();
   const rbac: any = useDocumentRBAC("Blockscene", (state: any) => state);
   const { get, put } = useFetchClient();
-  const user: any = useAuth("Blockscene", (state: any) => state.user);
   // Live form values: the context's `form.values` snapshot can lag behind edits made through the preview, which misplaces insertions.
   const formValues: any = useForm("Blockscene", (state: any) => state.values);
   const catalog = useCatalog(get);
-  const form = useRowForm(c, formValues ?? c.form?.values, get);
   const creating =
     !c.id && !c.form?.initialValues?.id && !c.form?.initialValues?.documentId;
   const allowed =
@@ -111,6 +116,57 @@ function Panel() {
     label:
       fields.find((field: any) => field.name === zone.name)?.label || zone.name,
   }));
+  const typeSettings = catalog?.contentTypes?.[c.model] || {};
+  const gallery = zones.length > 0 && Boolean(catalog?.editor?.enabled) && typeSettings.enabled !== false;
+  // Version history: saved documents of covered types, whether or not the gallery applies to them.
+  const history = !creating && Boolean(c.id) && Boolean(catalog?.history?.contentTypes?.includes(c.model));
+  return { c, rbac, get, put, formValues, catalog, creating, zones, typeSettings, gallery, history };
+}
+// "…" menus of the zone bars.
+const Menu = ({ label, testid, items }: any) => (
+  <Box data-testid={testid}>
+    <SimpleMenu variant="tertiary" size="S" aria-label={label} title={label} endIcon={null} label={<Icon name="more" size={16} />}>
+      {items.map((item: any) => (
+        <MenuItem key={item.testid} onSelect={item.onSelect} data-testid={item.testid}>
+          <Flex gap={2} alignItems="center"><Icon name={item.icon} size={16} />{item.label}</Flex>
+        </MenuItem>
+      ))}
+    </SimpleMenu>
+  </Box>
+);
+// Mounted in the Entry panel's `editView.right-links` injection zone, where it shows nothing: everything it renders is
+// portalled into the form (zone bars, row tools), into dialogs or into the preview pane. Its anchor still sits in the
+// side panels column, which split mode and the visual editor sidebar use to find the edit view's grid.
+function Editor() {
+  const scope = useScope();
+  const { catalog, typeSettings, gallery } = scope;
+  const lazy = Boolean(catalog?.editor?.enabled && catalog.editor.lazyEditors !== false && typeSettings.enabled !== false);
+  const lazyFields = (catalog?.editor?.lazyFields || []).join(",");
+  React.useEffect(() => {
+    if (catalog) setLazyConfig({ on: lazy, fields: lazyFields ? lazyFields.split(",") : [] });
+  }, [catalog, lazy, lazyFields]);
+  // A save refetches the document: while it loads the zones read as none, which must not unmount the editor (the mode
+  // and the undo history live in it). The side panel never had this problem: its content updates are deferred.
+  const kept = React.useRef(false);
+  if (!scope.c.isLoading) kept.current = gallery;
+  if (!kept.current) return null;
+  return (
+    <Guard>
+      <div hidden data-blockscene-editor="">
+        <Workspace scope={scope} />
+      </div>
+    </Guard>
+  );
+}
+// One per document and locale, created once the catalog is known: useEditorState is the single mode, undo history and
+// preview route of the edit view (zone bar, pane toolbar and keyboard shortcuts).
+function Workspace({ scope }: any) {
+  const { c, get, put, formValues, catalog, creating, zones, typeSettings } = scope;
+  const user: any = useAuth("Blockscene", (state: any) => state.user);
+  const form = useRowForm(c, formValues ?? c.form?.values, get);
+  const editor = { ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
+    sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left" };
+  const state = useEditorState(editor);
   const add = (zone: any, uid: string) => {
     const values = formValues ?? c.form.values;
     const close = catalog?.groups?.[uid];
@@ -136,50 +192,54 @@ function Panel() {
     if (close) c.form.addFieldRow(zone.name, { __component: close }, at + 1);
     return true;
   };
-  const typeSettings = catalog?.contentTypes?.[c.model] || {};
-  const lazy = Boolean(catalog?.editor?.enabled && catalog.editor.lazyEditors !== false && typeSettings.enabled !== false);
-  const lazyFields = (catalog?.editor?.lazyFields || []).join(",");
-  React.useEffect(() => {
-    if (catalog) setLazyConfig({ on: lazy, fields: lazyFields ? lazyFields.split(",") : [] });
-  }, [catalog, lazy, lazyFields]);
-  const gallery = zones.length > 0 && catalog?.editor?.enabled && typeSettings.enabled !== false;
-  // Version history: saved documents of covered types, whether or not the gallery applies to them.
-  const history = !creating && Boolean(c.id) && Boolean(catalog?.history?.contentTypes?.includes(c.model));
-  if (!gallery && !history) return null;
-  const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
+  return (
+    <>
+      <Gallery
+        zones={zones}
+        components={c.components}
+        add={add}
+        Modal={Modal}
+        Toggle={ToggleField}
+        Menu={Menu}
+        get={get}
+        put={put}
+        editor={catalog.editor}
+        catalog={catalog}
+        docKey={`${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`}
+        contentType={c.model}
+        userId={user?.id}
+        form={form}
+        zoneTools={<ZoneBarTools state={state} />}
+      />
+      <PagePreview
+        editor={editor}
+        state={state}
+        groups={catalog.groups || null}
+        hiddenAttribute={catalog.editor.hiddenBlocks !== "off" ? catalog.hiddenAttribute : null}
+        form={form}
+        Modal={Modal}
+        Toggle={ToggleField}
+      />
+    </>
+  );
+}
+// The side panel holds only what has no place in the form: the version history and the layout group diagnostics.
+// Neither: no panel at all.
+function Panel() {
+  const { c, rbac, get, catalog, gallery, history } = useScope();
+  const canReadHistory = Boolean((useRBAC(HISTORY_READ) as any).allowedActions?.canRead);
+  const preview = usePreviewZone();
+  const groups = gallery ? catalog?.groups : null;
+  const problems = groups && preview.zone ? validateGroups(preview.rows, groups) : [];
+  const versions = history && canReadHistory;
+  if (!versions && !problems.length) return null;
   return {
-    // The panel is the plugin (gallery, accordions, preview modes), so it carries the plugin's name; the dialog stays "Block gallery".
     title: "Blockscene",
     content: (
       <Guard>
       <Flex direction="column" alignItems="stretch" gap={4}>
-        {gallery && <>
-        <Gallery
-          zones={zones}
-          components={c.components}
-          add={add}
-          Modal={Modal}
-          Toggle={ToggleField}
-          get={get}
-          put={put}
-          editor={catalog.editor}
-          catalog={catalog}
-          docKey={docKey}
-          contentType={c.model}
-          userId={user?.id}
-          form={form}
-        />
-        <PagePreview
-          editor={{ ...catalog.editor, previewMode: typeSettings.previewMode || catalog.editor.previewMode,
-            sidebar: typeSettings.sidebar || [], sidebarPosition: typeSettings.sidebarPosition || "left" }}
-          groups={catalog.groups || null}
-          hiddenAttribute={catalog.editor.hiddenBlocks !== "off" ? catalog.hiddenAttribute : null}
-          form={form}
-          Modal={Modal}
-          Toggle={ToggleField}
-        />
-        </>}
-        {history && (
+        {problems.length > 0 && <GroupDiagnostics scope={preview} groups={groups} problems={problems} />}
+        {versions && (
           <History
             model={c.model}
             documentId={c.id}
@@ -306,6 +366,7 @@ export default {
   registerTrads,
   bootstrap(app: any) {
     app.getPlugin("content-manager").apis.addEditViewSidePanel([Panel]);
+    app.getPlugin("content-manager").injectComponent("editView", "right-links", { name: "blockscene", Component: Editor });
     app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout, dropField));
     // Every plugin has registered its custom fields by now.
     wrapCustomFields(strapiApp);

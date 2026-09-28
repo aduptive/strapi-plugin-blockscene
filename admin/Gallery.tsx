@@ -28,10 +28,11 @@ import {
   stopAll,
   toggles,
   isNativeAddButton,
+  accordionToggle,
 } from "./accordions.mjs";
 import { Wireframe } from "./wireframes";
 import { RowPreviews } from "./RowPreviews";
-import { RowActions, ZoneRowTools, useRowActions } from "./RowActions";
+import { RowActions, SelectionBar, useRowActions, zoneMenuItems } from "./RowActions";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
 
@@ -978,19 +979,7 @@ function ZoneGallery({
       open={open}
       onOpenChange={setOpen}
       title={t.gallery}
-      trigger={
-        controlled ? null : (
-          <Button
-            variant="secondary"
-            fullWidth
-            onClick={() => setOpen(true)}
-            data-testid={`open-gallery-${zone.name}`}
-          >
-            {/* The zone is named by the heading above when there are several; its raw field name never shows. */}
-            {t.add}
-          </Button>
-        )
-      }
+      trigger={null}
     >
       <Layout>
         <Side $collapsed={collapsed} aria-label={t.gallery} data-testid={`gallery-sidebar-${zone.name}`} data-collapsed={collapsed}>
@@ -1267,26 +1256,34 @@ function useInitialAccordions({
   }, [docKey, editor?.enabled, editor?.initialState, contentType]);
 }
 
-// Open all / Close all sit right after the native zone label pill ("blocks (2)"): one inert <span> is inserted
-// in the label row and the buttons are portalled into it, re-inserted when Strapi re-renders (as RowPreviews does).
+// The zone bar sits right after the native zone label pill ("blocks (2)"): one inert <span> is inserted in the label
+// row and the tools are portalled into it, re-inserted when Strapi re-renders (as RowPreviews does). An empty zone has
+// no label row, only the native add button: the span goes right after that button instead.
 // ponytail: DOM injection; drop it if Strapi ever exposes a zone label slot.
 const ZONE_ATTR = "data-blockscene-zone-controls";
-function useLabelAnchor(zone: any, enabled: boolean) {
+function useZoneAnchor(zone: any, enabled: boolean) {
   const [el, setEl] = React.useState<HTMLElement | null>(null);
+  const filled = zone.count > 0;
   React.useEffect(() => {
     if (!enabled) return;
     let frame = 0;
     const sync = () => {
-      const list = findZoneList(zone.label);
-      // The label row is the first child of the zone box with text (DS1 and DS2 render it before the list).
-      const row = list && ([...(list.parentElement?.children || [])] as HTMLElement[]).find((child) => child !== list && child.textContent?.trim());
+      let host: HTMLElement | null = null, after: HTMLElement | null = null;
+      if (filled) {
+        const list = findZoneList(zone.label);
+        // The label row is the first child of the zone box with text (DS1 and DS2 render it before the list).
+        host = (list && ([...(list.parentElement?.children || [])] as HTMLElement[]).find((child) => child !== list && child.textContent?.trim())) || null;
+      } else {
+        after = [...document.querySelectorAll<HTMLElement>("button")].find((button) => isNativeAddButton(button, zone)) || null;
+        host = after?.parentElement || null;
+      }
       let anchor = document.querySelector<HTMLElement>(`[${ZONE_ATTR}="${CSS.escape(zone.name)}"]`);
-      if (anchor && anchor.parentElement !== row) { anchor.remove(); anchor = null; }
-      if (!anchor && row) {
+      if (anchor && (anchor.parentElement !== host || (after && anchor.previousElementSibling !== after))) { anchor.remove(); anchor = null; }
+      if (!anchor && host) {
         anchor = document.createElement("span");
         anchor.setAttribute(ZONE_ATTR, zone.name);
-        anchor.style.cssText = "display:inline-flex;align-items:center;margin-left:8px";
-        row.appendChild(anchor);
+        anchor.style.cssText = "display:inline-flex;align-items:center;margin-left:8px;white-space:nowrap";
+        host.insertBefore(anchor, after ? after.nextSibling : null);
       }
       setEl(anchor);
     };
@@ -1301,14 +1298,47 @@ function useLabelAnchor(zone: any, enabled: boolean) {
       document.querySelector(`[${ZONE_ATTR}="${CSS.escape(zone.name)}"]`)?.remove();
       setEl(null);
     };
-  }, [zone.name, zone.label, enabled]);
+  }, [zone.name, zone.label, enabled, filled]);
   return el;
 }
-function ZoneControls({ zone, editor, contentType, userId, tools }: any) {
+// Whether some row of the zone is collapsed / expanded, read from the rows' own aria-expanded (a click on a header,
+// an open all in progress and a re-render all count), batched per frame.
+function useRowStates(zone: any, enabled: boolean) {
+  const [state, setState] = React.useState({ closed: false, open: false });
+  React.useEffect(() => {
+    if (!enabled) return;
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const list = findZoneList(zone.label);
+      const values = list ? toggles(list).map((button: HTMLElement) => button.getAttribute("aria-expanded") === "true") : [];
+      const closed = values.includes(false), open = values.includes(true);
+      setState((prev) => (prev.closed === closed && prev.open === open ? prev : { closed, open }));
+    };
+    read();
+    const observer = new MutationObserver(() => {
+      if (!frame) frame = requestAnimationFrame(read);
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-expanded"] });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [zone.label, enabled]);
+  return state;
+}
+// Per zone, after the label pill: Expand all / Collapse all (one button), the first zone's extra tools (Undo, Redo, mode;
+// Strapi 5) and a "…" menu with the rarer actions (select blocks, paste). Selection mode swaps all of it for the
+// selection bar.
+function ZoneControls({ zone, editor, contentType, userId, actions, extra, Menu }: any) {
   const t = useMessages();
-  const shown = Boolean(zone.count && (editor.showOpenAll || editor.showCloseAll || tools));
-  const anchor = useLabelAnchor(zone, shown);
-  if (!shown || !anchor) return null;
+  const toggleShown = Boolean(zone.count && (editor.showOpenAll || editor.showCloseAll));
+  const items = zoneMenuItems(zone, actions);
+  const selecting = actions?.selection?.zone === zone.name;
+  const anchor = useZoneAnchor(zone, toggleShown || Boolean(extra) || items.length > 0 || selecting);
+  const rows = useRowStates(zone, toggleShown && Boolean(anchor));
+  if (!anchor) return null;
+  const toggle = toggleShown && accordionToggle(rows.closed, rows.open, editor);
   const apply = (open: boolean) => {
     const list = findZoneList(zone.label);
     if (list) setAll(list, open, unstable_batchedUpdates);
@@ -1319,15 +1349,25 @@ function ZoneControls({ zone, editor, contentType, userId, tools }: any) {
     );
   };
   return createPortal(
-    <Flex gap={1} data-testid={`block-accordion-controls-${zone.name}`}>
-      {editor.showOpenAll && <Tool icon="expand" label={t.openAll} onClick={() => apply(true)} />}
-      {editor.showCloseAll && <Tool icon="collapse" label={t.closeAll} onClick={() => apply(false)} />}
-      {tools}
+    <Flex gap={2} alignItems="center" wrap="wrap" data-testid={`block-accordion-controls-${zone.name}`}>
+      {selecting ? <SelectionBar zone={zone} actions={actions} /> : <>
+        {toggle && (
+          <Button size="S" variant="tertiary" startIcon={<Icon name={toggle.action === "open" ? "expand" : "collapse"} size={14} />}
+            aria-expanded={!rows.closed} disabled={toggle.disabled} onClick={() => apply(toggle.action === "open")}
+            data-testid={`zone-toggle-${zone.name}`}>
+            {toggle.action === "open" ? t.expandAll : t.collapseAll}
+          </Button>
+        )}
+        {extra}
+        {items.length > 0 && <Menu label={t.moreActions} testid={`zone-more-${zone.name}`} items={items} />}
+      </>}
     </Flex>,
     anchor,
   );
 }
 
+// Everything the plugin adds to the edit view lives in the form itself (zone bars, row tools) or in dialogs: this renders
+// nothing in place. `zoneTools` joins the first zone's bar (Strapi 5: Undo, Redo and the editing mode).
 export function Gallery({
   zones,
   editor,
@@ -1335,6 +1375,8 @@ export function Gallery({
   contentType,
   userId,
   catalog,
+  zoneTools = null,
+  Menu,
   ...props
 }: any) {
   useInitialAccordions({ zones, editor, docKey, contentType, userId });
@@ -1343,7 +1385,7 @@ export function Gallery({
   // A pending open all / close all belongs to the document it was started on.
   React.useEffect(() => stopAll, [docKey]);
   return (
-    <Flex direction="column" alignItems="stretch" gap={3}>
+    <>
       {editor.showRowThumbnails !== false && (
         <RowPreviews
           zones={zones}
@@ -1353,25 +1395,14 @@ export function Gallery({
         />
       )}
       <RowActions zones={zones} actions={actions} Modal={props.Modal} />
-      {zones.map((zone: any) => (
-        <Flex key={zone.name} direction="column" alignItems="stretch" gap={2}>
-          {/* Several zones: name each gallery trigger's zone. */}
-          {zones.length > 1 && !zone.full && (
-            <Typography variant="sigma" textColor="neutral600" tag="h3">{zone.label}</Typography>
-          )}
-          {/* docKey ends with the content locale (both versions): the {locale} of blockPreviewUrl. */}
+      {zones.map((zone: any, index: number) => (
+        <React.Fragment key={zone.name}>
+          {/* Opened by the zone's native "Add a component" button. docKey ends with the content locale (both versions): the {locale} of blockPreviewUrl. */}
           {!zone.full && <ZoneGallery zone={zone} contentType={contentType} locale={String(docKey || "").split(":").pop()} {...props} />}
-          {/* An empty zone has no label row to hold the tools: its Paste sits under the gallery button. */}
-          {zone.count === 0 && actions?.clip && <Flex><ZoneRowTools zone={zone} actions={actions} /></Flex>}
-          <ZoneControls
-            zone={zone}
-            editor={editor}
-            contentType={contentType}
-            userId={userId}
-            tools={actions && actions.editor.clipboard !== false && <ZoneRowTools zone={zone} actions={actions} />}
-          />
-        </Flex>
+          <ZoneControls zone={zone} editor={editor} contentType={contentType} userId={userId} actions={actions}
+            extra={index === 0 ? zoneTools : null} Menu={Menu} />
+        </React.Fragment>
       ))}
-    </Flex>
+    </>
   );
 }

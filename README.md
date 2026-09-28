@@ -45,9 +45,42 @@ module.exports = {
 ```
 
 Rebuild/restart the admin. Open a content type with a Dynamic Zone. The
-editor panel provides one gallery button per editable, non-full zone. Zones
-that already have blocks get "Open all blocks" / "Close all blocks" icon
-buttons right beside the native zone label ("blocks (3)").
+native "Add a component to <zone>" button of each editable, non-full zone opens
+the gallery instead of Strapi's category picker; a full zone keeps its native
+button.
+
+### Zone bar
+
+Right beside the native zone label ("blocks (3)") each zone gets a short bar:
+
+- **Expand all / Collapse all**: one button with text. It reads the rows' own
+  state: "Expand all" while any block of the zone is collapsed, "Collapse all"
+  when every block is open (a header opened or closed by hand counts too), and
+  exposes it as `aria-expanded`. Blocks open or close a few at a time around the
+  viewport first (long pages stay responsive). Options `showOpenAll` /
+  `showCloseAll`: with both on (the default) the button toggles; with only one
+  on it offers that action alone, disabled while there is nothing to do; with
+  both off there is no button.
+- **Undo and Redo** (Strapi 5, first zone only): icon and text, the shortcut in
+  the tooltip. See [Undo and redo](#undo-and-redo).
+- **Editing mode** (Strapi 5, first zone only, when a preview route exists): a
+  menu with Fields, Fields + page and Visual editor. Without a preview route the
+  menu is not shown; Settings, Blockscene says why.
+- **"…" (More actions)**: Select blocks, and "Paste N blocks" while the
+  clipboard holds blocks this zone allows (see [Row actions](#row-actions)).
+  No entries, no menu.
+
+"Select blocks" swaps the bar for a selection bar: a select-all box with the
+count ("2 selected"; indeterminate while only some are selected, a click then
+selects none), Copy (disabled until a block is selected) and Done; Esc leaves
+too. Each row gets a checkbox at the start of its header.
+
+An empty zone has no label row: its bar (Paste, and on the first zone Undo,
+Redo and the mode) sits right after its native add button.
+
+The plugin adds no side panel of its own for any of this. The Blockscene side
+panel appears only for what has no place in the form: version history (when
+enabled) and layout group problems. With neither, there is no panel.
 
 ## Gallery
 
@@ -152,14 +185,14 @@ Each block header gets a few icons right before Strapi's own delete button
   nested components, new row key, media kept, relations kept (Strapi 5 reads
   the source row's relations from the server and adds its unsaved changes).
   A group OPEN duplicates with its whole range. Option `duplicate`.
-- **Copy / Paste** across pages. The copy icon copies one block; the select
-  icon in the zone label shows a checkbox per row, then "Copy selected". The
+- **Copy / Paste** across pages. The copy icon copies one block; "Select
+  blocks" in the zone bar's "…" menu shows a checkbox per row, then Copy. The
   blocks are stored in this browser's localStorage (`blockscene:clipboard:v1`,
-  with the source content type and locale). "Paste" appears in the zone label
-  (under the gallery button for an empty zone) and in the page preview seams.
-  Paste is all or nothing: every block must be allowed in the target zone, fit
-  its maximum, and groups must be whole; otherwise a notice explains why and the
-  form is not changed. Media and relations are kept by id/documentId, so paste
+  with the source content type and locale). "Paste N blocks" appears in the
+  zone bar's "…" menu of every zone that allows all the copied components, and
+  in the page preview seams. Paste is all or nothing: every block must be
+  allowed in the target zone, fit its maximum, and groups must be whole;
+  otherwise a notice explains why and the form is not changed. Media and relations are kept by id/documentId, so paste
   within the same install. Option `clipboard`.
 - **Confirm delete**. The native delete asks "Delete block …?" first;
   confirming runs Strapi's own removal. On a group marker the dialog says only
@@ -277,8 +310,8 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Option | Values | Default |
 | --- | --- | --- |
 | Editor enhancements enabled | on/off | on |
-| Show "Open all blocks" | yes/no | yes |
-| Show "Close all blocks" | yes/no | yes |
+| Show "Expand all" (`showOpenAll`) | yes/no | yes |
+| Show "Collapse all" (`showCloseAll`) | yes/no | yes |
 | Show block thumbnails in the rows (`showRowThumbnails`) | yes/no | yes |
 | Initial accordion state | all closed / all open / remember | all closed |
 | Load rich-text editors on demand (`lazyEditors`, Strapi 5) | yes/no | yes |
@@ -296,8 +329,10 @@ Every edit view opens in its content type's mode, else the initial preview
 mode. Editors can switch while they edit; the switch is not remembered.
 
 The initial state is applied once per document/locale after the blocks
-render; edits, reorders and newly inserted blocks are not re-applied. Hiding a
-button only hides it; native accordion headers keep working.
+render; edits, reorders and newly inserted blocks are not re-applied.
+`showOpenAll` and `showCloseAll` shape the zone bar's single toggle (both: it
+toggles; one: only that action; none: no button). Hiding it only hides it;
+native accordion headers keep working.
 
 Lazy editors: a custom field listed in `lazyFields` first shows a read-only
 preview of its HTML (same label, hint and error; scripts, frames, styles, event
@@ -309,7 +344,7 @@ registered custom field at boot and passes the others straight through; until
 the catalog loads, and when the plugin or the content type is off, every field
 is native.
 
-"Remember" stores only the last explicit open all / close all click, as
+"Remember" stores only the last explicit Expand all / Collapse all click, as
 `open`/`closed` in the browser's localStorage, keyed by admin URL, user id,
 content type and zone. Another user in the same browser does not inherit it.
 Blocked storage or an invalid value falls back to all closed. No sync between
@@ -321,9 +356,10 @@ the two supported versions only.
 
 ## Whole-page preview (Strapi 5)
 
-The Strapi 5 distribution adds a "Page preview" panel with three modes: form,
-side by side (resizable pane, native actions moved to a bar above the form) and
-preview. The panel posts the live values of the first Dynamic Zone to a page
+The Strapi 5 distribution adds a page preview with three modes, chosen from the
+first zone's bar and from the pane toolbar: Fields (form), Fields + page (side
+by side: resizable pane, native actions moved to a bar above the form) and
+Visual editor. It posts the live values of the first Dynamic Zone to a page
 your frontend serves; the page renders them with its own components and styles
 and can ask the admin to open a block, edit a field or pick media. Nothing is
 saved or published by the preview.
@@ -393,7 +429,7 @@ Minimal configuration:
    Use the same host name the frontend dev server was started for
    (`localhost` vs `127.0.0.1`): Next 16 refuses its dev WebSocket for the
    other one and the page then never hydrates, so `ready` never arrives and
-   the panel reports the preview as unavailable with no error in either console.
+   the pane reports the preview as unavailable with no error in either console.
 
 The bridge only exposes what the schema allows: attributes marked `private`
 are never projected, focused or edited; media URLs are passed through for any
@@ -411,11 +447,12 @@ page updates while you type; Done, Esc or the backdrop put the block back. Side
 by side focuses the field in the form on the left instead. Media
 fields open the native Media Library. Everything is validated against the schema
 and the zone's edit permission; a published page never receives unsaved values
-by itself. Strapi 4 does not have this panel yet (see `docs/BACKLOG.md`).
+by itself. Strapi 4 does not have the page preview yet (see `docs/BACKLOG.md`).
 
 ### Undo and redo
 
-The Blockscene panel and the pane toolbar have Undo and Redo buttons (Strapi 5).
+The first zone's bar and the pane toolbar have Undo and Redo buttons (Strapi 5),
+on one shared history (the shortcuts use it too).
 They step through the whole edit view: blocks inserted, removed or moved from the
 gallery, the page, groups or the native actions, and any field edit. Changes
 within 400 ms of each other are one step, so a burst of typing undoes at once;
@@ -467,7 +504,7 @@ With a valid map:
   groups may nest; a CLOSE right after its OPEN is a valid empty group. Errors
   are `closeBeforeOpen` (CLOSE with no open group), `mismatch` (CLOSE is not the
   one expected by the innermost open group) and `unclosed` (OPEN never closed).
-- Nothing is repaired on read: the panel lists the problems (row, marker) and
+- Nothing is repaired on read: the Blockscene side panel lists the problems (row, marker) and
   the stray rows stay visible so the editor can fix them. Drafts save normally.
 - Publishing is refused server-side while a configured pair is unbalanced.
   Strapi 5: a document-service middleware intercepts every facade path that
@@ -635,15 +672,15 @@ component display names are never translated by the plugin.
 
 ## Turning the editor enhancements off
 
-- **From the panel**: switch "Editor enhancements enabled" off. The gallery
-  button, controls and initial-state logic disappear and the native picker and
+- **From the settings page**: switch "Editor enhancements enabled" off. The
+  gallery, the zone bars and the initial-state logic disappear and the native picker and
   accordions remain. Content, config, media and unsaved edits are preserved; the
   form is not reloaded. The settings page stays available to turn it back on.
-- **Emergency, outside the panel**: start the server with
+- **Emergency, outside the admin**: start the server with
   `BLOCKSCENE_DISABLED=true` (or set `config.disabled: true`). It is read at
   boot and reported by the catalog, wins over the saved settings and cannot be
   undone from the client. Changing it requires a restart.
-- **If the catalog request fails**, the panel renders nothing and the native
+- **If the catalog request fails**, the plugin renders nothing and the native
   editor is used, so a plugin outage does not block editing.
 - **Completely**: set `'blockscene': { enabled: false }` in `config/plugins.js`
   and rebuild/restart. This is the only way out of an import/build failure; a
@@ -701,10 +738,10 @@ installs without overrides, not a promise for every minor in between. Strapi
 - Authenticated admin catalog endpoint exposes only supported metadata, resolved
   override URLs, palette and editor preferences; never the whole config.
 - Top-level Dynamic Zones only. Conditional fields are omitted conservatively.
-- "Open all" / "Close all" drive the native accordions without touching the
-  whole list at once: open all opens the rows in and near the visible area, a
-  few per frame, and the others as they approach while scrolling (until Close
-  all or leaving the document); close all closes the visible rows at once and
+- "Expand all" / "Collapse all" drive the native accordions without touching the
+  whole list at once: expanding opens the rows in and near the visible area, a
+  few per frame, and the others as they approach while scrolling (until Collapse
+  all or leaving the document); collapsing closes the visible rows at once and
   the rest in idle time. With lazy editors, on a 34-block page with CKEditor
   fields (Strapi 5.31) the longest pause went from about 2.9 s to 0.14 s on
   open all and from 1.6 s to 0.14 s on close all.

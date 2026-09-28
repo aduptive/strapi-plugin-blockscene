@@ -7,12 +7,12 @@ import { formDiff, loadVersion } from "./versions.mjs";
 // History section of the Blockscene side panel (Strapi 5): the versions of this document and locale, a block diff of
 // one against the form, and "Load this version" through `setValues` (what undo uses): nothing is written until the
 // editor saves, so validation, permissions and lifecycles apply as for any edit. Needs `plugin::blockscene.history.read`.
-const READ = [{ action: "plugin::blockscene.history.read", subject: null }];
+export const HISTORY_READ = [{ action: "plugin::blockscene.history.read", subject: null }];
 const PAGE = 10;
 
 export function History({ model, documentId, schema, components, editable, disabled, get, relationsOf }: any) {
   const t = useMessages();
-  const { allowedActions, isLoading }: any = useRBAC(READ);
+  const { allowedActions, isLoading }: any = useRBAC(HISTORY_READ);
   // The edit view's locale is in the URL (the form values do not carry it); none: the server uses the default locale.
   const [{ query }]: any = useQueryParams();
   const locale = typeof query?.plugins?.i18n?.locale === "string" ? query.plugins.i18n.locale : "";
