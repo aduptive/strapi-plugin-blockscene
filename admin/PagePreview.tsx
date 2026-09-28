@@ -191,6 +191,16 @@ const EdgeButton = styled.button`
 `;
 const HOVER_ATTR = "data-blockscene-hover",
   HOVER_GRACE = 1200;
+// The block's own accordion card inside a zone row (not the row, whose top holds the zone's connector line): the Radix
+// item holding the header on Design System 2, the nearest bordered wrapper of the header toggle on Design System 1.
+const accordionCard = (row: HTMLElement, ds: 1 | 2): HTMLElement => {
+  const toggle = row.querySelector<HTMLElement>("button[aria-expanded]");
+  if (!toggle) return row;
+  if (ds === 2) return toggle.closest<HTMLElement>("div[data-state]:has(> h3)") || row;
+  for (let el = toggle.parentElement; el && el !== row; el = el.parentElement)
+    if (getComputedStyle(el).borderTopStyle !== "none") return el;
+  return row;
+};
 // The iframe keeps one element whatever the device: switching only changes its size and scale, never reloads the page.
 const Frame = styled.iframe`
   position: absolute;
@@ -986,7 +996,8 @@ export function PagePreview({
       : undefined;
     hoverRow.current = item || null;
     if (!item) return setEdge(null);
-    item.setAttribute(HOVER_ATTR, "");
+    const card = accordionCard(item, host.ds);
+    card.setAttribute(HOVER_ATTR, "");
     const measure = () => {
       const r = item.getBoundingClientRect();
       setEdge(r.bottom < 0 ? "up" : r.top > window.innerHeight ? "down" : null);
@@ -995,7 +1006,7 @@ export function PagePreview({
     window.addEventListener("scroll", measure, true);
     window.addEventListener("resize", measure);
     return () => {
-      item.removeAttribute(HOVER_ATTR);
+      card.removeAttribute(HOVER_ATTR);
       window.removeEventListener("scroll", measure, true);
       window.removeEventListener("resize", measure);
     };
@@ -1074,7 +1085,7 @@ export function PagePreview({
               userSelect: dragging ? "none" : undefined,
             }}
           >
-            <style>{`${SPLIT_STYLE}\n[${HOVER_ATTR}] { outline: 2px solid ${theme?.colors?.primary600 || "#4945ff"}; outline-offset: 2px; border-radius: 4px; }
+            <style>{`${SPLIT_STYLE}\n[${HOVER_ATTR}] { ${host.ds === 2 ? `box-shadow: 0 0 0 1px ${theme?.colors?.primary600 || "#4945ff"};` : `border-color: ${theme?.colors?.primary600 || "#4945ff"} !important;`} }
 ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside the pane in split mode, gone under it otherwise. */
   resizable ? "[data-strapi-header-sticky] { right: var(--bp-pane) !important; }" : "[data-strapi-header-sticky] { display: none !important; }"}`}</style>
             {resizable && edge && (
