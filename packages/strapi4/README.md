@@ -614,7 +614,9 @@ blockscene: { config: { settings: { history: { enabled: true, contentTypes: ['ap
 
 Events live in the `blockscene_events` table (content type
 `plugin::blockscene.event`, hidden from the Content Manager and the Content-Type
-Builder). Removing the plugin lets Strapi drop that table on the next start.
+Builder). Removing the plugin, or installing a Blockscene version older than
+the one that added history, lets Strapi drop that table and every recorded
+version on the next start: back up `blockscene_events` first if you need it.
 
 ## Languages
 
