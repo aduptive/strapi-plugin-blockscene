@@ -7,15 +7,19 @@
 const { createHash } = require('node:crypto')
 const { PLUGIN } = require('./settings')
 const { snapshotPopulate, canonical, stable, summarize } = require('./diff')
+const { TRASH_UID, restoring } = require('./trash')
 
 const EVENT_UID = `plugin::${PLUGIN}.event`
-const ACTIONS = ['create', 'update', 'publish', 'unpublish', 'discard', 'delete', 'restore']
+// `restore`: a document back from the trash; `purge`: a trash entry deleted forever.
+const ACTIONS = ['create', 'update', 'publish', 'unpublish', 'discard', 'delete', 'restore', 'purge']
 // Document service action -> event action. `clone` makes a new document, so it is a create.
 const CAPTURED = { create: 'create', clone: 'create', update: 'update', publish: 'publish', unpublish: 'unpublish', discardDraft: 'discard', delete: 'delete' }
 const CRON = 'blocksceneHistoryPurge'
 const BATCH = 500
 const DAY = 24 * 60 * 60 * 1000
 const LIST_LIMIT = 100
+const ACTORS_LIMIT = 500
+const SEARCH_LIMIT = 200
 
 // `documentId` is reserved by Strapi 5 (every content type has its own) and `uid` reads as this row's: the target is
 // `contentType` + `relatedDocumentId`, the names Strapi's own history uses.
@@ -33,7 +37,8 @@ const eventContentType = { schema: {
     actor: { type: 'string', required: true },
     actorName: { type: 'string' },
     at: { type: 'datetime', required: true },
-    // { fields: [names], blocks: { added, removed, changed }, initial? } vs the previous snapshot; { missing: true } when the capture failed.
+    // { fields: [names], blocks: { added, removed, changed }, initial? } vs the previous snapshot; { missing: true } when the capture failed;
+    // restore: + { restoredFrom, trash }; purge: { trash, title }.
     summary: { type: 'json' },
     // Null when identical to the previous snapshot of the same locale (same hash) or purged.
     snapshot: { type: 'json' },
@@ -90,6 +95,14 @@ function historyService({ strapi }) {
   const localized = (uid) => Boolean(schemaOf(uid)?.pluginOptions?.i18n?.localized)
   const draftAndPublish = (uid) => schemaOf(uid)?.options?.draftAndPublish === true
   const events = () => strapi.db.query(EVENT_UID)
+  // The people (and tokens) in the activity, for its filter: the latest name each one had. ponytail: one GROUP BY over the
+  // events table per page load, fine for years of editing; a separate actors table if it ever shows in the query log.
+  const actors = async () => {
+    const meta = strapi.db.metadata.get(EVENT_UID)
+    const column = (name) => meta.attributes[name].columnName || name
+    return strapi.db.connection(meta.tableName).select({ actor: column('actor') }).max({ actorName: column('actorName') })
+      .groupBy(column('actor')).orderBy(column('actor')).limit(ACTORS_LIMIT)
+  }
   // The locales a call acts on, resolved the way the repository does: '*' every locale (null), a list, one locale, else
   // the default locale. Non-localized types have one row per status: [null].
   const scope = async (uid, locale) => {
@@ -110,7 +123,7 @@ function historyService({ strapi }) {
     async config() { return (await plugin().service('settings').get()).history },
     covers,
     // One event. The snapshot is stored unless identical to the latest stored one of the same document and locale.
-    async record({ uid, documentId, locale = null, action, entry, actor, missing = false }) {
+    async record({ uid, documentId, locale = null, action, entry, actor, missing = false, extra = null }) {
       let summary = missing ? { missing: true } : null, snapshot = null, hash = null, size = 0
       if (entry) {
         const content = canonical(entry, schemaOf(uid), schemaOf)
@@ -120,6 +133,7 @@ function historyService({ strapi }) {
         summary = summarize(previous?.snapshot || null, content, schemaOf(uid))
         if (previous?.hash !== hash) { snapshot = content; size = Buffer.byteLength(text) }
       }
+      if (extra) summary = { ...summary, ...extra }
       return events().create({ data: { contentType: uid, relatedDocumentId: documentId, locale, action, ...actor, at: new Date(), summary, snapshot, hash, size } })
     },
     // After a save or publish: one event per affected entry (drafts, or the published versions after a publish).
@@ -128,6 +142,12 @@ function historyService({ strapi }) {
       for (const entry of await rows(uid, documentId, locales, published)) await self.record({ uid, documentId, locale: entry.locale ?? null, action, entry, actor })
     },
     scope, rows,
+    // The Content Manager's main field of a content type when it is a plain value (what list views show), else null.
+    async mainField(uid) {
+      let name = null
+      try { name = (await strapi.plugin('content-manager').service('content-types').findConfiguration(strapi.contentTypes[uid]))?.settings?.mainField } catch { name = null }
+      return name && name !== 'id' && schemaOf(uid)?.attributes?.[name] && !['relation', 'media', 'component', 'dynamiczone', 'password', 'json', 'blocks'].includes(schemaOf(uid).attributes[name].type) ? name : null
+    },
     // Latest events of one document and locale, newest first; `stored`: its snapshot (or an identical one) can be loaded.
     async list({ uid, documentId, locale }) {
       const where = { contentType: uid, relatedDocumentId: documentId, locale: locale || null }
@@ -151,9 +171,7 @@ function historyService({ strapi }) {
       const relations = {}
       for (const target of [...new Set(refs.relations.map(ref => ref.target))]) {
         if (!strapi.contentTypes?.[target]) continue
-        let mainField = null
-        try { mainField = (await strapi.plugin('content-manager').service('content-types').findConfiguration(strapi.contentTypes[target]))?.settings?.mainField } catch { mainField = null }
-        const scalar = mainField && !['relation', 'media', 'component', 'dynamiczone', 'password'].includes(schemaOf(target)?.attributes?.[mainField]?.type) && mainField !== 'id'
+        const mainField = await self.mainField(target), scalar = Boolean(mainField)
         const found = await strapi.db.query(target).findMany({
           select: ['id', 'documentId', 'locale', ...(scalar ? [mainField] : [])],
           where: { documentId: { $in: [...new Set(refs.relations.filter(ref => ref.target === target).map(ref => ref.documentId))] }, ...(draftAndPublish(target) && { publishedAt: { $null: true } }) },
@@ -161,6 +179,49 @@ function historyService({ strapi }) {
         relations[target] = found.map(row => ({ id: row.id, documentId: row.documentId, locale: row.locale || null, label: scalar && row[mainField] != null ? String(row[mainField]) : undefined, mainField: scalar ? mainField : undefined }))
       }
       return { event: meta, snapshot, media: Object.fromEntries(files.map(file => [file.id, file])), relations }
+    },
+    // Content activity: one page of events (no snapshots), newest first, with each document's title and whether it still
+    // exists (the list links to it). `types`: the content types the user may read. `q`: documents whose main field
+    // contains it now, or whose trash entry's title does (at most SEARCH_LIMIT per content type).
+    async activity({ actor, contentType, action, from, to, q, page, pageSize, types }) {
+      const empty = { results: [], pagination: { page, pageSize, total: 0, pageCount: 0 }, actors: [] }
+      if (contentType && !types.includes(contentType)) return empty
+      const where = { contentType: contentType || { $in: types }, ...(actor && { actor }), ...(action && { action }),
+        ...((from || to) && { at: { ...(from && { $gte: from }), ...(to && { $lte: to }) } }) }
+      if (q) {
+        const matches = []
+        for (const uid of contentType ? [contentType] : types) {
+          const main = await self.mainField(uid)
+          const found = new Set(main ? (await strapi.db.query(uid).findMany({ select: ['documentId'], where: { [main]: { $containsi: q } }, limit: SEARCH_LIMIT })).map(row => row.documentId) : [])
+          for (const row of await strapi.db.query(TRASH_UID).findMany({ select: ['relatedDocumentId'], where: { contentType: uid, title: { $containsi: q } }, limit: SEARCH_LIMIT })) found.add(row.relatedDocumentId)
+          if (found.size) matches.push({ contentType: uid, relatedDocumentId: { $in: [...found] } })
+        }
+        if (!matches.length) return { ...empty, actors: await actors() }
+        where.$or = matches
+      }
+      const [list, total] = await Promise.all([
+        events().findMany({ select: ['id', 'contentType', 'relatedDocumentId', 'locale', 'action', 'actor', 'actorName', 'at', 'summary'], where, orderBy: [{ at: 'desc' }, { id: 'desc' }], offset: (page - 1) * pageSize, limit: pageSize }),
+        events().count({ where }),
+      ])
+      // Titles: the document's current rows (the event's locale first), else its latest trash entry.
+      const docs = new Map()
+      for (const uid of [...new Set(list.map(event => event.contentType))]) {
+        const ids = [...new Set(list.filter(event => event.contentType === uid).map(event => event.relatedDocumentId))]
+        const main = strapi.contentTypes?.[uid] ? await self.mainField(uid) : null
+        const found = strapi.contentTypes?.[uid] ? await strapi.db.query(uid).findMany({ select: ['documentId', 'locale', ...(main ? [main] : [])], where: { documentId: { $in: ids } } }) : []
+        for (const row of found) { const key = `${uid}|${row.documentId}`; docs.set(key, [...(docs.get(key) || []), { locale: row.locale ?? null, title: main && row[main] != null ? String(row[main]) : null }]) }
+        const gone = ids.filter(id => !docs.has(`${uid}|${id}`))
+        if (gone.length) for (const row of await strapi.db.query(TRASH_UID).findMany({ select: ['relatedDocumentId', 'title'], where: { contentType: uid, relatedDocumentId: { $in: gone } }, orderBy: { id: 'desc' } }))
+          if (!docs.has(`trash|${uid}|${row.relatedDocumentId}`)) docs.set(`trash|${uid}|${row.relatedDocumentId}`, row.title)
+      }
+      const results = list.map(event => {
+        const rows = docs.get(`${event.contentType}|${event.relatedDocumentId}`) || []
+        const own = rows.find(row => row.locale === (event.locale ?? null))
+        // A purge names the trash entry it deleted (its own title), not the document's current one.
+        if (event.action === 'purge') return { ...event, exists: false, title: event.summary?.title ?? null }
+        return { ...event, exists: Boolean(own), title: (own || rows[0])?.title ?? docs.get(`trash|${event.contentType}|${event.relatedDocumentId}`) ?? null }
+      })
+      return { results, pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) }, actors: await actors() }
     },
     // Nightly, in batches, idempotent (two instances running it is harmless): events past eventDays are deleted;
     // snapshots past retentionDays, or beyond maxSnapshots per document (newest kept), are emptied. Never touches media.
@@ -202,21 +263,31 @@ function registerHistory(strapi) {
   const warn = (message, error) => strapi.log.error(`[${PLUGIN}] ${message}: ${error?.message || error}`)
   strapi.documents.use(async (ctx, next) => {
     const action = CAPTURED[ctx.action]
-    if (!action || !String(ctx.uid || '').startsWith('api::') || strapi.plugin(PLUGIN).config('disabled') === true) return next()
+    // A restore's own writes are recorded by the restore (as `restore` events).
+    if (!action || !String(ctx.uid || '').startsWith('api::') || strapi.plugin(PLUGIN).config('disabled') === true || restoring.getStore()) return next()
     const history = service()
     const params = ctx.params || {}
     if (action === 'delete') {
-      if (!params.documentId || !history.covers(await history.config(), ctx.uid)) return next()
-      // One transaction around the read, the delete and the events: a failed capture rolls the delete back (a caller's
-      // transaction, like the Content Manager's bulk delete, is joined and rolled back whole).
+      const config = params.documentId ? await history.config() : null
+      if (!config || !history.covers(config, ctx.uid)) return next()
+      // One transaction around the read, the delete, the events and the trash row: a failed capture rolls the delete back
+      // (a caller's transaction, like the Content Manager's bulk delete, is joined and rolled back whole).
       return strapi.db.transaction(async () => {
-        const actor = actorOf(strapi)
-        let entries
-        try { entries = await history.rows(ctx.uid, params.documentId, await history.scope(ctx.uid, params.locale)) }
-        catch (error) { warn('reading the document before a delete failed', error); fail(`The version history could not record this delete, so nothing was deleted (${error.message}).`) }
+        const actor = actorOf(strapi), trash = strapi.plugin(PLUGIN).service('trash')
+        const published = strapi.getModel(ctx.uid)?.options?.draftAndPublish === true
+        let locales, entries, live, incoming
+        try {
+          locales = await history.scope(ctx.uid, params.locale)
+          entries = await history.rows(ctx.uid, params.documentId, locales)
+          live = published ? await history.rows(ctx.uid, params.documentId, locales, true) : []
+          // Links other documents and blocks have to these rows: the database removes them with the rows.
+          incoming = await trash.incoming(ctx.uid, new Map([...entries.map(row => [row.id, { locale: row.locale, published: false }]), ...live.map(row => [row.id, { locale: row.locale, published: true }])]))
+        } catch (error) { warn('reading the document before a delete failed', error); fail(`The version history could not record this delete, so nothing was deleted (${error.message}).`) }
         const result = await next()
-        try { for (const entry of entries) await history.record({ uid: ctx.uid, documentId: params.documentId, locale: entry.locale ?? null, action, entry, actor }) }
-        catch (error) { warn('recording a delete failed, the delete was rolled back', error); fail(`The version history could not record this delete, so nothing was deleted (${error.message}).`) }
+        try {
+          for (const entry of entries) await history.record({ uid: ctx.uid, documentId: params.documentId, locale: entry.locale ?? null, action, entry, actor })
+          if (entries.length || live.length) await trash.record({ uid: ctx.uid, documentId: params.documentId, locales, drafts: entries, published: live, incoming, actor, days: config.trashDays })
+        } catch (error) { warn('recording a delete failed, the delete was rolled back', error); fail(`The version history could not record this delete, so nothing was deleted (${error.message}).`) }
         return result
       })
     }
@@ -252,16 +323,24 @@ function registerPurge(strapi) {
   strapi.cron.add({ [CRON]: { options: '0 3 * * *', task: async () => {
     try { const counts = await strapi.plugin(PLUGIN).service('history').purge(); if (counts.events || counts.expired || counts.excess) strapi.log.info(`[${PLUGIN}] history purge: ${counts.events} events deleted, ${counts.expired + counts.excess} snapshots emptied`) }
     catch (error) { strapi.log.error(`[${PLUGIN}] history purge failed: ${error?.message || error}`) }
+    try { const count = await strapi.plugin(PLUGIN).service('trash').purge(); if (count) strapi.log.info(`[${PLUGIN}] trash purge: ${count} expired entries deleted`) }
+    catch (error) { strapi.log.error(`[${PLUGIN}] trash purge failed: ${error?.message || error}`) }
   } } })
 }
 
 const DOCUMENT_ID = /^[A-Za-z0-9_-]{1,64}$/
 const LOCALE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
-// Reading a version needs `history.read` (route policy) and read access to the content type in the Content Manager.
-const canRead = (strapi, ctx, uid) => {
-  try { return !strapi.plugin('content-manager').service('permission-checker').create({ userAbility: ctx.state.userAbility, model: uid }).cannot.read() }
+// Reading a version, the activity or the trash needs the route's permission and read access to the content type in the
+// Content Manager (restore: create, delete forever: delete).
+const can = (strapi, ctx, uid, action = 'read') => {
+  try { return !strapi.plugin('content-manager').service('permission-checker').create({ userAbility: ctx.state.userAbility, model: uid }).cannot[action]() }
   catch { return false }
 }
+const canRead = (strapi, ctx, uid) => can(strapi, ctx, uid)
+const readableTypes = (strapi, ctx) => Object.keys(strapi.contentTypes || {}).filter(uid => uid.startsWith('api::') && canRead(strapi, ctx, uid))
+const ACTOR = /^(system|(admin|token|user):\d{1,15})$/
+const int = (value, fallback, max) => { if (value === undefined || value === '') return fallback; const n = Number(value); return Number.isInteger(n) && n >= 1 && n <= max ? n : NaN }
+const date = (value) => { if (!value) return null; const time = Date.parse(value); return typeof value === 'string' && value.length <= 40 && Number.isFinite(time) ? new Date(time) : NaN }
 const historyController = ({ strapi }) => ({
   async list(ctx) {
     const { uid, documentId } = ctx.params || {}
@@ -279,6 +358,17 @@ const historyController = ({ strapi }) => ({
     if (!found || !canRead(strapi, ctx, found.event.contentType)) return ctx.notFound()
     ctx.body = found
   },
+  async activity(ctx) {
+    const { actor = '', contentType = '', action = '', q = '' } = ctx.query || {}
+    const page = int(ctx.query?.page, 1, 10000), pageSize = int(ctx.query?.pageSize, 25, 100), from = date(ctx.query?.from), to = date(ctx.query?.to)
+    if ([actor, contentType, action, q].some(value => typeof value !== 'string') || (actor && !ACTOR.test(actor)) || (contentType && !/^api::[\w-]+\.[\w-]+$/.test(contentType))
+      || (action && !ACTIONS.includes(action)) || q.length > 100 || [page, pageSize, from, to].some(value => Number.isNaN(value))) return ctx.badRequest('Invalid filters')
+    const history = strapi.plugin(PLUGIN).service('history')
+    const types = readableTypes(strapi, ctx)
+    ctx.body = { ...await history.activity({ actor, contentType, action, from, to, q: q.trim(), page, pageSize, types }),
+      enabled: Boolean((await history.config()).enabled) && strapi.plugin(PLUGIN).config('disabled') !== true,
+      types: types.map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind, localized: Boolean(strapi.contentTypes[uid].pluginOptions?.i18n?.localized) })) }
+  },
 })
 
-module.exports = { EVENT_UID, ACTIONS, CAPTURED, CRON, BATCH, eventContentType, covers, retention, actorOf, refsOf, historyService, registerHistory, registerPurge, historyController }
+module.exports = { EVENT_UID, ACTIONS, CAPTURED, CRON, BATCH, eventContentType, covers, retention, actorOf, refsOf, can, readableTypes, historyService, registerHistory, registerPurge, historyController }
