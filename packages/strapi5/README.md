@@ -172,10 +172,14 @@ block).
 
 **The hidden attribute is a database column.** At register time the plugin adds
 a boolean attribute (like i18n adds `locale`) to every component used in a
-Dynamic Zone: `{ type: 'boolean', default: false, visible: false,
-configurable: false }`, so Strapi's schema sync creates a `bs_hidden` column in
-each of those component tables on the next start (existing rows read as not
-hidden). It is hidden from the edit view. Rename it with the plugin config
+Dynamic Zone: `{ type: 'boolean', default: false, configurable: false }`, so
+Strapi's schema sync creates a `bs_hidden` column in each of those component
+tables on the next start (existing rows read as not hidden). It is never shown
+as an input: the plugin removes it from the components' edit layouts through
+the Content Manager's layout hook (it may be listed in "Configure the view" of
+a component; leave it out of the layout). It is not marked `visible: false`,
+because before Strapi 5.45 the edit view crashes on a value whose attribute the
+admin does not know. Rename it with the plugin config
 `hiddenAttribute: 'myName'`, or set `hiddenAttribute: false` to add nothing (no
 eye, nothing stripped). A component that already has an attribute of that name
 with another type is skipped with a warning. Removing the plugin (or setting

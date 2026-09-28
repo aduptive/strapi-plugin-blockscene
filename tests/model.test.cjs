@@ -205,6 +205,8 @@ test('native "Add a component" button is matched by its zone name only, never an
   const button = (text, extra = {}) => ({ textContent: text, getAttribute: (k) => extra[k] || null, closest: (sel) => (extra.inside && sel.includes(extra.inside) ? {} : null) })
   assert.equal(isNativeAddButton(button('Add a component to blocks'), { name: 'blocks' }), true)
   assert.equal(isNativeAddButton(button('Adicionar um componente a blocks'), { name: 'blocks' }), true)
+  assert.equal(isNativeAddButton(button('Add a component to Page blocks'), { name: 'blocks', label: 'Page blocks' }), true, 'renamed zone label')
+  assert.equal(isNativeAddButton(button('Add a component to Blocks'), { name: 'blocks', label: 'Blocks' }), true, 'humanized label')
   assert.equal(isNativeAddButton(button('Add a component to sidebar'), { name: 'blocks' }), false)
   assert.equal(isNativeAddButton(button('Add a component to sub blocks'), { name: 'blocks' }), true, 'suffix rule: documented limit for zone names that end another zone name')
   assert.equal(isNativeAddButton(button('Add a component to blocks', { 'aria-expanded': 'false' }), { name: 'blocks' }), false)
@@ -476,7 +478,7 @@ test('hidden blocks: attribute injected into zone components only, strip removes
   const components = { 'b.hero': { attributes: { title: { type: 'string' } } }, 'b.text': { attributes: { bsHidden: { type: 'string' } } }, 'b.item': { attributes: {} } }
   const contentTypes = { 'api::page.page': { attributes: { blocks: { type: 'dynamiczone', components: ['b.hero', 'b.text'] }, other: { type: 'component', component: 'b.item' } } } }
   assert.deepEqual(injectHidden(components, contentTypes, 'bsHidden'), { added: ['b.hero'], skipped: ['b.text'] })
-  assert.deepEqual(components['b.hero'].attributes.bsHidden, { type: 'boolean', default: false, visible: false, configurable: false })
+  assert.deepEqual(components['b.hero'].attributes.bsHidden, { type: 'boolean', default: false, configurable: false })
   assert.equal(components['b.item'].attributes.bsHidden, undefined, 'components outside a zone are untouched')
   const schemas = { 'api::page.page': { attributes: { blocks: { type: 'dynamiczone' }, seo: { type: 'component', component: 'shared.seo' }, related: { type: 'relation', target: 'api::page.page' } } },
     'shared.seo': { attributes: { zone: { type: 'dynamiczone' } } }, 'b.hero': { attributes: { items: { type: 'component', component: 'b.item', repeatable: true } } }, 'b.item': { attributes: {} } }

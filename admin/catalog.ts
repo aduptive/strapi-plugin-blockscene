@@ -19,15 +19,15 @@ const adminLocale = () => {
   try { return localStorage.getItem('strapi-admin-language') || document.documentElement.lang || 'en' } catch { return 'en' }
 }
 // Content Manager hook 'Admin/CM/pages/EditView/mutate-edit-view-layout'. It runs synchronously, so it uses the last
-// catalog: until one has loaded (the first edit/list view of a session) the layout is returned untouched and a fetch
-// starts; the next layout computed (another document, list -> edit) gets the labels. Any error: layout untouched.
-export const labelsHook = (get: () => any, relabel: (layout: any, catalog: any, locale: string) => any) => (args: any) => {
+// catalog: until one has loaded (the first edit/list view of a session) only the hidden-on-site attribute is removed
+// (default name) and a fetch starts; the next layout computed (another document, list -> edit) gets the labels.
+// The removal runs whatever the editor settings (kill switch included): the attribute exists whenever the server adds it.
+// Any error: layout untouched.
+export const labelsHook = (get: () => any, relabel: (layout: any, catalog: any, locale: string) => any, drop: (layout: any, name: string | null) => any) => (args: any) => {
   try {
-    if (!cached) {
-      pending ||= load(get()).catch(() => {}).finally(() => { pending = null })
-      return args
-    }
-    const layout = relabel(args.layout, cached, adminLocale())
+    if (!cached) pending ||= load(get()).catch(() => {}).finally(() => { pending = null })
+    const trimmed = drop(args.layout, cached ? cached.hiddenAttribute : 'bsHidden')
+    const layout = cached ? relabel(trimmed, cached, adminLocale()) : trimmed
     return layout === args.layout ? args : { ...args, layout }
   } catch (error) {
     console.error('[blockscene] field labels skipped after an error:', error)

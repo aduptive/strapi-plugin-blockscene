@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Fix (Strapi 5.0 to 5.44): the edit view crashed ("Cannot read properties of
+  undefined (reading 'type')") on any document with a block whose hidden-on-site
+  value had been set. The attribute was `visible: false`, so the Content
+  Manager's schema left it out while the data carried it, and Content Managers
+  before 5.45 do not tolerate that. It is now a regular attribute removed from
+  the components' edit layouts by the layout hook (never an input, Strapi 5 and
+  4). The browser smoke reopens a page with a hidden block and checks there is
+  no input for it.
+- Fix: with friendly labels (or a zone renamed in "Configure the view"), the
+  native "Add a component to <zone>" button opened Strapi's picker instead of
+  the gallery; it is matched by the zone's rendered label as well as its name.
+
 - Version history (Strapi 5, off by default; ADU-379). A document service
   middleware records one event per create, save, publish, unpublish, discard
   draft and delete of the covered content types (all `api::` types or a list),

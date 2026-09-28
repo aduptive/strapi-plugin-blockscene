@@ -217,6 +217,21 @@ export function initialState(editor, remembered) {
   return "closed";
 }
 
+// The hidden-on-site attribute (server/hidden.js) is known to the Content Manager but never an input: removed from every
+// component's edit layout, empty rows dropped. Strapi 5 shape (components[uid].layout = rows) and Strapi 4 shape
+// (components[uid].layouts.edit = rows). Only components carry it.
+const withoutField = (rows, name) => rows.map((row) => row.filter((field) => field?.name !== name)).filter((row) => row.length);
+export function dropField(layout, name) {
+  if (!name || !layout?.components) return layout;
+  return { ...layout, components: Object.fromEntries(Object.entries(layout.components).map(([uid, component]) =>
+    [uid, Array.isArray(component?.layout) ? { ...component, layout: withoutField(component.layout, name) } : component])) };
+}
+export function dropField4(layout, name) {
+  if (!name || !layout?.components) return layout;
+  return { ...layout, components: Object.fromEntries(Object.entries(layout.components).map(([uid, component]) =>
+    [uid, Array.isArray(component?.layouts?.edit) ? { ...component, layouts: { ...component.layouts, edit: withoutField(component.layouts.edit, name) } } : component])) };
+}
+
 // Friendly field labels (Content Manager edit-layout hook). "mobileColumnsCount" -> "Mobile columns count";
 // acronym runs stay upper case ("pageSEO" -> "Page SEO", "ctaURL" -> "Cta URL").
 export function humanize(name) {

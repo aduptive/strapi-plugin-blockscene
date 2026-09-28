@@ -68,7 +68,7 @@ try {
   await page.goto('/admin/content-manager/collection-types/api::page.page/create')
   await page.getByRole('textbox', { name: /^title/i }).first().fill(`Plugin smoke ${Date.now()}`)
   await step('the native "Add a component to blocks" button opens the gallery', async () => {
-    await page.getByRole('button', { name: /Add a component to blocks/ }).click()
+    await page.getByRole('button', { name: /Add a component to blocks/i }).click()
     await page.getByTestId('blockscene-blocks.hero').waitFor()
     assert.equal(await page.getByText(/Pick one component/i).count(), 0, 'native category picker stays closed')
     await page.keyboard.press('Escape'); await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' })
@@ -613,6 +613,11 @@ try {
       assert.deepEqual((await rest(source.title)).map(b => [b.body, b.bsHidden]), [['First text', false], ['Second text', true]], 'flag: sent with the attribute')
       const admin = (await api('GET', `/content-manager/collection-types/api::page.page/${idOf(source)}`)).data
       assert.equal((admin.data || admin).blocks.length, 2, 'admin reads keep hidden rows')
+      // The attribute is known to the Content Manager (5.0 to 5.44 crash on a value it has no attribute for) but is never an input.
+      await page.reload(); await page.getByTestId('row-hide-blocks-1').waitFor()
+      await zoneRows().nth(1).locator('button[aria-expanded]').first().click()
+      await page.waitForTimeout(300)
+      assert.equal(await page.locator('[name$="bsHidden"]').count(), 0, 'no input for the hidden attribute')
       if (major === 5) {
         await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
         await page.reload(); await page.getByTestId('page-preview-modes').first().getByRole('button', { name: 'Fields + page' }).click()

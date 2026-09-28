@@ -102,3 +102,14 @@ test('field labels: code config validated strictly; invalid config ignored with 
   await plugin.controllers.catalog({ strapi }).find(ctx)
   assert.deepEqual(ctx.body.fields, {}); assert.match(warnings[0], /"fields" config ignored: Invalid label of "b\.hero\.ctaURL"/)
 })
+
+test('hidden-on-site attribute: removed from every component edit layout (Strapi 5 and 4 shapes), empty rows dropped', async () => {
+  const { dropField, dropField4 } = await import('../admin/model.mjs')
+  const v5 = { layout: [[[{ name: 'blocks' }]]], components: { 'b.hero': { layout: [[{ name: 'title' }, { name: 'bsHidden' }], [{ name: 'bsHidden' }]] }, 'b.x': { settings: {} } } }
+  const out5 = dropField(v5, 'bsHidden')
+  assert.deepEqual(out5.components['b.hero'].layout, [[{ name: 'title' }]]); assert.equal(out5.layout, v5.layout); assert.equal(out5.components['b.x'], v5.components['b.x'])
+  assert.equal(dropField(v5, null), v5, 'no attribute: layout untouched')
+  const v4 = { contentType: { uid: 'api::page.page' }, components: { 'b.hero': { layouts: { edit: [[{ name: 'bsHidden' }], [{ name: 'title' }]], list: [] } } } }
+  const out4 = dropField4(v4, 'bsHidden')
+  assert.deepEqual(out4.components['b.hero'].layouts, { edit: [[{ name: 'title' }]], list: [] })
+})
