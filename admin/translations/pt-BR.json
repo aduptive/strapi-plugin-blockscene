@@ -72,7 +72,6 @@
  "previewHelp": "Alterações não salvas aparecem na preview. Clique em um bloco para abrir seu formulário, em uma imagem para abrir a Media Library, em um texto para editá-lo.",
  "previewNoUrl": "Sem URL de preview: defina em Configurações, Blockscene, ou configure a Preview nativa do Strapi para este tipo de conteúdo.",
  "previewFailed": "A preview não respondeu em 15 s. Se o frontend ainda estiver carregando, ela aparece sozinha; o formulário continua utilizável.",
- "previewReady": "Preview da página · alterações não salvas",
  "previewLoading": "Carregando preview…",
  "retry": "Tentar novamente",
  "editText": "Editar texto",

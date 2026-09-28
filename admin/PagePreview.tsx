@@ -1,7 +1,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import styled, { useTheme } from "styled-components";
-import { Box, Button, Flex, Typography } from "@strapi/design-system";
+import { Box, Button, Flex, MenuItem, SimpleMenu, Status, Typography } from "@strapi/design-system";
+import { useIntl } from "react-intl";
 import {
   DescriptionComponentRenderer,
   useFetchClient,
@@ -302,6 +303,11 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
   );
   const { toggleNotification } = useNotification();
   const t = useMessages();
+  const { formatMessage } = useIntl();
+  const modified = useForm("BlocksceneToolbar", (state: any) => state.modified);
+  // The document's state as the edit view header shows it (Draft / Modified / Published), with the same colours and
+  // Content Manager labels; unsaved form changes are a separate hint.
+  const status: string | undefined = documentId ? doc?.status : undefined;
   const descriptions = (
     plugins["content-manager"]?.apis?.getDocumentActions?.("panel") || []
   ).filter((d: any) => ACTION_TYPES.includes(d.type));
@@ -341,7 +347,16 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
   return (
     <DescriptionComponentRenderer props={props} descriptions={descriptions}>
       {(actions: any[]) => (
-        <Flex gap={1} data-testid="page-preview-actions">
+        <Flex gap={2} alignItems="center" data-testid="page-preview-actions">
+          {status && (
+            <Status size="S" showBullet={false} role="status" data-testid="page-preview-status"
+              variant={status === "draft" ? "secondary" : status === "published" ? "success" : "alternative"}>
+              <Typography tag="span" variant="omega" fontWeight="bold">
+                {formatMessage({ id: `content-manager.containers.List.${status}`, defaultMessage: status.charAt(0).toUpperCase() + status.slice(1) })}
+              </Typography>
+            </Status>
+          )}
+          {modified && <Typography variant="pi" textColor="neutral600">{t.unsaved}</Typography>}
           {[...actions]
             .sort(
               (a, b) =>
@@ -359,7 +374,8 @@ function ToolbarActions({ model, collectionType, documentId, locale }: any) {
                 <span key={action.id} title={reason}>
                   <Button
                     size="S"
-                    variant={action.variant || "default"}
+                    // Publish is the primary action, Save the secondary one (as in the edit view's panel).
+                    variant={typeOf(action) === "publish" ? "default" : "secondary"}
                     disabled={action.disabled}
                     loading={action.loading}
                     aria-description={reason}
@@ -1067,13 +1083,19 @@ export function PagePreview({
       <Tool icon="redo" label={`${t.redo} (${MAC ? "⇧⌘Z" : "Ctrl+Y"})`} disabled={!history.canRedo} onClick={history.redo} />
     </Flex>
   );
+  // One menu instead of four buttons: the toolbar stays on one line in a narrow pane; the icons stay.
+  const deviceLabel = (value: Device) => (DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]);
   const devices = (
-    <Flex gap={1} wrap="wrap" data-testid="page-preview-devices" role="group" aria-label={t.deviceGroup}>
-      {(Object.keys(DEVICES) as Device[]).map((value) => (
-        <Tool key={value} icon={value} label={DEVICES[value] ? `${t.device[value]} · ${DEVICES[value]} px` : t.device[value]}
-          active={device === value} onClick={() => setDevice(value)} />
-      ))}
-    </Flex>
+    <Box data-testid="page-preview-devices">
+      <SimpleMenu variant="tertiary" size="S" aria-label={`${t.deviceGroup}: ${deviceLabel(device)}`}
+        label={<Flex gap={2} alignItems="center"><Icon name={device} size={16} />{t.device[device]}</Flex>}>
+        {(Object.keys(DEVICES) as Device[]).map((value) => (
+          <MenuItem key={value} onSelect={() => setDevice(value)} aria-checked={device === value}>
+            <Flex gap={2} alignItems="center"><Icon name={value} size={16} />{deviceLabel(value)}</Flex>
+          </MenuItem>
+        ))}
+      </SimpleMenu>
+    </Box>
   );
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const map: Record<string, number> = {
@@ -1253,13 +1275,11 @@ export function PagePreview({
                 wrap="wrap"
                 style={{ marginLeft: "auto" }}
               >
-                <Typography variant="pi" role="status" textColor="neutral600">
-                  {failed
-                    ? t.previewFailed
-                    : ready
-                      ? t.previewReady
-                      : t.previewLoading}
-                </Typography>
+                {!ready && (
+                  <Typography variant="pi" role="status" textColor="neutral600">
+                    {failed ? t.previewFailed : t.previewLoading}
+                  </Typography>
+                )}
                 {failed && (
                   <Button size="S" variant="secondary" onClick={retry}>
                     {t.retry}

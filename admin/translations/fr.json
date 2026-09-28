@@ -72,7 +72,6 @@
  "previewHelp": "Les modifications non enregistrées apparaissent dans l'aperçu. Cliquez sur un bloc pour ouvrir son formulaire, sur une image pour ouvrir la Médiathèque, sur un texte pour le modifier.",
  "previewNoUrl": "Aucune URL d'aperçu : définissez-la dans Paramètres, Blockscene, ou configurez l'aperçu natif de Strapi pour ce type de contenu.",
  "previewFailed": "L'aperçu n'a pas répondu en 15 s. Si le frontend est encore en train de charger, il apparaîtra de lui-même ; le formulaire reste utilisable.",
- "previewReady": "Aperçu de la page · modifications non enregistrées",
  "previewLoading": "Chargement de l'aperçu…",
  "retry": "Réessayer",
  "editText": "Modifier le texte",

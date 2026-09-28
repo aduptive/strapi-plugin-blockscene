@@ -72,7 +72,6 @@
  "previewHelp": "Niet-opgeslagen wijzigingen verschijnen in het voorbeeld. Klik op een blok om het formulier te openen, op een afbeelding voor de Mediabibliotheek, op een tekst om die te bewerken.",
  "previewNoUrl": "Geen voorbeeld-URL: stel die in bij Instellingen, Blockscene, of configureer Strapi's native Preview voor dit contenttype.",
  "previewFailed": "Het voorbeeld antwoordde niet binnen 15 s. Als de frontend nog laadt, verschijnt het vanzelf; het formulier blijft bruikbaar.",
- "previewReady": "Paginavoorbeeld · niet-opgeslagen wijzigingen",
  "previewLoading": "Voorbeeld laden…",
  "retry": "Opnieuw proberen",
  "editText": "Tekst bewerken",

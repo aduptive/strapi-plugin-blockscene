@@ -72,7 +72,6 @@
  "previewHelp": "As alterações por guardar aparecem na pré-visualização. Clique num bloco para abrir o seu formulário, numa imagem para abrir a Media Library, num texto para o editar.",
  "previewNoUrl": "Sem URL de pré-visualização: defina em Definições, Blockscene, ou configure a Preview nativa do Strapi para este tipo de conteúdo.",
  "previewFailed": "A pré-visualização não respondeu em 15 s. Se o frontend ainda estiver a carregar, ela aparece sozinha; o formulário continua utilizável.",
- "previewReady": "Pré-visualização da página · alterações por guardar",
  "previewLoading": "A carregar pré-visualização…",
  "retry": "Tentar novamente",
  "editText": "Editar texto",

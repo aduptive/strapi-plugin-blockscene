@@ -72,7 +72,6 @@
  "previewHelp": "Unsaved changes appear in the preview. Click a block to open its form, an image to open the Media Library, a text to edit it.",
  "previewNoUrl": "No preview URL: set it in Settings, Blockscene, or configure Strapi's native Preview for this content type.",
  "previewFailed": "The preview did not answer within 15 s. If the frontend is still loading it will appear by itself; the form stays usable.",
- "previewReady": "Page preview · unsaved changes",
  "previewLoading": "Loading preview…",
  "retry": "Try again",
  "editText": "Edit text",
