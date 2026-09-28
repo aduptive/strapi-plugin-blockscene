@@ -230,6 +230,8 @@
  "confirmDeleteOption": "Confirm before deleting a block",
  "duplicateOption": "Show \"Duplicate\" on each block",
  "clipboardOption": "Show \"Copy\" and \"Paste\" (across pages)",
+ "friendlyLabels": "Friendly field labels",
+ "friendlyLabelsHelp": "Fields whose label is still the attribute name read as words (\"mobileColumnsCount\" becomes \"Mobile columns count\"). Labels set in \"Configure the view\" and texts from the project's \"fields\" config are kept.",
  "hiddenBlocks": "Blocks hidden on the site",
  "hiddenModes.strip": "Removed from the content API",
  "hiddenModes.flag": "Sent with the flag (the frontend decides)",

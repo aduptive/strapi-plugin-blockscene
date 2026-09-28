@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups } = require('./groups')
 const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 
@@ -125,6 +125,8 @@ module.exports = {
       groups: null,
       // Project defaults from code: same shape as the stored settings, e.g. require('./blockscene.json'). See README "Settings page".
       settings: null,
+      // Edit view field texts from code (never stored): { uid: { attribute: { label, description, placeholder } } }. See README "Field labels".
+      fields: null,
       // "Hide on the site": boolean attribute added to every Dynamic Zone component (a DB column); false adds nothing.
       hiddenAttribute: 'bsHidden' },
     validator: catalog,
@@ -144,6 +146,7 @@ module.exports = {
       { section: 'plugins', displayName: 'Change gallery settings', uid: 'settings.update', pluginName: PLUGIN },
     ])
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
+    strapi.plugin(PLUGIN).service('settings').fields()
     registerPublishGuard(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
   },
@@ -158,9 +161,18 @@ module.exports = {
       catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
       return project
     }
+    // Code field texts (plugin config `fields`): validated once, strictly; invalid ones are ignored with a warning.
+    let fields
+    const fieldTexts = () => {
+      if (fields !== undefined) return fields
+      const schemas = Object.fromEntries(Object.entries({ ...strapi.contentTypes, ...strapi.components }).map(([uid, schema]) => [uid, Object.keys(schema?.attributes || {})]))
+      try { fields = validateFields(strapi.plugin(PLUGIN).config('fields'), schemas) }
+      catch (error) { fields = {}; strapi.log?.warn(`[${PLUGIN}] "fields" config ignored: ${error.message}. Field labels fall back to the Content Manager's own.`) }
+      return fields
+    }
     const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi))
     return {
-      projectDefaults, get,
+      projectDefaults, get, fields: fieldTexts,
       async set(value) {
         const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi))
         for (const [uid, entry] of Object.entries(next.components)) {
@@ -191,7 +203,10 @@ module.exports = {
             ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }) }
         }
         const hidden = hiddenName(plugin.config('hiddenAttribute')) || null
-        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden,
+        // types: what the Strapi 5 layout hook matches an edit layout against (it receives no model uid).
+        const types = Object.fromEntries(Object.entries(strapi.contentTypes || {}).filter(([uid]) => !uid.startsWith('admin::'))
+          .map(([uid, schema]) => [uid, [schema.info?.displayName || '', ...Object.keys(schema.attributes || {})]]))
+        ctx.body = { ...base, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),

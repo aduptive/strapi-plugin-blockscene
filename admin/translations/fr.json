@@ -230,6 +230,8 @@
  "confirmDeleteOption": "Confirmer avant de supprimer un bloc",
  "duplicateOption": "Afficher « Dupliquer » sur chaque bloc",
  "clipboardOption": "Afficher « Copier » et « Coller » (entre pages)",
+ "friendlyLabels": "Libellés de champ lisibles",
+ "friendlyLabelsHelp": "Les champs dont le libellé est encore le nom de l'attribut s'affichent en mots (\"mobileColumnsCount\" devient \"Mobile columns count\"). Les libellés définis dans « Configurer la vue » et les textes de la configuration « fields » du projet sont conservés.",
  "hiddenBlocks": "Blocs masqués sur le site",
  "hiddenModes.strip": "Retirés de l'API de contenu",
  "hiddenModes.flag": "Envoyés avec l'indicateur (le frontend décide)",

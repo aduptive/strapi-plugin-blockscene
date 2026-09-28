@@ -16,6 +16,7 @@ import {
   useAuth,
   useForm,
   useNotification,
+  getFetchClient,
 } from "@strapi/strapi/admin";
 import {
   unstable_useContentManagerContext as useContext,
@@ -24,10 +25,10 @@ import {
 import { Gallery } from "./Gallery";
 import { PagePreview } from "./PagePreview";
 import { Settings, permissions, register } from "./Settings";
-import { editableZones, canInsert, componentDefaults } from "./model.mjs";
+import { editableZones, canInsert, componentDefaults, labelEditLayout } from "./model.mjs";
 import { cloneRow, currentRelations, fractionalKeys, relationSlots, toConnect } from "./rows.mjs";
 import { Guard } from "./Guard";
-import { useCatalog } from "./catalog";
+import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { setLazyConfig, wrapCustomFields } from "./LazyInput";
 
@@ -286,6 +287,7 @@ export default {
   registerTrads,
   bootstrap(app: any) {
     app.getPlugin("content-manager").apis.addEditViewSidePanel([Panel]);
+    app.registerHook("Admin/CM/pages/EditView/mutate-edit-view-layout", labelsHook(() => getFetchClient().get, labelEditLayout));
     // Every plugin has registered its custom fields by now.
     wrapCustomFields(strapiApp);
   },

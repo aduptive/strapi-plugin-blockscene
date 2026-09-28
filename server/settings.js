@@ -18,7 +18,9 @@ const DEFAULTS = {
     lazyEditors: true, lazyFields: ['plugin::ckeditor5.CKEditor'],
     // Row actions in each block header (see README "Row actions"). hiddenBlocks: what the content API does with rows
     // hidden on the site: 'strip' removes them, 'flag' sends them with the attribute, 'off' hides the eye icon.
-    confirmDelete: true, hiddenBlocks: 'strip', duplicate: true, clipboard: true },
+    confirmDelete: true, hiddenBlocks: 'strip', duplicate: true, clipboard: true,
+    // Edit view labels that are still the raw attribute name read as "Mobile columns count" (see README "Field labels").
+    friendlyLabels: true },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -231,6 +233,32 @@ function overrides(next, base) {
   }))
 }
 
+// Plugin config `fields` (code only): { "<content type or component uid>": { "<attribute>": { label, description,
+// placeholder } } }, each text a string or { "<locale>": string }. `schemas`: uid -> attribute names.
+const FIELD_TEXT = { label: 80, description: 300, placeholder: 120 }
+const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
+const plain = value => value && typeof value === 'object' && !Array.isArray(value)
+const fieldText = (value, max) => typeof value === 'string' ? value.trim() !== '' && value.length <= max
+  : plain(value) && Object.keys(value).length > 0 && Object.keys(value).length <= 30 && Object.entries(value).every(([locale, text]) => LOCALE.test(locale) && fieldText(text, max))
+function validateFields(input, schemas = {}) {
+  if (input === null || input === undefined) return {}
+  if (!plain(input)) fail('fields must be an object')
+  if (JSON.stringify(input).length > 256 * 1024) fail('fields config too large')
+  for (const [uid, entries] of Object.entries(input)) {
+    if (!Object.hasOwn(schemas, uid)) fail(`Unknown content type or component "${uid}"`)
+    if (!plain(entries)) fail(`Invalid entry for "${uid}"`)
+    for (const [name, entry] of Object.entries(entries)) {
+      if (!schemas[uid].includes(name)) fail(`Unknown field "${name}" of "${uid}"`)
+      if (!plain(entry)) fail(`Invalid entry for "${uid}.${name}"`)
+      for (const [key, value] of Object.entries(entry)) {
+        if (!(key in FIELD_TEXT)) fail(`Unknown field setting "${key}" of "${uid}.${name}"`)
+        if (!fieldText(value, FIELD_TEXT[key])) fail(`Invalid ${key} of "${uid}.${name}": a string of 1 to ${FIELD_TEXT[key]} characters, or { "<locale>": string }`)
+      }
+    }
+  }
+  return structuredClone(input)
+}
+
 // Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.
 const PREFS = { starred: 200, recent: 20 }
 function validatePrefs(input, componentUids) {
@@ -246,4 +274,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, mergeSaved, layer, overrides, safeUrl, fail }

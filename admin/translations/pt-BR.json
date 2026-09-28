@@ -230,6 +230,8 @@
  "confirmDeleteOption": "Confirmar antes de excluir um bloco",
  "duplicateOption": "Mostrar \"Duplicar\" em cada bloco",
  "clipboardOption": "Mostrar \"Copiar\" e \"Colar\" (entre páginas)",
+ "friendlyLabels": "Rótulos de campo amigáveis",
+ "friendlyLabelsHelp": "Campos cujo rótulo ainda é o nome do atributo aparecem como palavras (\"mobileColumnsCount\" vira \"Mobile columns count\"). Rótulos definidos em \"Configurar a visualização\" e textos da configuração \"fields\" do projeto são mantidos.",
  "hiddenBlocks": "Blocos ocultos no site",
  "hiddenModes.strip": "Removidos da API de conteúdo",
  "hiddenModes.flag": "Enviados com a marcação (o frontend decide)",

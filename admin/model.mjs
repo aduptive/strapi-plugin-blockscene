@@ -216,3 +216,76 @@ export function initialState(editor, remembered) {
   if (editor?.initialState === "remember") return remembered || "closed";
   return "closed";
 }
+
+// Friendly field labels (Content Manager edit-layout hook). "mobileColumnsCount" -> "Mobile columns count";
+// acronym runs stay upper case ("pageSEO" -> "Page SEO", "ctaURL" -> "Cta URL").
+export function humanize(name) {
+  const text = String(name || "").replace(/[_\-\s]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").trim().split(" ").filter(Boolean)
+    .map((word) => (/^[A-Z0-9]{2,}$/.test(word) && /[A-Z]/.test(word) ? word : word.toLowerCase())).join(" ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+// A config text: a string, or { "<locale>": string } resolved as exact locale > its language > same language > en > first.
+export function localized(value, locale = "en") {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return undefined;
+  const keys = Object.keys(value);
+  const lang = (key) => key.toLowerCase().split("-")[0];
+  const lower = String(locale || "en").toLowerCase();
+  const key = keys.find((k) => k.toLowerCase() === lower) ?? keys.find((k) => k.toLowerCase() === lang(lower)) ??
+    keys.find((k) => lang(k) === lang(lower)) ?? keys.find((k) => lang(k) === "en") ?? keys[0];
+  return key === undefined ? undefined : value[key];
+}
+// Per field: config text > a label set in "Configure the view" (anything but the raw name) > humanized name (option on).
+// Description and placeholder change only when the config has them. null: nothing to change.
+function fieldText(fields, owner, name, label, locale, on) {
+  const entry = (owner && fields?.[owner]?.[name]) || {};
+  const out = {};
+  const text = localized(entry.label, locale) ?? (on && label === name ? humanize(name) : undefined);
+  if (text !== undefined) out.label = text;
+  for (const key of ["description", "placeholder"]) {
+    const value = localized(entry[key], locale);
+    if (value !== undefined) out[key] = value;
+  }
+  return Object.keys(out).length ? out : null;
+}
+// Strapi 5 hands the hook no model uid: the layout is matched to a content type by its display name and field names
+// (catalog.types: uid -> [displayName, ...attributes]). null: no match; false: more than one (the layout is left alone).
+export function layoutType(layout, types = {}) {
+  const names = (layout?.layout || []).flat(2).map((field) => field?.name);
+  const found = Object.entries(types || {}).filter(([, [displayName, ...attributes]]) =>
+    displayName === layout?.settings?.displayName && names.every((name) => attributes.includes(name)));
+  return found.length === 1 ? found[0][0] : found.length ? false : null;
+}
+const labelsOff = (catalog) => !catalog?.editor?.enabled || (!catalog.editor.friendlyLabels && !Object.keys(catalog.fields || {}).length);
+// Strapi 5 edit layout: layout = panels > rows > fields ({ name, label, hint, placeholder }), components[uid].layout = rows.
+export function labelEditLayout(layout, catalog, locale) {
+  if (labelsOff(catalog) || !Array.isArray(layout?.layout) || !layout.layout.length) return layout;
+  const uid = layoutType(layout, catalog.types);
+  if (uid === false || (uid && catalog.contentTypes?.[uid]?.enabled === false)) return layout;
+  const fix = (owner) => (field) => {
+    const text = field && fieldText(catalog.fields, owner, field.name, field.label, locale, catalog.editor.friendlyLabels);
+    if (!text) return field;
+    const { description, ...rest } = text;
+    return { ...field, ...rest, ...(description !== undefined && { hint: description }) };
+  };
+  return {
+    ...layout,
+    layout: layout.layout.map((panel) => panel.map((row) => row.map(fix(uid)))),
+    components: Object.fromEntries(Object.entries(layout.components || {}).map(([cuid, component]) =>
+      [cuid, Array.isArray(component?.layout) ? { ...component, layout: component.layout.map((row) => row.map(fix(cuid))) } : component])),
+  };
+}
+// Strapi 4 edit layout: contentType.layouts.edit and components[uid].layouts.edit are rows of { name, metadatas }.
+export function labelEditLayout4(layout, catalog, locale) {
+  const uid = layout?.contentType?.uid;
+  if (labelsOff(catalog) || !uid || catalog.contentTypes?.[uid]?.enabled === false) return layout;
+  const fix = (owner) => (field) => {
+    const text = field?.metadatas && fieldText(catalog.fields, owner, field.name, field.metadatas.label, locale, catalog.editor.friendlyLabels);
+    return text ? { ...field, metadatas: { ...field.metadatas, ...text } } : field;
+  };
+  const rows = (target, owner) => Array.isArray(target?.layouts?.edit)
+    ? { ...target, layouts: { ...target.layouts, edit: target.layouts.edit.map((row) => row.map(fix(owner))) } } : target;
+  return { ...layout, contentType: rows(layout.contentType, uid),
+    components: Object.fromEntries(Object.entries(layout.components || {}).map(([cuid, component]) => [cuid, rows(component, cuid)])) };
+}

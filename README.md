@@ -284,6 +284,7 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Duplicate on each block (`duplicate`) | yes/no | yes |
 | Copy and Paste (`clipboard`) | yes/no | yes |
 | Blocks hidden on the site (`hiddenBlocks`) | `strip` / `flag` / `off` | `strip` |
+| Friendly field labels (`friendlyLabels`, see [Field labels](#field-labels)) | yes/no | yes |
 
 Every edit view opens in its content type's mode, else the initial preview
 mode. Editors can switch while they edit; the switch is not remembered.
@@ -483,6 +484,65 @@ With a valid map:
 
 Configured groups are stored exactly as before: the flat list of components in
 the zone. Removing the config only removes the group tools and the guard.
+
+## Field labels
+
+The Content Manager shows each field under its "Configure the view" label, which
+defaults to the raw attribute name (`mobileColumnsCount`). Blockscene rewrites
+the edit view labels, hints and placeholders through the Content Manager's own
+`Admin/CM/pages/EditView/mutate-edit-view-layout` hook (Strapi 5 and 4, the
+same hook the i18n plugin uses), so nothing in the DOM is patched and the
+saved view configuration is never changed. Per field, the first that applies:
+
+1. **Project texts** from the plugin config `fields` (below);
+2. **a label set in "Configure the view"** (anything other than the attribute name);
+3. **the humanized name** when "Friendly field labels" is on: `mobileColumnsCount`
+   reads "Mobile columns count", `page_seo` "Page seo", acronym runs stay
+   (`pageSEO` "Page SEO", `ctaURL` "Cta URL").
+
+Description (the hint under the field) and placeholder change only when the
+project texts have them. Texts follow the admin user's interface language
+(`strapi-admin-language`, else English), resolved as: exact locale, then its
+language (`pt-BR` → `pt`), then any variant of that language, then `en`, then
+the first value.
+
+```js
+// config/plugins.js
+blockscene: { config: { fields: {
+  'api::page.page': {
+    pageSeo: { label: { en: 'Search engine settings', 'pt-BR': 'Configurações de SEO' },
+      description: { en: 'Title and description shown on Google', 'pt-BR': 'Título e descrição no Google' } },
+  },
+  'shared.seo': { metaTitle: { placeholder: 'Up to 60 characters' } },
+} } },
+```
+
+Keys are content type or component uids, then attribute names; each of
+`label` (up to 80 characters), `description` (300) and `placeholder` (120) is a
+string or `{ "<locale>": string }`. The map is validated strictly at boot:
+an unknown uid, attribute or key, an empty or too long text, or a malformed
+locale code logs a warning naming it and the whole `fields` config is ignored
+(labels fall back to the two other steps). It is code only, versioned with the
+project; the Settings page has the on/off switch but does not edit texts.
+
+To start the file, generate every field of a project with its humanized English
+label from a clone of this repository, then keep what you want to change:
+
+```bash
+node scripts/fields-skeleton.mjs ../my-project/backend > ../my-project/backend/config/blockscene-fields.json
+# config/plugins.js: fields: require('./blockscene-fields.json')
+```
+
+Limits: the hook runs synchronously and reads the last catalog the admin
+loaded. The first edit or list view of a session starts that request and shows
+native labels; the next layout computed (another document, list → edit, a
+locale switch) has them. Strapi 5 gives the hook no content type uid, so the
+layout is matched by display name and field names; two content types that
+share both are left untouched (component fields always work: they are keyed by
+uid). The switch "Editor enhancements enabled", `BLOCKSCENE_DISABLED` and a
+content type turned off all leave the native labels; any error leaves the
+layout untouched. Changing the interface language applies from the next edit
+view.
 
 ## Languages
 
