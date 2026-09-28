@@ -9,6 +9,17 @@ import { formDiff, loadVersion } from "./versions.mjs";
 // editor saves, so validation, permissions and lifecycles apply as for any edit. Needs `plugin::blockscene.history.read`.
 export const HISTORY_READ = [{ action: "plugin::blockscene.history.read", subject: null }];
 const PAGE = 10;
+// One line for an event's summary (also the activity page's "What").
+export function summaryText(t: any, s: any) {
+  if (!s) return "";
+  if (s.missing) return t.historyMissing;
+  if (s.initial) return t.historyInitial;
+  const parts = [];
+  const b = s.blocks || {};
+  if (b.added || b.removed || b.changed) parts.push(t.f("historyBlocksSummary", { added: b.added || 0, removed: b.removed || 0, changed: b.changed || 0 }));
+  if (s.fields?.length) parts.push(t.f("historyFieldsSummary", { fields: s.fields.join(", ") }));
+  return parts.join(" · ") || t.historyNoChange;
+}
 
 export function History({ model, documentId, schema, components, editable, disabled, get, relationsOf }: any) {
   const t = useMessages();
@@ -42,16 +53,7 @@ export function History({ model, documentId, schema, components, editable, disab
   if (isLoading || !allowed || !documentId) return null;
   const name = (uid: string) => components?.[uid]?.info?.displayName || uid;
   const when = (at: string) => { try { return new Date(at).toLocaleString(t.locale, { dateStyle: "medium", timeStyle: "short" }); } catch { return at; } };
-  const summary = (s: any) => {
-    if (!s) return "";
-    if (s.missing) return t.historyMissing;
-    if (s.initial) return t.historyInitial;
-    const parts = [];
-    const b = s.blocks || {};
-    if (b.added || b.removed || b.changed) parts.push(t.f("historyBlocksSummary", { added: b.added || 0, removed: b.removed || 0, changed: b.changed || 0 }));
-    if (s.fields?.length) parts.push(t.f("historyFieldsSummary", { fields: s.fields.join(", ") }));
-    return parts.join(" · ") || t.historyNoChange;
-  };
+  const summary = (s: any) => summaryText(t, s);
   const select = async (event: any) => {
     setReport(null);
     if (open?.event?.id === event.id) return setOpen(null);

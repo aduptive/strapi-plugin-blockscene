@@ -38,6 +38,7 @@ import { Guard } from "./Guard";
 import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { setLazyConfig, wrapCustomFields } from "./LazyInput";
+import { ContentPage, contentMenuLink } from "./Activity";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   // Controlled callers (row previews, insertion gaps) pass no trigger: Dialog.Trigger requires a single element child.
@@ -366,6 +367,7 @@ export default {
     // Public admin API (README "Custom sidebar panels"): reached from a host's or another plugin's bootstrap, which
     // Strapi runs after every register.
     app.registerPlugin({ id: "blockscene", name: "Blockscene", apis: { registerPanel: (panel: any) => registerPanel(panel, ICON_NAMES) } });
+    app.addMenuLink(contentMenuLink(() => <Guard><ContentPage /></Guard>));
   },
   registerTrads,
   bootstrap(app: any) {
