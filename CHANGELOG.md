@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.5 (Strapi 5) and 1.0.0-alpha.5 (Strapi 4) — 2026-09-28
 
 - Row actions in each block header, before the native delete (Strapi 5 and 4):
   hide on the site (eye), duplicate (deep copy right below, groups whole,
