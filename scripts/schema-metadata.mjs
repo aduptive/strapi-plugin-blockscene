@@ -98,7 +98,9 @@ const changed = []
 for (const doc of Object.values(docs)) {
   if (JSON.stringify(doc.json) === doc.before) continue
   const indent = doc.text.match(/^[ \t]+(?=")/m)?.[0] || '  '
-  write(doc.file, JSON.stringify(doc.json, null, indent) + (doc.text.endsWith('\n') ? '\n' : ''))
+  // Keep the file's line endings (CRLF on files saved on Windows) so the diff shows only the added metadata.
+  const eol = doc.text.includes('\r\n') ? '\r\n' : '\n'
+  write(doc.file, (JSON.stringify(doc.json, null, indent) + (doc.text.endsWith('\n') ? '\n' : '')).replace(/\n/g, eol))
   changed.push(doc.file)
 }
 if (Object.keys(translations).length && !dry) mkdirSync(outDir, { recursive: true })
