@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.9 (Strapi 5) and 1.0.0-alpha.9 (Strapi 4) — 2026-09-28
 
 - Fix: saving a Dynamic Zone component in the Content-Type Builder (`strapi
   develop`, Strapi 5 and 4) wrote the hidden-on-site attribute (`bsHidden`)
