@@ -20,6 +20,7 @@ import {
   blockPreviewSrc,
   variantRow,
   localized,
+  localizeBlocks,
 } from "./model.mjs";
 import { PROTOCOL, isPreviewMessage, projectPage } from "./preview.mjs";
 import { DEVICES, type Device, frameStyle, useStageSize, stageBackground } from "./devices";
@@ -920,7 +921,7 @@ function ZoneGallery({
     setDetail(null);
     get("/blockscene/catalog")
       .then(({ data }: any) => {
-        if (active) setConfig(data);
+        if (active) setConfig(localizeBlocks(data, t.locale));
       })
       .catch(() => {
         if (active) setError(t.failed);

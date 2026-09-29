@@ -167,3 +167,24 @@ its repository folder is still `strapi-plugin-image-optimization`; the lab
 scripts map the folder to the new artifact name. `lab:refresh` removes the
 installed copies and installs with `--force`, because npm keeps an installed
 package when the tarball carries the same version.
+
+## Schema metadata
+
+The smoke step "schema metadata" runs only when the served lab's `blocks.text`
+carries schema metadata (the catalog has field texts for `blocks.text.body`).
+It is a temporary lab edit, reverted after the run, in both labs:
+
+- `src/components/blocks/text.json`: `info.description` "Paragraphs of text.",
+  `pluginOptions.blockscene` `{ "tags": ["Long read"] }` (before `attributes`),
+  and on `body` `pluginOptions.blockscene`
+  `{ "label": "Body text", "help": "Plain paragraphs, no markup." }`;
+- `config/plugins.js`, blockscene config: `translations: { 'pt-BR': {
+  'blocks.text': 'Texto', 'blocks.text.description': 'Parágrafos de texto.',
+  'blocks.text.body': 'Texto do corpo', 'blocks.text.body.help': 'Parágrafos simples, sem marcação.' } }`.
+
+Restart the lab, then run the smoke as usual. Verified 2026-09-28 on 5.52.1 and
+4.26.1 (lab copies in `strapi develop`): Strapi keeps `pluginOptions.blockscene`
+on components and attributes at runtime, and editing a field of that component
+in the Content-Type Builder and saving keeps it (block and attribute level) and
+`info.description` in the JSON file. The same save also writes the plugin's
+injected `bsHidden` attribute into the file (both majors).

@@ -273,7 +273,16 @@ export function localized(value, locale = "en") {
     keys.find((k) => lang(k) === lang(lower)) ?? keys.find((k) => lang(k) === "en") ?? keys[0];
   return key === undefined ? undefined : value[key];
 }
-// Per field: config text > a label set in "Configure the view" (anything but the raw name) > humanized name (option on).
+// Block label and description from the schema metadata may come as { "<locale>": text } (server schemaMetadata; a null
+// source text means "Strapi's own"): resolved once per catalog load, so every consumer reads plain strings.
+export function localizeBlocks(catalog, locale) {
+  if (!catalog?.components) return catalog;
+  const text = (value) => localized(value, locale) ?? undefined;
+  return { ...catalog, components: Object.fromEntries(Object.entries(catalog.components).map(([uid, entry]) =>
+    [uid, entry && (typeof entry.label === "object" || typeof entry.description === "object") ? { ...entry, label: text(entry.label), description: text(entry.description) } : entry])) };
+}
+// Per field: config text > schema metadata (merged into catalog.fields by the server, the config winning per text) >
+// a label set in "Configure the view" (anything but the raw name) > humanized name (option on).
 // Description, placeholder and help change only when the config has them. null: nothing to change.
 function fieldText(fields, owner, name, label, locale, on) {
   const entry = (owner && fields?.[owner]?.[name]) || {};
@@ -282,7 +291,7 @@ function fieldText(fields, owner, name, label, locale, on) {
   if (text !== undefined) out.label = text;
   for (const key of ["description", "placeholder", "help"]) {
     const value = localized(entry[key], locale);
-    if (value !== undefined) out[key] = value;
+    if (value != null) out[key] = value;
   }
   return Object.keys(out).length ? out : null;
 }

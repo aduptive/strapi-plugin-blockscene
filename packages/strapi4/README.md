@@ -147,9 +147,10 @@ layout, guessed from the component name and display name (hero, banner,
 cover; text, rich, quote, title; image, media, video, gallery, carousel; list,
 query, archive, related, posts, projects; card; cta, button, link; form,
 contact; wrapper, column, grid, divider, spacer, section; else text). Override
-it, and add up to 10 tags (1 to 24 characters), in Settings, Blockscene, or in
-the plugin config: `components[uid].typology` and `components[uid].tags`. A
-Settings value wins over the config. The former `category` config key still
+it, and add up to 10 tags (1 to 24 characters), in Settings, Blockscene, in
+the plugin config (`components[uid].typology` and `components[uid].tags`) or in
+the component schema ([`pluginOptions.blockscene`](#describing-blocks-and-fields-in-the-schema)).
+A Settings value wins over the config, the config over the schema. The former `category` config key still
 works: it becomes the block's tag when no tags are set.
 
 The native "Add a component to <zone>" button of an editable zone opens this
@@ -777,8 +778,10 @@ same hook the i18n plugin uses), so nothing in the DOM is patched and the
 saved view configuration is never changed. Per field, the first that applies:
 
 1. **Project texts** from the plugin config `fields` (below);
-2. **a label set in "Configure the view"** (anything other than the attribute name);
-3. **the humanized name** when "Friendly field labels" is on: `mobileColumnsCount`
+2. **schema metadata**: `pluginOptions.blockscene` on the attribute, with its
+   translations (see [Describing blocks and fields in the schema](#describing-blocks-and-fields-in-the-schema));
+3. **a label set in "Configure the view"** (anything other than the attribute name);
+4. **the humanized name** when "Friendly field labels" is on: `mobileColumnsCount`
    reads "Mobile columns count", `page_seo` "Page seo", acronym runs stay
    (`pageSEO` "Page SEO", `ctaURL` "Cta URL").
 
@@ -837,6 +840,85 @@ uid). The switch "Editor enhancements enabled", `BLOCKSCENE_DISABLED` and a
 content type turned off all leave the native labels; any error leaves the
 layout untouched. Changing the interface language applies from the next edit
 view.
+
+## Describing blocks and fields in the schema
+
+The same texts can live in the component and content type JSON files, next to
+what they describe, instead of the long `components` and `fields` config maps:
+
+```jsonc
+// src/components/sections/rich-text.json
+{
+  "collectionName": "components_sections_rich_texts",
+  "info": { "displayName": "Rich text", "description": "Formatted text with an optional title and anchor." },
+  "pluginOptions": { "blockscene": { "tags": ["Editorial"] } },
+  "attributes": {
+    "anchor": { "type": "string", "pluginOptions": { "blockscene": { "help": "Id for links to this block (#id), without the \"#\"." } } },
+    "text": { "type": "richtext" }
+  }
+}
+// src/components/shared/tag.json, attribute "label"
+"label": { "type": "string", "pluginOptions": { "blockscene": { "label": "Tag text", "help": "One or two words." } } }
+```
+
+- **Block**: the native `info.description` is the gallery description;
+  `pluginOptions.blockscene` takes `label`, `typology`, `tags`, `keywords` and
+  `image`, with the same rules as the `components` config entries.
+- **Field** (any content type or component attribute): `pluginOptions.blockscene`
+  takes `label` (up to 80 characters), `description` (300), `placeholder` (120)
+  and `help` (500), each a plain string in the source language, English.
+
+Other languages go in one flat file per locale, given to the plugin config:
+
+```js
+// config/plugins.js
+blockscene: { config: { translations: { 'pt-BR': require('./blockscene/pt-BR.json') } } },
+```
+
+```json
+{
+  "sections.rich-text": "Texto formatado",
+  "sections.rich-text.description": "Texto formatado com título e âncora opcionais.",
+  "sections.rich-text.anchor": "Âncora",
+  "sections.rich-text.anchor.help": "Id para links a este bloco (#id), sem o \"#\".",
+  "shared.tag.label": "Texto da tag"
+}
+```
+
+Keys are `<uid>` (block label, else the `displayName`), `<uid>.description`
+(block description), `<uid>.<attribute>` (field label) and
+`<uid>.<attribute>.<description|placeholder|help>`. A component attribute named
+`description` takes its label as `<uid>.description.label`. The admin picks the
+language as for the field labels above; a missing key shows the schema's
+English text, and a translated field label with no English one in the schema
+shows Strapi's own label in English.
+
+Precedence, per text: the plugin config (`components`, `fields`, and Settings
+for typology and tags) > schema metadata > native Strapi ("Configure the view"
+labels, `displayName`) > automatic (humanized names, guessed typology). The
+existing config keeps working unchanged. Everything is read once at boot:
+invalid values (a typology outside the list, a label over 80 characters, an
+unknown key) and translation keys naming no known block or field are left out,
+with one warning listing them by uid.
+
+**Content-Type Builder.** Tested on Strapi 5.52.1 and 4.26.1 in development
+mode: editing and saving a component in the Content-Type Builder keeps
+`pluginOptions.blockscene` (block and attributes) and `info.description`. It
+has no field for them, so add and change them in the JSON files.
+
+To move an existing config, from a clone of this repository (idempotent; each
+schema file keeps its indentation and key order; labels equal to what the
+plugin would show anyway, the humanized name or the `displayName`, are dropped):
+
+```bash
+node scripts/schema-metadata.mjs ../my-project/backend --fields fields.json --components components.json [--out dir] [--source en] [--dry-run]
+```
+
+`fields.json` and `components.json` hold the two config maps as JSON. The
+translation files go to `config/blockscene/<locale>.json`; the script lists
+what it could not place and the `components` keys that stay in the config
+(`variants`, `template`). Remove the migrated entries from the config
+afterwards: the config wins.
 
 ## Version history (Strapi 5)
 

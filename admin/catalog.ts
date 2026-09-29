@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { helpAction } from './FieldHelp'
+import { localizeBlocks } from './model.mjs'
 // One catalog request per edit view. Any failure yields null, which the
 // adapters treat as "use the native editor" so a plugin outage never blocks editing.
 // The last catalog is also kept for the synchronous edit-layout hook (field labels).
@@ -7,7 +8,8 @@ let cached: any = null
 let pending: Promise<void> | null = null
 // The side panel and the injected editor ask at the same time: one request in flight serves both.
 let flight: Promise<any> | null = null
-const load = (get: any) => (flight ||= get('/blockscene/catalog').then(({ data }: any) => { cached = data; return data }).finally(() => { flight = null }))
+// Block labels and descriptions are resolved to the admin language here, once per load (one load per edit view).
+const load = (get: any) => (flight ||= get('/blockscene/catalog').then(({ data }: any) => { cached = localizeBlocks(data, adminLocale()); return cached }).finally(() => { flight = null }))
 export function useCatalog(get: any) {
   const [catalog, setCatalog] = React.useState<any>(null)
   React.useEffect(() => {
