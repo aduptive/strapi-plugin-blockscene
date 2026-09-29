@@ -96,8 +96,9 @@ The modal is a block browser (80vw wide):
   remembered per browser). Active values show as removable chips with "Clear
   all"; the empty state offers a reset.
 - **Cards**, grouped by typology: facet badges (IMAGE, VIDEO, GALLERY, RICH
-  TEXT, LIST, DYNAMIC, FORM), a star and a hover "+" that inserts at once.
-- A click **magnifies** the block: the card grows into a large panel over the
+  TEXT, LIST, DYNAMIC, FORM), a star and an always-visible preview button.
+  Clicking or focusing the card and pressing Enter inserts it at once.
+- The preview button **magnifies** the block: the card grows into a large panel over the
   grid (sidebar and top bar stay usable, the grid dims underneath) and shrinks
   back into its card on close (close button, Esc or a click on the dimmed
   grid). The animation is transform/opacity only, about 250 ms, and is skipped
@@ -105,8 +106,7 @@ The modal is a block browser (80vw wide):
   with Fit / Mobile / Tablet / Desktop widths (scaled to fit, as in the page
   preview) and a compact strip: label, uid, description, badges, fields (on
   demand), the variant choice (see [Insert variants](#insert-variants)), star
-  and Insert. Double click, "+" or Enter on a focused card inserts without it
-  (the first variant, when the block has variants).
+  and Insert. A direct card insert uses the first variant, when the block has variants.
 
 The magnified preview shows the card's thumbnail at once and fades the live
 page in over it once it has loaded. Live source, first match wins:
@@ -189,7 +189,7 @@ components: {
 - **Choosing**: with two or more variants the magnified block shows them as a
   row of buttons; the live preview follows the choice (`{variant}` in the
   block preview URL, or the variant's block sent through the bridge) and
-  Insert inserts it. Double click, "+" and Enter insert the first variant.
+  Insert inserts it. Clicking the card or pressing Enter inserts the first variant.
   The picker opened from a page preview insertion seam offers the same
   choice. A block without variants behaves as before; Settings, Blockscene
   lists each block's variants read-only.

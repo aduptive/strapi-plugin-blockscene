@@ -331,10 +331,6 @@ const Badge = styled.span`
 `;
 const CardBox = styled.div`
   position: relative;
-  &:hover .bs-quick,
-  &:focus-within .bs-quick {
-    opacity: 1;
-  }
 `;
 const CardBadges = styled.div`
   position: absolute;
@@ -346,7 +342,7 @@ const CardBadges = styled.div`
   gap: 4px;
   pointer-events: none;
 `;
-const Round = styled.button<{ $on?: boolean; $primary?: boolean }>`
+const Round = styled.button<{ $on?: boolean }>`
   position: absolute;
   right: 14px;
   display: inline-flex;
@@ -357,16 +353,16 @@ const Round = styled.button<{ $on?: boolean; $primary?: boolean }>`
   padding: 0;
   border-radius: 50%;
   cursor: pointer;
-  border: 1px solid ${({ theme, $primary }) => ($primary ? theme.colors.primary600 : theme.colors.neutral200)};
-  color: ${({ theme, $on, $primary }) => ($primary ? theme.colors.neutral0 : $on ? theme.colors.warning500 : theme.colors.neutral600)};
-  background: ${({ theme, $primary }) => ($primary ? theme.colors.primary600 : theme.colors.neutral0)};
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
+  color: ${({ theme, $on }) => ($on ? theme.colors.warning500 : theme.colors.neutral600)};
+  background: ${({ theme }) => theme.colors.neutral0};
+  transition: transform 120ms ease-out;
+  &:active {
+    transform: scale(0.97);
+  }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary600};
     outline-offset: 1px;
-  }
-  &.bs-quick {
-    opacity: 0;
-    transition: opacity 120ms;
   }
 `;
 const Mono = styled.code`
@@ -450,28 +446,15 @@ function Badges({ entry, t, tags }: any) {
   );
 }
 
-// Click magnifies the block; double click, Enter or the "+" inserts at once. A single click waits out the
-// double click window, so a double click never starts the magnify animation.
+// The whole card is the primary insert action. Preview is an explicit, always-visible secondary action.
 function Card({ entry, palette, showFields, starred, active, onOpen, onInsert, onStar }: any) {
   const t = useMessages();
-  const timer = React.useRef<any>(null);
-  React.useEffect(() => () => clearTimeout(timer.current), []);
   return (
     <CardBox title={entry.uid} data-testid={`blockscene-${entry.uid}`}>
       <Tile
         type="button"
         $active={active}
-        onClick={(event: React.MouseEvent) => {
-          clearTimeout(timer.current);
-          if (event.detail === 2) onInsert();
-          else if (event.detail === 1) timer.current = setTimeout(onOpen, 220);
-          else onOpen();
-        }}
-        onKeyDown={(event: React.KeyboardEvent) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          onInsert();
-        }}
+        onClick={onInsert}
       >
         <Thumb
           candidates={entry.candidates}
@@ -515,15 +498,13 @@ function Card({ entry, palette, showFields, starred, active, onOpen, onInsert, o
       </Round>
       <Round
         type="button"
-        className="bs-quick"
         style={{ top: 46 }}
-        $primary
-        aria-label={t.f("quickInsert", { label: entry.label })}
-        title={t.f("quickInsert", { label: entry.label })}
-        onClick={onInsert}
-        data-testid={`gallery-quick-${entry.uid}`}
+        aria-label={t.f("rowPreview", { label: entry.label })}
+        title={t.f("rowPreview", { label: entry.label })}
+        onClick={onOpen}
+        data-testid={`gallery-preview-${entry.uid}`}
       >
-        <Icon name="plus" size={16} />
+        <Icon name="seo" size={16} />
       </Round>
     </CardBox>
   );
@@ -959,7 +940,7 @@ function ZoneGallery({
     setPicked(NO_FILTERS);
   };
   const labelOf = (menu: string, value: string) => (menu === "tags" ? value : t.facets[value] || value);
-  // values: the chosen insert variant's (a quick insert takes the first one), undefined without variants.
+  // values: the chosen insert variant's (a direct card insert takes the first one), undefined without variants.
   const select = (uid: string, values?: any) => {
     try {
       if (controlled ? (controlled.onSelect(uid, values), true) : add(zone, uid, values)) {

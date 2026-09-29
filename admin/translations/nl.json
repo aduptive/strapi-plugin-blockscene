@@ -202,7 +202,7 @@
  "blockPreview": "Livevoorbeeld van het blok",
  "livePreviewFailed": "Livevoorbeeld niet beschikbaar, de afbeelding wordt getoond.",
  "blockPreviewUrl": "URL van blokvoorbeeld",
- "blockPreviewUrlHelp": "Optioneel. Een pagina van uw frontend die één blok rendert, groot getoond wanneer op een galerijkaart wordt geklikt, bijv. http://localhost:3026/nl/block-preview/'{name}'/'{variant}'. Plaatshouders: '{uid}', '{name}' (na de punt), '{category}' (voor de punt), '{variant}' (default), '{locale}'. Leeg gebruikt de paginavoorbeeldroute als die er is, anders de afbeelding.",
+ "blockPreviewUrlHelp": "Optioneel. Een pagina van uw frontend die één blok rendert, groot getoond wanneer op het vergrootglas van een galerijkaart wordt geklikt, bijv. http://localhost:3026/nl/block-preview/'{name}'/'{variant}'. Plaatshouders: '{uid}', '{name}' (na de punt), '{category}' (voor de punt), '{variant}' (default), '{locale}'. Leeg gebruikt de paginavoorbeeldroute als die er is, anders de afbeelding.",
  "rowActions": "Acties voor {label}",
  "selectBlock": "{label} selecteren",
  "hiddenBadge": "Verborgen",

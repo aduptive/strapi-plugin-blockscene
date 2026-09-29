@@ -167,8 +167,8 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem('blockscene:gallery-sidebar')), 'collapsed')
     await page.getByRole('dialog').screenshot({ path: `artifacts/strapi${major}-gallery-collapsed.png`, animations: 'disabled' })
     await page.getByTestId('gallery-sidebar-toggle').click(); await page.locator('[data-testid="gallery-sidebar-blocks"][data-collapsed="false"]').waitFor()
-    // Magnify: a single click lifts the card into a large panel over the grid (sidebar and toolbar stay visible); Insert is its primary action.
-    await hero.locator('button').first().click()
+    // Preview: the always-visible magnifier lifts the card into a large panel; clicking the card itself inserts.
+    await hero.getByTestId('gallery-preview-blocks.hero').click()
     const detail = page.getByTestId('gallery-detail'); await detail.waitFor()
     await page.getByTestId('gallery-magnify-scrim').waitFor()
     assert.ok(await page.getByTestId('gallery-sidebar-blocks').isVisible() && await page.locator('input[name="block-search-blocks"]').isVisible(), 'sidebar and toolbar stay visible')
@@ -187,13 +187,13 @@ try {
   await page.locator('input[name="block-search-blocks"]').fill('not-a-real-block')
   await page.getByText('No blocks found.', { exact: true }).waitFor()
   await page.locator('input[name="block-search-blocks"]').fill('banner')
-  await step('double click inserts at once; the detail pane Insert too, and it is recorded as recently used', async () => {
-    await page.getByTestId('blockscene-blocks.hero').locator('button').first().dblclick()
+  await step('card click inserts at once; the detail pane Insert too, and it is recorded as recently used', async () => {
+    await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
     await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' })
     await openGallery('sidebar')
     await page.getByTestId('blockscene-blocks.text').waitFor()
     assert.equal(await page.getByTestId('blockscene-blocks.hero').count(), 0, 'Sidebar only allows text')
-    await page.getByTestId('blockscene-blocks.text').locator('button').first().click()
+    await page.getByTestId('gallery-preview-blocks.text').click()
     const recent = page.waitForResponse(res => res.url().endsWith('/blockscene/me/prefs') && res.request().method() === 'PUT')
     await page.getByTestId('gallery-detail').getByTestId('gallery-insert').click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
@@ -224,7 +224,7 @@ try {
   const docUrl = page.url()
   // Add a second block so "open/close all" has more than one accordion in the zone.
   await openGallery()
-  await page.getByTestId('blockscene-blocks.text').hover(); await page.getByTestId('gallery-quick-blocks.text').click()
+  await page.getByTestId('blockscene-blocks.text').locator('button').first().click()
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
   const second = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && ['PUT', 'POST'].includes(res.request().method()) && res.ok())
   await save.click()
@@ -466,7 +466,7 @@ try {
     const zoneRows = () => page.locator('ol[aria-describedby]').first().locator(':scope > li')
     assert.equal(await zoneRows().count(), 2, 'cancel keeps the zone unchanged')
     await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
-    await picker.getByTestId('blockscene-blocks.text').locator('button').first().dblclick(); await picker.waitFor({ state: 'hidden' })
+    await picker.getByTestId('blockscene-blocks.text').locator('button').first().click(); await picker.waitFor({ state: 'hidden' })
     await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
     assert.match(await zoneRows().nth(1).innerText(), /Text/, 'inserted after the first block')
     // The compact per-block preview setting persists but is hidden here: this lab has no accordion integration.
@@ -561,7 +561,7 @@ try {
     const gap = frame.locator('[data-testid^="bp-gap-"]').nth(1)
     await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
     const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
-    await picker.getByTestId('blockscene-blocks.text').locator('button').first().dblclick(); await picker.waitFor({ state: 'hidden' })
+    await picker.getByTestId('blockscene-blocks.text').locator('button').first().click(); await picker.waitFor({ state: 'hidden' })
     await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 3)
     assert.match(await rows().nth(1).innerText(), /Text/, 'inserted after the first block')
     await frame.locator('main > section').nth(2).waitFor()
@@ -641,7 +641,7 @@ try {
       await page.waitForFunction(([rows, title]) => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === rows && document.querySelector('input[name="title"]')?.value === title, [rows, title])
     }
     await openGallery()
-    await page.getByTestId('blockscene-blocks.text').hover(); await page.getByTestId('gallery-quick-blocks.text').click()
+    await page.getByTestId('blockscene-blocks.text').locator('button').first().click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     await expect(count + 1, original)
     await new Promise(r => setTimeout(r, 600))
@@ -919,7 +919,7 @@ try {
     await page.goto(docUrl); await page.getByTestId('block-accordion-controls-blocks').waitFor(); await rows().first().waitFor()
     const before = await page.locator('ol[aria-describedby]').first().locator(':scope > li').count()
     await openGallery()
-    await page.getByTestId('blockscene-group.section').locator('button').first().dblclick()
+    await page.getByTestId('blockscene-group.section').locator('button').first().click()
     await page.waitForFunction(n => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === n, before + (GROUPS_MODE === '1' ? 2 : 1))
     // Only the `blocks` zone (the first list): the sidebar zone renders its own list on the same page.
     const rowNames = () => page.locator('ol[aria-describedby]').first().locator(':scope > li').evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
@@ -982,7 +982,7 @@ try {
         // A child through the group's inner gap lands between the pair; the whole group then moves down and is removed as one range.
         const inner = created.locator(`[data-testid="bp-gap-${createdKey}"]`); await inner.hover(); await inner.locator('.bp-insert').first().click()
         const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
-        await picker.getByTestId('blockscene-blocks.text').locator('button').first().dblclick(); await picker.waitFor({ state: 'hidden' })
+        await picker.getByTestId('blockscene-blocks.text').locator('button').first().click(); await picker.waitFor({ state: 'hidden' })
         await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li').length === 8)
         const afterChild = await names(); const gapAfter = await inner.locator('.bp-insert').first().getAttribute('data-after')
         assert.match(afterChild[1], /Text/, `child between OPEN and CLOSE (created ${createdKey}, gap after ${gapAfter}); rows: ${afterChild.join(' | ')}`); assert.match(afterChild[2], /Section end/)
@@ -990,7 +990,7 @@ try {
         const childBlock = created.locator('[data-block-uid="blocks.text"]').first()
         const childKey = await childBlock.getAttribute('data-block-key')
         const childGap = created.locator(`[data-testid="bp-gap-${childKey}"]`); await childGap.hover(); await childGap.locator('.bp-insert').first().click()
-        await picker.getByTestId('blockscene-group.section').locator('button').first().dblclick(); await picker.waitFor({ state: 'hidden' })
+        await picker.getByTestId('blockscene-group.section').locator('button').first().click(); await picker.waitFor({ state: 'hidden' })
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 10)
         assert.deepEqual((await names()).slice(0, 5).map(n => n.replace(/ - .*$/, '')), ['Section (group open)', 'Text', 'Section (group open)', 'Section end (group close)', 'Section end (group close)'], 'nested pair from the seam picker: OPEN, CLOSE adjacent')
         assert.equal(await page.getByTestId('page-preview-diagnostics').count(), 0, 'still balanced')
@@ -1173,7 +1173,7 @@ try {
     await until(cells, ['Text: c1', 'Hero example: Hero edited'])
     // "+": the gallery inserts at the end of the group.
     await page.getByTestId('grid-add-blocks-1').click()
-    await page.getByTestId('blockscene-blocks.text').locator('button').first().dblclick()
+    await page.getByTestId('blockscene-blocks.text').locator('button').first().click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b 0b', 'the new block is the group\'s last child')
     await until(async () => (await cells()).length, 3)
@@ -1196,7 +1196,7 @@ try {
     // "+" goes through the variant-aware insert path: the chosen variant's values land in the new child.
     if (((await api('GET', '/blockscene/catalog')).data?.components?.['blocks.hero']?.variants || []).length > 1) {
       await page.getByTestId('grid-add-blocks-1').click()
-      await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
+      await page.getByTestId('gallery-preview-blocks.hero').click()
       await page.getByTestId('gallery-detail').getByTestId('gallery-variant-dark').click()
       await page.getByTestId('gallery-detail').getByTestId('gallery-insert').click()
       await page.getByRole('dialog').waitFor({ state: 'hidden' })
@@ -1240,7 +1240,7 @@ try {
     await page.goto('/admin/content-manager/collection-types/api::page.page/create')
     await page.getByRole('textbox', { name: /^title/i }).first().fill(`Variant smoke ${Date.now()}`)
     await openGallery()
-    await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
+    await page.getByTestId('gallery-preview-blocks.hero').click()
     const detail = page.getByTestId('gallery-detail'); await detail.waitFor()
     await detail.getByTestId('gallery-variants').waitFor()
     assert.equal(await detail.getByTestId('gallery-variant-default').getAttribute('aria-pressed'), 'true', 'the first variant is chosen')
@@ -1253,9 +1253,9 @@ try {
     await page.getByRole('dialog').screenshot({ path: `artifacts/strapi${major}-gallery-variants.png`, animations: 'disabled' })
     await detail.getByTestId('gallery-insert').click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
-    // Quick insert takes the first variant (plain defaults here).
+    // Direct card insert takes the first variant (plain defaults here).
     await openGallery()
-    await page.getByTestId('blockscene-blocks.hero').hover(); await page.getByTestId('gallery-quick-blocks.hero').click()
+    await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     const response = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && res.request().method() === 'POST')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -1273,7 +1273,7 @@ try {
     const gap = seamFrame.locator('[data-testid^="bp-gap-"]').nth(1); await gap.waitFor()
     await gap.hover(); await gap.locator('.bp-insert:not(.bp-insert--group)').click()
     const picker = page.getByRole('dialog').filter({ hasText: 'Block gallery' })
-    await picker.getByTestId('blockscene-blocks.hero').locator('button').first().click()
+    await picker.getByTestId('gallery-preview-blocks.hero').click()
     await picker.getByTestId('gallery-variant-dark').click()
     await picker.getByTestId('gallery-insert').click(); await picker.waitFor({ state: 'hidden' })
     await page.waitForFunction(() => document.querySelector('ol[aria-describedby]')?.querySelectorAll(':scope > li').length === 3)
@@ -1302,7 +1302,7 @@ try {
     await page.getByTestId('gallery-filter-tags').getByRole('button').click(); await page.getByTestId('gallery-option-tags-Long read').check()
     await page.keyboard.press('Escape'); await page.getByTestId('gallery-option-tags-Long read').waitFor({ state: 'detached' })
     await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' }); await card.waitFor()
-    await card.locator('button').first().dblclick(); await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    await card.locator('button').first().click(); await page.getByRole('dialog').waitFor({ state: 'hidden' })
     const response = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && res.request().method() === 'POST')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     const saved = await response; assert.ok(saved.ok(), `Save returned ${saved.status()}`)
