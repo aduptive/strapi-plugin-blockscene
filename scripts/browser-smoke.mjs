@@ -76,6 +76,16 @@ try {
     for (const bad of [{ palette: { accent: 'red' } }, { components: { 'blocks.nope': { template: 'generic' } } }, { components: { 'blocks.text': { mediaId: 999999 } } }, { components: { 'blocks.text': { template: 'fancy' } } }])
       assert.equal((await api('PUT', '/blockscene/settings', bad)).status, 400, JSON.stringify(bad))
   })
+  // What the builder reads is what its UI sends back on save: without the attribute there, it is never written to a
+  // component file. The save itself needs `strapi develop` (README "The hidden attribute is a database column" has the manual check).
+  await step('hidden-on-site attribute: out of the Content-Type Builder reads, kept in the Content Manager schema', async () => {
+    const names = attributes => Array.isArray(attributes) ? attributes.map(attribute => attribute.name) : Object.keys(attributes || {})
+    const reads = [(await api('GET', '/content-type-builder/components/blocks.hero')).data?.data?.schema?.attributes]
+    if (major === 5) reads.push((await api('GET', '/content-type-builder/schema')).data?.data?.components?.['blocks.hero']?.attributes)
+    for (const attributes of reads) { assert.ok(names(attributes).includes('title'), 'builder read'); assert.ok(!names(attributes).includes('bsHidden'), 'not in the builder') }
+    const init = (await api('GET', '/content-manager/init')).data?.data
+    assert.ok(names(init?.components?.find(component => component.uid === 'blocks.hero')?.attributes).includes('bsHidden'), 'in the Content Manager')
+  })
   await putSettings({}) // reset to defaults
   assert.equal((await api('PUT', '/blockscene/me/prefs', { starred: [], recent: [] })).status, 200, 'reset gallery prefs')
   assert.equal((await api('GET', '/blockscene/me/prefs', null, false)).status, 401)

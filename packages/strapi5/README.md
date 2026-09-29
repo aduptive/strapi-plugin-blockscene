@@ -270,7 +270,16 @@ as an input: the plugin removes it from the components' edit layouts through
 the Content Manager's layout hook (it may be listed in "Configure the view" of
 a component; leave it out of the layout). It is not marked `visible: false`,
 because before Strapi 5.45 the edit view crashes on a value whose attribute the
-admin does not know. Rename it with the plugin config
+admin does not know. It is kept out of the Content-Type Builder instead (the
+plugin wraps the builder's component reads), so saving a component there in
+`strapi develop` never writes it to the component's JSON file. With earlier
+versions (up to 2.0.0-alpha.8, and 1.0.0-alpha.8 on Strapi 4) the builder did
+write it (`"bsHidden": { "type": "boolean", "configurable": false, "default": false }`);
+a file that has it keeps working, and the builder keeps it there on later saves.
+To clean it up, delete that entry from the component JSON by hand (the plugin
+still adds the attribute at startup, so the column and its data stay). To check,
+edit a Dynamic Zone component in the builder (for example its display name),
+save, and diff its JSON file: only your change is there. Rename it with the plugin config
 `hiddenAttribute: 'myName'`, or set `hiddenAttribute: false` to add nothing (no
 eye, nothing stripped). A component that already has an attribute of that name
 with another type is skipped with a warning. Removing the plugin (or setting

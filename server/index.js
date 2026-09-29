@@ -2,12 +2,14 @@
 
 const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups, layoutFields } = require('./groups')
-const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
+const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
 const { trashContentType, trashService, trashController } = require('./trash')
 // Set at build time for the Strapi 4 package; from source (tests) it is Strapi 5. Version history is Strapi 5 only.
 const STRAPI5 = process.env.BLOCKSCENE_STRAPI_MAJOR !== '4'
 
+// Components that got the hidden-on-site attribute at register time (bootstrap keeps it out of the Content-Type Builder).
+let withHidden = []
 const store = (strapi) => strapi.store({ type: 'plugin', name: PLUGIN })
 // Settings saved by the plugin under its previous id ("block-picker", alphas before the rename) are copied once.
 const LEGACY_PLUGIN = 'block-picker'
@@ -144,9 +146,11 @@ module.exports = {
   register({ strapi }) {
     const plugin = strapi.plugin(PLUGIN)
     const name = hiddenName(plugin.config('hiddenAttribute'))
+    withHidden = []
     if (name === null) strapi.log.warn(`[${PLUGIN}] "hiddenAttribute" config ignored: expected a name like "bsHidden" or false. Hiding blocks is off.`)
     if (!name) return
-    const { skipped } = injectHidden(strapi.components, strapi.contentTypes, name)
+    const { added, skipped } = injectHidden(strapi.components, strapi.contentTypes, name)
+    withHidden = added
     if (skipped.length) strapi.log.warn(`[${PLUGIN}] "${name}" already exists with another type on ${skipped.join(', ')}; those blocks cannot be hidden.`)
   },
   async bootstrap({ strapi }) {
@@ -161,6 +165,9 @@ module.exports = {
     strapi.plugin(PLUGIN).service('settings').variants()
     registerPublishGuard(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
+    // The Content-Type Builder never sees the attribute, so saving a component there never writes it to its file
+    // (the services registry: `strapi.get` on Strapi 5, `strapi.container.get` on Strapi 4).
+    if (withHidden.length) hideFromBuilder(typeof strapi.get === 'function' ? strapi.get('services') : strapi.container.get('services'), withHidden, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')))
     if (STRAPI5) { registerHistory(strapi); registerPurge(strapi) }
   },
   destroy({ strapi }) { if (STRAPI5) strapi.cron?.remove?.(CRON) },

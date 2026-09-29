@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Fix: saving a Dynamic Zone component in the Content-Type Builder (`strapi
+  develop`, Strapi 5 and 4) wrote the hidden-on-site attribute (`bsHidden`)
+  into the component's JSON file. The builder lists only visible attributes and
+  sends back on save what it listed; i18n's `locale` stays out through `visible:
+  false`, which this attribute cannot use (Content Managers before 5.45 crash).
+  The plugin now wraps the builder's component reads (`components.formatComponent`,
+  and `schema.getSchema` on later 5.x) through the services registry's `extend`,
+  so the attribute is never listed there and never saved; the Content Manager
+  still has it. A file that already has it keeps working (remove the entry by
+  hand to clean it up; README "The hidden attribute is a database column").
+  Verified in `strapi develop` on 5.52.1 and 4.26.1 (builder save, file
+  diffed); the smoke checks the builder reads leave it out and the Content
+  Manager schema keeps it.
 - Hover sync: a block hovered in the page now highlights its form row with the
   native accordion hover look (Strapi 5: the primary 1 px ring on the accordion
   item; Strapi 4: the primary border of the accordion wrapper) instead of an
