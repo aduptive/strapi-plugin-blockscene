@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups, invalidComponents, layoutFields } = require('./groups')
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
@@ -160,6 +160,8 @@ module.exports = {
       settings: null,
       // Edit view field texts from code (never stored): { uid: { attribute: { label, description, placeholder } } }. See README "Field labels".
       fields: null,
+      // Initial block sets per content type, shown only on a new empty entry. See README "Starter kits".
+      kits: null,
       // Other languages for the schema metadata (pluginOptions.blockscene, info.description), one flat map per locale:
       // { 'pt-BR': require('./blockscene/pt-BR.json') }. See README "Describing blocks and fields in the schema".
       translations: null,
@@ -188,6 +190,7 @@ module.exports = {
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
     strapi.plugin(PLUGIN).service('settings').fields()
     strapi.plugin(PLUGIN).service('settings').variants()
+    strapi.plugin(PLUGIN).service('settings').kits()
     registerZoneGuards(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
     // The Content-Type Builder never sees the attribute, so saving a component there never writes it to its file
@@ -242,9 +245,17 @@ module.exports = {
       for (const note of notes) strapi.log?.warn(`[${PLUGIN}] components variants: ${note}.`)
       return variants
     }
+    let kits
+    const starterKits = () => {
+      if (kits !== undefined) return kits
+      const notes = []
+      kits = validateKits(strapi.plugin(PLUGIN).config('kits'), strapi.contentTypes || {}, strapi.components || {}, safeGroups(strapi.plugin(PLUGIN).config('groups'), componentUids(strapi)), notes)
+      for (const note of notes) strapi.log?.warn(`[${PLUGIN}] starter kits: ${note}.`)
+      return kits
+    }
     const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
     return {
-      projectDefaults, get, fields: fieldTexts, schema: schemaMeta, variants: insertVariants,
+      projectDefaults, get, fields: fieldTexts, schema: schemaMeta, variants: insertVariants, kits: starterKits,
       async set(value) {
         const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
         for (const [uid, entry] of Object.entries(next.components)) {
@@ -283,7 +294,7 @@ module.exports = {
         const history = STRAPI5 && strapi.documents?.use && !base.disabled && settings.history.enabled ? { contentTypes: apiUids(strapi).filter(uid => covers(settings.history, uid)) } : null
         // Layout grids of the configured OPENs (a layout on any other component does nothing).
         const layouts = Object.fromEntries(Object.entries(settings.components).filter(([uid, entry]) => entry.layout && base.groups?.[uid]).map(([uid, entry]) => [uid, entry.layout]))
-        ctx.body = { ...base, layouts, palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
+        ctx.body = { ...base, layouts, kits: plugin.service('settings').kits(), palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),

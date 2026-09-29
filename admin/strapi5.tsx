@@ -41,6 +41,7 @@ import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { setLazyConfig, wrapCustomFields } from "./LazyInput";
 import { ContentPage, contentMenuLink } from "./Activity";
+import { StarterKits } from "./StarterKits";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   // Controlled callers (row previews, insertion gaps) pass no trigger: Dialog.Trigger requires a single element child.
@@ -203,6 +204,7 @@ function Workspace({ scope }: any) {
   };
   return (
     <>
+      <StarterKits creating={creating} kits={catalog.kits?.[c.model]} zones={zones} components={c.components} form={form} Modal={Modal} />
       <Gallery
         zones={zones}
         components={c.components}

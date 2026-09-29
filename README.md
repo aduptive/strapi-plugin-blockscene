@@ -215,6 +215,36 @@ components: {
   per variant and 256 KB for all of them. An invalid variant is left out with
   a warning naming the problem; the block keeps its valid ones.
 
+### Starter kits
+
+New entries can start from a named set of blocks instead of an empty Dynamic
+Zone. Kits live in project code, per content type. When every editable zone is
+empty, Blockscene opens the kit chooser once; choosing one only changes the
+unsaved form, so every placeholder remains editable and **Start blank** keeps
+the current behaviour.
+
+```js
+// config/plugins.js
+blockscene: { config: {
+  kits: {
+    'api::page.page': [{
+      id: 'landing',
+      label: { en: 'Landing page', 'pt-BR': 'Página de campanha' },
+      zones: { blocks: [
+        { __component: 'blocks.hero', title: 'Replace this headline' },
+        { __component: 'blocks.rich-text', text: 'Replace this text.' },
+      ] },
+    }],
+  },
+} }
+```
+
+Rows use the Content API shape and the same validated values as [insert
+variants](#insert-variants). Schema defaults are merged in, nested components
+work, and configured layout OPEN blocks receive their CLOSE automatically.
+Media and relations are omitted because their ids are installation-specific;
+the gallery thumbnails still provide visual image placeholders in the chooser.
+
 ## Row thumbnails
 
 Each added block shows its thumbnail at the left of the native accordion

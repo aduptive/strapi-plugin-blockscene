@@ -452,6 +452,56 @@ function validateVariants(config, schemas = {}, notes = []) {
   return out
 }
 
+// Code-only starter kits: named initial rows per Dynamic Zone. Rows use the Content API shape so fixtures can be pasted
+// directly; values share the variant validator and never carry install-specific media/relation ids.
+function validateKits(input, contentTypes = {}, schemas = {}, groups = null, notes = []) {
+  if (input === null || input === undefined) return {}
+  if (!plain(input) || JSON.stringify(input).length > 256 * 1024) { notes.push('expected an object up to 256 KB'); return {} }
+  const out = {}
+  for (const [uid, kits] of Object.entries(input)) {
+    const type = contentTypes[uid]
+    if (!type || !uid.startsWith('api::')) { notes.push(`${uid}: unknown content type`); continue }
+    if (!Array.isArray(kits) || kits.length > 12) { notes.push(`${uid}: kits must be a list of at most 12`); continue }
+    const ids = new Set()
+    for (const kit of kits) {
+      const name = `${uid} kit "${kit?.id ?? '?'}"`
+      try {
+        if (!plain(kit) || Object.keys(kit).some(key => !['id', 'label', 'zones'].includes(key))) throw new Error('expected { id, label, zones }')
+        if (!text(kit.id) || !VARIANT.id.test(kit.id) || ids.has(kit.id)) throw new Error('id must be 1 to 40 lowercase letters, digits, "-" or "_", unique per content type')
+        if (!fieldText(kit.label, 60)) throw new Error('label must be a string of 1 to 60 characters, or { "<locale>": string }')
+        if (!plain(kit.zones) || !Object.keys(kit.zones).length) throw new Error('zones must be a non-empty object')
+        const zones = {}
+        for (const [zoneName, rows] of Object.entries(kit.zones)) {
+          const zone = type.attributes?.[zoneName]
+          if (zone?.type !== 'dynamiczone') throw new Error(`unknown Dynamic Zone "${zoneName}"`)
+          if (!Array.isArray(rows) || !rows.length || rows.length > 50) throw new Error(`${zoneName} must contain 1 to 50 rows`)
+          const clean = []
+          for (let index = 0; index < rows.length; index++) {
+            const row = rows[index]
+            if (!plain(row) || !text(row.__component)) throw new Error(`${zoneName}[${index}] must have __component`)
+            const component = row.__component
+            if (!zone.components?.includes(component) || !schemas[component]) throw new Error(`${zoneName}[${index}]: component "${component}" is not allowed`)
+            const skipped = []
+            const values = variantValues(row, schemas[component], schemas, `${zoneName}[${index}]`, skipped)
+            if (skipped.length) notes.push(`${name}: media and relation values are not inserted (${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ', ...' : ''})`)
+            clean.push({ __component: component, values })
+            const close = groups?.[component]
+            if (close) {
+              if (!zone.components?.includes(close) || !schemas[close]) throw new Error(`${zoneName}[${index}]: close component "${close}" is not allowed`)
+              clean.push({ __component: close, values: {} })
+            }
+          }
+          if (clean.length > (zone.max ?? Infinity)) throw new Error(`${zoneName} exceeds its maximum of ${zone.max}`)
+          zones[zoneName] = clean
+        }
+        ids.add(kit.id)
+        ;(out[uid] ||= []).push({ id: kit.id, label: structuredClone(kit.label), zones })
+      } catch (error) { notes.push(`${name} ignored: ${error.message}`) }
+    }
+  }
+  return out
+}
+
 // Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.
 const PREFS = { starred: 200, recent: 20 }
 function validatePrefs(input, componentUids) {
@@ -467,4 +517,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }

@@ -35,6 +35,7 @@ import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
 import { Icon, ICON_NAMES } from "./icons";
+import { StarterKits } from "./StarterKits";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   const id = React.useId();
@@ -157,6 +158,7 @@ function Workspace({ c, schema, zones, components, add, catalog, docKey, form, g
   const state = useEditorState(editor, host);
   return (
     <>
+      <StarterKits creating={c.isCreatingEntry} kits={catalog.kits?.[c.slug]} zones={zones} components={components} form={form} Modal={Modal} />
       <Gallery
         zones={zones}
         components={components}
