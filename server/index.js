@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups, layoutFields } = require('./groups')
 const { hiddenName, injectHidden, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
@@ -133,6 +133,9 @@ module.exports = {
       settings: null,
       // Edit view field texts from code (never stored): { uid: { attribute: { label, description, placeholder } } }. See README "Field labels".
       fields: null,
+      // Other languages for the schema metadata (pluginOptions.blockscene, info.description), one flat map per locale:
+      // { 'pt-BR': require('./blockscene/pt-BR.json') }. See README "Describing blocks and fields in the schema".
+      translations: null,
       // "Hide on the site": boolean attribute added to every Dynamic Zone component (a DB column); false adds nothing.
       hiddenAttribute: 'bsHidden' },
     validator: catalog,
@@ -174,15 +177,28 @@ module.exports = {
       catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
       return project
     }
+    // Schema metadata (pluginOptions.blockscene, info.description) with the `translations` config: read once, one warning for what is left out.
+    let meta
+    const schemaMeta = () => {
+      if (meta !== undefined) return meta
+      const notes = []
+      meta = schemaMetadata({ ...strapi.contentTypes, ...strapi.components }, strapi.plugin(PLUGIN).config('translations'), notes)
+      if (notes.length) strapi.log?.warn(`[${PLUGIN}] schema metadata left out: ${notes.slice(0, 20).join('; ')}${notes.length > 20 ? `; and ${notes.length - 20} more` : ''}.`)
+      return meta
+    }
     // Code field texts (plugin config `fields`): validated once; a malformed map is ignored and stale entries skipped, with a warning.
+    // Each code text wins over the schema metadata's text of the same key.
     let fields
     const fieldTexts = () => {
       if (fields !== undefined) return fields
       const schemas = Object.fromEntries(Object.entries({ ...strapi.contentTypes, ...strapi.components }).map(([uid, schema]) => [uid, Object.keys(schema?.attributes || {})]))
       const stale = []
-      try { fields = validateFields(strapi.plugin(PLUGIN).config('fields'), schemas, stale) }
-      catch (error) { fields = {}; strapi.log?.warn(`[${PLUGIN}] "fields" config ignored: ${error.message}. Field labels fall back to the Content Manager's own.`) }
+      let code = {}
+      try { code = validateFields(strapi.plugin(PLUGIN).config('fields'), schemas, stale) }
+      catch (error) { strapi.log?.warn(`[${PLUGIN}] "fields" config ignored: ${error.message}. Field labels fall back to the schema metadata and the Content Manager's own.`) }
       if (stale.length) strapi.log?.warn(`[${PLUGIN}] "fields" entries for fields the schema no longer has were skipped: ${stale.slice(0, 20).join(', ')}${stale.length > 20 ? ` and ${stale.length - 20} more` : ''}.`)
+      fields = structuredClone(schemaMeta().fields)
+      for (const [uid, entries] of Object.entries(code)) for (const [name, entry] of Object.entries(entries)) (fields[uid] ||= {})[name] = { ...fields[uid][name], ...entry }
       return fields
     }
     // Insert variants (plugin config `components[uid].variants`): validated once against the schemas; what is left out is warned about.
@@ -196,7 +212,7 @@ module.exports = {
     }
     const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
     return {
-      projectDefaults, get, fields: fieldTexts, variants: insertVariants,
+      projectDefaults, get, fields: fieldTexts, schema: schemaMeta, variants: insertVariants,
       async set(value) {
         const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
         for (const [uid, entry] of Object.entries(next.components)) {
@@ -219,7 +235,7 @@ module.exports = {
         const plugin = strapi.plugin(PLUGIN)
         const base = catalog({ components: plugin.config('components'), previewBaseUrl: plugin.config('previewBaseUrl'),
           previewVersion: plugin.config('previewVersion'), disabled: plugin.config('disabled'), blockPreview: plugin.config('blockPreview'),
-          groups: plugin.config('groups'), componentUids: componentUids(strapi), schemas: strapi.components })
+          groups: plugin.config('groups'), componentUids: componentUids(strapi), schemas: strapi.components, blocks: plugin.service('settings').schema().blocks })
         const settings = await plugin.service('settings').get()
         const media = await resolveMedia(strapi, settings)
         for (const [uid, list] of Object.entries(plugin.service('settings').variants())) base.components[uid] = { ...base.components[uid], variants: list }
@@ -243,7 +259,7 @@ module.exports = {
       async find(ctx) {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
         // typology: the value without a Settings override (code config, else the guess), shown as "Automatic".
-        const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components }).components
+        const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components, blocks: strapi.plugin(PLUGIN).service('settings').schema().blocks }).components
         const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
           displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology,
           layoutFields: layoutFields(schema) }))

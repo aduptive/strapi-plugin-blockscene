@@ -1278,6 +1278,52 @@ try {
     await page.goto('/admin/settings/blockscene')
     assert.match(await page.getByTestId('variants-blocks.hero').innerText(), /Default, Dark$/, 'Settings lists the code variants read-only')
   })
+  // Schema metadata runs only when the lab's blocks.text carries it (a temporary lab edit, see docs/LOCAL-TESTING.md
+  // "Schema metadata"): info.description, pluginOptions.blockscene tags ['Long read'], a label and help on body, and
+  // pt-BR translations in the plugin config.
+  if ((await api('GET', '/blockscene/catalog')).data?.fields?.['blocks.text']?.body) await step('schema metadata: block description and tag in the gallery, field label and help from the schema, pt-BR after switching the admin language', async () => {
+    await page.evaluate(() => localStorage.setItem('strapi-admin-language', 'en'))
+    await page.goto('/admin/content-manager/collection-types/api::page.page/create')
+    const title = `Schema metadata smoke ${Date.now()}`
+    await page.getByRole('textbox', { name: /^title/i }).first().fill(title)
+    await openGallery()
+    const card = page.getByTestId('blockscene-blocks.text')
+    await card.getByText('Paragraphs of text.', { exact: true }).waitFor()
+    await page.getByTestId('gallery-filter-tags').getByRole('button').click(); await page.getByTestId('gallery-option-tags-Long read').check()
+    await page.keyboard.press('Escape'); await page.getByTestId('gallery-option-tags-Long read').waitFor({ state: 'detached' })
+    await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' }); await card.waitFor()
+    await card.locator('button').first().dblclick(); await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    const response = page.waitForResponse(res => res.url().includes('/content-manager/collection-types/api::page.page') && res.request().method() === 'POST')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    const saved = await response; assert.ok(saved.ok(), `Save returned ${saved.status()}`)
+    const payload = await saved.json(), id = (payload.data || payload)[major === 5 ? 'documentId' : 'id']
+    // A fresh page load computes its first edit layout before the catalog arrives (see admin/catalog.ts): Strapi 5's list
+    // view already runs the layout hook, Strapi 4 needs one edit view first, then back to the list and in again.
+    const field = async (locale, label, help, gallery) => {
+      await page.evaluate(value => localStorage.setItem('strapi-admin-language', value), locale)
+      await page.goto(`/admin/content-manager/collection-types/api::page.page?_q=${encodeURIComponent(title)}`)
+      await page.getByText(title, { exact: true }).first().waitFor()
+      // Strapi 5's guided tour covers the list on a fresh browser profile.
+      await page.getByRole('button', { name: /^skip/i }).click({ timeout: 2000 }).catch(() => {})
+      await page.getByText(title, { exact: true }).first().click()
+      if (major === 4) { await toggle().waitFor(); await page.goBack(); await page.getByText(title, { exact: true }).first().click() }
+      await toggle().waitFor(); await waitState('false', 1)
+      await firstHeader().click(); await waitState('true', 1)
+      await page.getByText(label, { exact: true }).first().waitFor()
+      if (major === 5) {
+        await page.getByRole('button', { name: locale === 'en' ? 'More information' : 'Mais informações' }).first().hover()
+        await page.getByText(help, { exact: true }).first().waitFor()
+      } else await page.getByText(help, { exact: true }).first().waitFor()
+      await page.getByRole('button', { name: /(Add a component to|Adicionar componente a) blocks/i }).click()
+      await page.getByTestId('blockscene-blocks.text').getByText(gallery[0], { exact: true }).waitFor()
+      await page.getByTestId('blockscene-blocks.text').getByText(gallery[1], { exact: true }).waitFor()
+      await page.keyboard.press('Escape')
+    }
+    await field('en', 'Body text', 'Plain paragraphs, no markup.', ['Text', 'Paragraphs of text.'])
+    await field('pt-BR', 'Texto do corpo', 'Parágrafos simples, sem marcação.', ['Texto', 'Parágrafos de texto.'])
+    await page.evaluate(() => localStorage.setItem('strapi-admin-language', 'en'))
+    await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
+  })
   await page.goto('/admin/settings/image-pipeline')
   await page.getByTestId('save-image-settings').waitFor()
   await page.getByLabel('Maximum dimension (px)', { exact: true }).fill('1600')

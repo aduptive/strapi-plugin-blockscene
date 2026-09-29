@@ -151,6 +151,8 @@ function catalog(config = {}) {
   }
   for (const [uid, schema] of Object.entries(config.schemas || {})) {
     const entry = entries[uid] ||= {}
+    // Schema metadata (see schemaMetadata) fills what the code config leaves unset.
+    for (const [key, value] of Object.entries(config.blocks?.[uid] || {})) if (entry[key] === undefined) entry[key] = value
     entry.facets = facetsOf(uid, schema, config.schemas)
     entry.typology ||= guessTypology(uid, schema?.info?.displayName)
     entry.tags ||= []
@@ -324,6 +326,70 @@ function validateFields(input, schemas = {}, stale = []) {
   return out
 }
 
+// Schema metadata (README "Describing blocks and fields in the schema"), under the code config and over Strapi's own:
+// a component's `pluginOptions.blockscene` { label, typology, tags, keywords, image } and native `info.description`,
+// and any attribute's `pluginOptions.blockscene` { label, description, placeholder, help }, plain source (English)
+// strings. Plugin config `translations` { "<locale>": { "<uid>": block label, "<uid>.description": block description,
+// "<uid>.<attr>": field label ("<uid>.<attr>.label" too, for an attribute named "description"),
+// "<uid>.<attr>.<description|placeholder|help>" } }: a translated text becomes { en: source, "<locale>": text },
+// resolved by the admin like `fields` (a null source falls back to Strapi's own text). `schemas`: uid -> schema.
+// Invalid values and keys naming no known block or field are left out and listed in `notes`.
+const str = max => value => typeof value === 'string' && value.trim() !== '' && value.length <= max
+const BLOCK_META = { label: str(80), typology: value => TYPOLOGIES.includes(value), tags: validTags, keywords: str(500), image: value => safeUrl(value) !== undefined }
+const localize = (holder, key, source, locale, text) => {
+  holder[key] = { ...(plain(holder[key]) ? holder[key] : { en: holder[key] ?? source }), [locale]: text }
+}
+function schemaMetadata(schemas = {}, translations = null, notes = []) {
+  const blocks = {}, fields = {}
+  const own = (holder, where) => {
+    const value = holder?.pluginOptions?.blockscene
+    if (value === undefined || plain(value)) return value || {}
+    notes.push(`${where}: pluginOptions.blockscene must be an object`)
+    return {}
+  }
+  for (const [uid, schema] of Object.entries(schemas)) {
+    // Components (no "::" in their uid) are the gallery's blocks.
+    if (!uid.includes('::')) {
+      const block = {}
+      for (const [key, value] of Object.entries(own(schema, uid))) {
+        if (!Object.hasOwn(BLOCK_META, key)) notes.push(`${uid}: unknown key "${key}"`)
+        else if (!BLOCK_META[key](value)) notes.push(`${uid}: invalid ${key}`)
+        else block[key] = key === 'tags' ? cleanTags(value) : value
+      }
+      if (typeof schema?.info?.description === 'string' && schema.info.description.trim()) block.description = schema.info.description
+      if (Object.keys(block).length) blocks[uid] = block
+    }
+    for (const [name, attr] of Object.entries(schema?.attributes || {})) {
+      const texts = {}
+      for (const [key, value] of Object.entries(own(attr, `${uid}.${name}`))) {
+        if (!Object.hasOwn(FIELD_TEXT, key)) notes.push(`${uid}.${name}: unknown key "${key}"`)
+        else if (!str(FIELD_TEXT[key])(value)) notes.push(`${uid}.${name}: ${key} must be a string of 1 to ${FIELD_TEXT[key]} characters`)
+        else texts[key] = value
+      }
+      if (Object.keys(texts).length) (fields[uid] ||= {})[name] = texts
+    }
+  }
+  if (translations != null && !plain(translations)) { notes.push('translations must be { "<locale>": { "<key>": text } }'); translations = null }
+  const stale = []
+  for (const [locale, entries] of Object.entries(translations || {})) {
+    if (!LOCALE.test(locale) || !plain(entries) || JSON.stringify(entries).length > 256 * 1024) { notes.push(`translations "${locale}" ignored: expected a locale code with a flat { "<key>": text } map under 256 KB`); continue }
+    for (const [key, text] of Object.entries(entries)) {
+      const uid = Object.keys(schemas).find(uid => key === uid || key.startsWith(`${uid}.`))
+      const [name, part = 'label', extra] = uid ? key.slice(uid.length + 1).split('.') : []
+      const block = uid && !uid.includes('::')
+      const target = block && key === uid ? [blocks[uid] ||= {}, 'label', schemas[uid]?.info?.displayName || uid, 80]
+        : block && key === `${uid}.description` ? [blocks[uid] ||= {}, 'description', null, 300]
+        : uid && Object.hasOwn(schemas[uid]?.attributes || {}, name) && Object.hasOwn(FIELD_TEXT, part) && extra === undefined ? [null, part, null, FIELD_TEXT[part]] : null
+      if (!target) { stale.push(`${locale} "${key}"`); continue }
+      const [holder, field, source, max] = target
+      if (!str(max)(text)) { notes.push(`translations ${locale} "${key}": a string of 1 to ${max} characters`); continue }
+      localize(holder || ((fields[uid] ||= {})[name] ||= {}), field, source, locale, text)
+    }
+  }
+  if (stale.length) notes.push(`translation keys naming no block or field were skipped: ${stale.slice(0, 20).join(', ')}${stale.length > 20 ? ` and ${stale.length - 20} more` : ''}`)
+  return { blocks, fields }
+}
+
 // Plugin config `components[uid].variants` (code only): [{ id, label, values }], named presets the gallery inserts.
 // `values` is a partial field map merged over the schema defaults at insert: scalar attributes (by type, enumerations
 // against their values), JSON, blocks and nested components (single or repeatable, each item validated against its
@@ -401,4 +467,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }

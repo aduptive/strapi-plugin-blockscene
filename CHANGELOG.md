@@ -6,6 +6,20 @@
   native accordion hover look (Strapi 5: the primary 1 px ring on the accordion
   item; Strapi 4: the primary border of the accordion wrapper) instead of an
   offset outline around the whole row and its connector line.
+- Blocks and fields described in the schema: a component's native
+  `info.description` is its gallery description, and `pluginOptions.blockscene`
+  carries block metadata (`label`, `typology`, `tags`, `keywords`, `image`) on a
+  component and field texts (`label`, `description`, `placeholder`, `help`,
+  plain English strings) on any attribute. Other languages come from the new
+  plugin config `translations` (`{ '<locale>': require('./blockscene/<locale>.json') }`,
+  flat keys `<uid>`, `<uid>.description`, `<uid>.<attr>`, `<uid>.<attr>.<key>`),
+  resolved in the admin language with the schema's English text as fallback.
+  Precedence: plugin config (and Settings) > schema > native > automatic; the
+  `components` and `fields` config maps keep working unchanged. Invalid values
+  and stale translation keys are left out with one boot warning. The
+  Content-Type Builder (Strapi 5.52.1 and 4.26.1) keeps these keys when a
+  component is edited and saved. `scripts/schema-metadata.mjs` moves a
+  project's config maps into its schema files and per-locale translation files.
 
 ## 2.0.0-alpha.8 (Strapi 5) and 1.0.0-alpha.8 (Strapi 4) — 2026-09-28
 
