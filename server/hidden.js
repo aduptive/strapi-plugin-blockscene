@@ -29,6 +29,30 @@ function injectHidden(components, contentTypes, name) {
   return { added, skipped }
 }
 
+// Keeps the attribute out of what the Content-Type Builder reads, so its UI never sends it back on save and it is never
+// written to a component file. i18n's `locale` stays out the same way, through `visible: false` (the builder lists only
+// visible attributes), but that flag also removes it from the Content Manager's schema, which crashes before 5.45.
+// The builder keeps what it does not see: on save it replaces only configurable attributes, and a file that already has
+// the attribute (`configurable: false`, as the builder wrote it) keeps it untouched. Wraps, through the services
+// registry's `extend`, `components.formatComponent` (GET /components, what the builder UI reads on Strapi 4 and 5.0) and
+// `schema.getSchema` (GET /schema, what it reads on later 5.x); a service that does not exist is skipped.
+// `uids`: the components that have it.
+function hideFromBuilder(services, uids, name) {
+  const has = new Set(uids)
+  const drop = (attributes) => Array.isArray(attributes) ? attributes.filter(attr => attr?.name !== name)
+    : attributes && typeof attributes === 'object' ? Object.fromEntries(Object.entries(attributes).filter(([key]) => key !== name)) : attributes
+  const extend = (uid, wrap) => { if (services?.get?.(uid)) services.extend(uid, wrap) }
+  extend('plugin::content-type-builder.components', (service) => ({ ...service, formatComponent(component, ...rest) {
+    const out = service.formatComponent(component, ...rest)
+    return has.has(component?.uid) && out?.schema ? { ...out, schema: { ...out.schema, attributes: drop(out.schema.attributes) } } : out
+  } }))
+  extend('plugin::content-type-builder.schema', (service) => ({ ...service, async getSchema(...args) {
+    const out = await service.getSchema(...args)
+    for (const uid of has) if (out?.components?.[uid]) out.components[uid] = { ...out.components[uid], attributes: drop(out.components[uid].attributes) }
+    return out
+  } }))
+}
+
 // Removes Dynamic Zone rows whose `name` is true, recursively through components and populated relations (a related
 // document's zones are stripped too). Mutates and returns `data`. `schemaOf(uid)` gives a content type or component.
 function stripHidden(data, schema, schemaOf, name, depth = 0) {
@@ -71,4 +95,4 @@ function registerHiddenStrip(strapi, name, plugin) {
   }))
 }
 
-module.exports = { DEFAULT_NAME, hiddenName, zoneComponents, injectHidden, stripHidden, registerHiddenStrip }
+module.exports = { DEFAULT_NAME, hiddenName, zoneComponents, injectHidden, hideFromBuilder, stripHidden, registerHiddenStrip }

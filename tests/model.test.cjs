@@ -504,6 +504,24 @@ test('hidden blocks: attribute injected into zone components only, strip removes
   assert.equal(stripHidden(null, schemas['api::page.page'], uid => schemas[uid], 'bsHidden'), null)
 })
 
+test('hidden blocks: kept out of the Content-Type Builder reads (Strapi 4/5.0 formatComponent, later 5.x getSchema)', async () => {
+  const { hideFromBuilder } = require('../server/hidden.js')
+  const registry = (services) => ({ get: uid => services[uid], extend(uid, wrap) { services[uid] = wrap(services[uid]) } })
+  const services = {
+    'plugin::content-type-builder.components': { other: () => 'kept', formatComponent: (c) => ({ uid: c.uid, schema: { attributes: { title: { type: 'string' }, bsHidden: { type: 'boolean' } } } }) },
+    'plugin::content-type-builder.schema': { getSchema: async () => ({ contentTypes: {}, components: {
+      'b.hero': { attributes: [{ name: 'title', type: 'string' }, { name: 'bsHidden', type: 'boolean' }] }, 'b.item': { attributes: [{ name: 'bsHidden', type: 'boolean' }] } } }) },
+  }
+  hideFromBuilder(registry(services), ['b.hero'], 'bsHidden')
+  const { formatComponent, other } = services['plugin::content-type-builder.components']
+  assert.deepEqual(Object.keys(formatComponent({ uid: 'b.hero' }).schema.attributes), ['title'])
+  assert.deepEqual(Object.keys(formatComponent({ uid: 'b.item' }).schema.attributes), ['title', 'bsHidden'], 'only the components that got it')
+  assert.equal(other(), 'kept', 'the rest of the service is unchanged')
+  const schema = await services['plugin::content-type-builder.schema'].getSchema()
+  assert.deepEqual(schema.components['b.hero'].attributes.map(a => a.name), ['title']); assert.equal(schema.components['b.item'].attributes.length, 1)
+  assert.doesNotThrow(() => hideFromBuilder(registry({}), ['b.hero'], 'bsHidden'), 'no builder (or an older one without the schema service)')
+})
+
 test('row clone: ids stripped from the row and nested components, media and relation targets kept, relations to connect', async () => {
   const { cloneRow, relationSlots, currentRelations, toConnect } = await import('../admin/rows.mjs')
   const components = { 'b.hero': { attributes: { title: { type: 'string' }, image: { type: 'media' }, items: { type: 'component', component: 'b.item', repeatable: true },
