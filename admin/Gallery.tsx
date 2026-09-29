@@ -1125,7 +1125,7 @@ function ZoneGallery({
             >
               {(view === "recent" ? [{ typology: "recent", entries }] : groupEntries(entries)).map(
                 ({ typology, entries: items }: any) => (
-                  <Flex key={typology} direction="column" alignItems="stretch" gap={2}>
+                  <Flex key={typology} direction="column" alignItems="stretch" gap={2} flex="0 0 auto">
                     <Typography variant="sigma" textColor="neutral600" data-testid={`block-group-${typology}`}>
                       {`${typology === "recent" ? t.nav.recent : t.typologies[typology] || typology} (${items.length})`}
                     </Typography>
