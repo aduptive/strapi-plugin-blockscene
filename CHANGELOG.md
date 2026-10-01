@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-alpha.10 (Strapi 5) — 2026-10-01
+
+- Fix: the lazy editor no longer wraps custom fields that are not configured in
+  `lazyFields`. This prevents unrelated custom fields, such as a project's slug
+  field, from failing with an invalid React hook error before the page preview
+  can open.
+
 ## 2.0.0-alpha.9 (Strapi 5) and 1.0.0-alpha.9 (Strapi 4) — 2026-09-28
 
 - Fix: saving a Dynamic Zone component in the Content-Type Builder (`strapi
