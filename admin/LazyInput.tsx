@@ -96,14 +96,14 @@ function lazyInput(uid: string, Real: any) {
   return Lazy
 }
 
-// Every registered custom field gets the wrapper (the configured list is only known once the catalog loads); fields
-// outside `lazyFields` render straight through.
+// Decorate every loader because the configured list arrives after bootstrap, but leave modules outside `lazyFields`
+// untouched. Besides avoiding needless wrappers, this keeps third-party custom fields in their own React runtime.
 export function wrapCustomFields(app: any) {
   const all = app?.customFields?.getAll?.() || {}
   for (const [uid, field] of Object.entries<any>(all)) {
     const load = field?.components?.Input
     if (typeof load !== 'function' || load.blockscene) continue
-    const wrapped: any = () => Promise.resolve(load()).then((mod: any) => ({ ...mod, default: lazyInput(uid, mod?.default ?? mod) }))
+    const wrapped: any = () => Promise.resolve(load()).then((mod: any) => lazyFor(uid) ? ({ ...mod, default: lazyInput(uid, mod?.default ?? mod) }) : mod)
     wrapped.blockscene = true
     field.components.Input = wrapped
   }
