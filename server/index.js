@@ -1,7 +1,7 @@
 'use strict'
 
 const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
-const { safeGroups, validateGroups, layoutFields } = require('./groups')
+const { safeGroups, validateGroups, invalidComponents, layoutFields } = require('./groups')
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
 const { trashContentType, trashService, trashController } = require('./trash')
@@ -43,6 +43,16 @@ const apiUids = (strapi) => Object.keys(strapi.contentTypes || {}).filter(uid =>
 const zonesOf = (schema) => Object.entries(schema?.attributes || {}).filter(([, attr]) => attr?.type === 'dynamiczone').map(([name]) => name)
 const label = (error) => `row ${error.index + 1}: ${error.code === 'closeBeforeOpen' ? `close marker ${error.uid} has no open marker before it` :
   error.code === 'mismatch' ? `close marker ${error.uid} does not match the open group ${error.open} (expected ${error.expected})` : `group ${error.uid} is not closed (expected ${error.expected})`}`
+const componentLabel = (error) => `row ${error.index + 1}: component "${error.uid}" is not allowed in this Dynamic Zone`
+function checkComponents(strapi, uid, entry) {
+  const schema = strapi.getModel(uid)
+  for (const name of zonesOf(schema)) {
+    if (!Array.isArray(entry?.[name])) continue
+    const errors = invalidComponents(entry[name], schema.attributes[name].components)
+    if (errors.length) fail(`Block components in "${name}" are not allowed by its schema (${errors.map(componentLabel).join('; ')}).`,
+      { plugin: PLUGIN, field: name, errors: errors.map(error => ({ path: [name, error.index], message: componentLabel(error), name: 'ValidationError', code: 'componentNotAllowed', uid: error.uid })) })
+  }
+}
 // Publishing is refused while a configured pair is unbalanced. Drafts are still saved so the editor can repair them; nothing is rewritten here.
 function checkZones(strapi, uid, entry, groups) {
   for (const name of zonesOf(strapi.getModel(uid))) {
@@ -52,11 +62,10 @@ function checkZones(strapi, uid, entry, groups) {
       { plugin: PLUGIN, field: name, errors: errors.map(error => ({ path: [name, error.index], message: label(error), name: 'ValidationError', code: error.code, uid: error.uid, expected: error.expected })) })
   }
 }
-function registerPublishGuard(strapi) {
+function registerZoneGuards(strapi) {
   const plugin = strapi.plugin(PLUGIN)
   const groups = safeGroups(plugin.config('groups'), componentUids(strapi))
   if (plugin.config('groups') && !groups) strapi.log.warn(`[${PLUGIN}] "groups" config ignored: expected { "<open component uid>": "<close component uid>" } with existing components; every block is treated as ordinary.`)
-  if (!groups) return
   // The guard follows the same switches as the editor: the env/config bypass, the Settings on/off and the per-type
   // off. Read on every publish (one store read), so turning the plugin off in the panel takes effect at once.
   const active = async (uid) => {
@@ -77,11 +86,13 @@ function registerPublishGuard(strapi) {
     strapi.documents.use(async (ctx, next) => {
       const { action, params = {} } = ctx
       const publishing = action === 'publish' || ((action === 'create' || action === 'update') && params.status === 'published')
-      if (!publishing || !ctx.uid) return next()
+      if (!ctx.uid || !['create', 'update', 'publish'].includes(action)) return next()
       const model = strapi.getModel(ctx.uid)
       const zones = zonesOf(model)
       if (!zones.length || !(await active(ctx.uid))) return next()
-      if (action === 'create') { checkZones(strapi, ctx.uid, params.data || {}, groups); return next() }
+      if (action === 'create' || action === 'update') checkComponents(strapi, ctx.uid, params.data || {})
+      if (!publishing) return next()
+      if (action === 'create') { if (groups) checkZones(strapi, ctx.uid, params.data || {}, groups); return next() }
       const populate = Object.fromEntries(zones.map(name => [name, true]))
       const localized = Boolean(model?.pluginOptions?.i18n?.localized)
       const { documentId } = params
@@ -95,7 +106,8 @@ function registerPublishGuard(strapi) {
       for (const draft of drafts) {
         // update: the rows being written win over the stored draft, zone by zone
         const entry = action === 'update' ? { ...(draft || {}), ...Object.fromEntries(zones.filter(name => Array.isArray(params.data?.[name])).map(name => [name, params.data[name]])) } : draft
-        checkZones(strapi, ctx.uid, entry, groups)
+        checkComponents(strapi, ctx.uid, entry)
+        if (groups) checkZones(strapi, ctx.uid, entry, groups)
       }
       return next()
     })
@@ -104,19 +116,32 @@ function registerPublishGuard(strapi) {
   // Strapi 4: publishing sets publishedAt through entityService.update/create (admin, REST) or db updateMany (bulk publish).
   const published = (data) => Boolean(data && data.publishedAt)
   strapi.db.lifecycles.subscribe({
-    async beforeCreate(event) { if (published(event.params?.data) && await active(event.model.uid)) checkZones(strapi, event.model.uid, event.params.data, groups) },
+    async beforeCreate(event) {
+      const data = event.params?.data, uid = event.model.uid
+      if (!zonesOf(strapi.getModel(uid)).length || !(await active(uid))) return
+      checkComponents(strapi, uid, data || {})
+      if (groups && published(data)) checkZones(strapi, uid, data, groups)
+    },
     async beforeUpdate(event) {
       const { data, where } = event.params || {}
       const zones = zonesOf(strapi.getModel(event.model.uid))
-      if (!published(data) || !zones.length || !(await active(event.model.uid))) return
+      if (!zones.length || !(await active(event.model.uid))) return
+      checkComponents(strapi, event.model.uid, data || {})
+      if (!published(data)) return
       const entry = zones.every(name => Array.isArray(data[name])) ? data : { ...(await strapi.entityService.findOne(event.model.uid, where?.id, { populate: zones })), ...data }
-      checkZones(strapi, event.model.uid, entry, groups)
+      checkComponents(strapi, event.model.uid, entry)
+      if (groups) checkZones(strapi, event.model.uid, entry, groups)
     },
     async beforeUpdateMany(event) {
       const { data, where } = event.params || {}
       const zones = zonesOf(strapi.getModel(event.model.uid))
-      if (!published(data) || !zones.length || !(await active(event.model.uid))) return
-      for (const entry of await strapi.entityService.findMany(event.model.uid, { filters: where, populate: zones })) checkZones(strapi, event.model.uid, entry, groups)
+      if (!zones.length || !(await active(event.model.uid))) return
+      checkComponents(strapi, event.model.uid, data || {})
+      if (!published(data)) return
+      for (const entry of await strapi.entityService.findMany(event.model.uid, { filters: where, populate: zones })) {
+        checkComponents(strapi, event.model.uid, entry)
+        if (groups) checkZones(strapi, event.model.uid, entry, groups)
+      }
     },
   })
 }
@@ -163,7 +188,7 @@ module.exports = {
     strapi.plugin(PLUGIN).service('settings').projectDefaults()
     strapi.plugin(PLUGIN).service('settings').fields()
     strapi.plugin(PLUGIN).service('settings').variants()
-    registerPublishGuard(strapi)
+    registerZoneGuards(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
     // The Content-Type Builder never sees the attribute, so saving a component there never writes it to its file
     // (the services registry: `strapi.get` on Strapi 5, `strapi.container.get` on Strapi 4).

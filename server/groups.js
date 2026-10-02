@@ -23,6 +23,11 @@ function safeGroups(value, knownUids) {
   return Object.keys(out).length ? out : null
 }
 const uidOf = row => typeof row?.__component === 'string' ? row.__component : ''
+const invalidComponents = (rows, allowed) => {
+  const uids = new Set(Array.isArray(allowed) ? allowed : [])
+  return (Array.isArray(rows) ? rows : []).flatMap((row, index) =>
+    uidOf(row) && !uids.has(uidOf(row)) ? [{ index, uid: uidOf(row) }] : [])
+}
 const isOpener = (row, g) => Boolean(g) && Object.prototype.hasOwnProperty.call(g, uidOf(row))
 const isClose = (row, g) => Boolean(g) && Object.values(g).includes(uidOf(row))
 // Saved rows keep their id across reorders, but component ids are only unique per
@@ -137,5 +142,5 @@ function layoutColumns(row, layout, schema) {
   return { desktop: read(layout.columnsField), mobile: layout.mobileColumnsField ? read(layout.mobileColumnsField) : null }
 }
 
-module.exports = { safeGroups, validateGroups, groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, blockKey, isOpener, isClose,
+module.exports = { safeGroups, validateGroups, invalidComponents, groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, blockKey, isOpener, isClose,
   MAX_COLUMNS, parseColumns, layoutFields, validLayout, layoutColumns }
