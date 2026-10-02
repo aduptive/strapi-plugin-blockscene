@@ -202,7 +202,7 @@
  "blockPreview": "Live-Vorschau des Blocks",
  "livePreviewFailed": "Live-Vorschau nicht verfügbar, das Bild wird angezeigt.",
  "blockPreviewUrl": "Block-Vorschau-URL",
- "blockPreviewUrlHelp": "Optional. Eine Seite Ihres Frontends, die einen einzelnen Block rendert und beim Klick auf eine Galeriekarte groß angezeigt wird, z. B. http://localhost:3026/de/block-preview/'{name}'/'{variant}'. Platzhalter: '{uid}', '{name}' (nach dem Punkt), '{category}' (vor dem Punkt), '{variant}' (default), '{locale}'. Leer verwendet die Seitenvorschau-Route, falls vorhanden, sonst das Bild.",
+ "blockPreviewUrlHelp": "Optional. Eine Seite Ihres Frontends, die einen einzelnen Block rendert und über die Lupe einer Galeriekarte groß angezeigt wird, z. B. http://localhost:3026/de/block-preview/'{name}'/'{variant}'. Platzhalter: '{uid}', '{name}' (nach dem Punkt), '{category}' (vor dem Punkt), '{variant}' (default), '{locale}'. Leer verwendet die Seitenvorschau-Route, falls vorhanden, sonst das Bild.",
  "rowActions": "Aktionen für {label}",
  "selectBlock": "{label} auswählen",
  "hiddenBadge": "Ausgeblendet",
