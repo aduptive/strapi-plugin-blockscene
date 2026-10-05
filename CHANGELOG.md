@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.12 (Strapi 5) and 1.0.0-alpha.11 (Strapi 4) — 2026-10-05
 
 - New entries can start from project-defined, locale-aware block kits. Kits are
   validated against each Dynamic Zone's allowlist and bounds, schema defaults
