@@ -300,6 +300,22 @@ test('per content type settings: only types with a zone, only known keys; stale 
   assert.deepEqual(merged.contentTypes, { 'api::page.page': { enabled: false } })
 })
 
+test('settings gallery lists only components directly allowed by a Dynamic Zone', () => {
+  const { directComponentUids } = require('../server/settings')
+  const types = {
+    'api::page.page': { attributes: {
+      blocks: { type: 'dynamiczone', components: ['blocks.hero', 'wrappers.open', 'wrappers.close'] },
+      seo: { type: 'component', component: 'global.seo' },
+    } },
+    'api::global-option.global-option': { attributes: {
+      glossary: { type: 'component', component: 'global.glossary', repeatable: true },
+    } },
+  }
+  assert.deepEqual(directComponentUids(types), ['blocks.hero', 'wrappers.open', 'wrappers.close'])
+  assert.deepEqual(directComponentUids(types, { 'api::page.page': { enabled: false } }), [], 'disabled content types do not contribute gallery cards')
+  assert.deepEqual(directComponentUids({}), [])
+})
+
 test('visual editor sidebar: items name their own type fields, known icons, modal or drawer; stale items dropped on read', () => {
   const { validateSettings, mergeSaved } = require('../server/settings')
   const types = { 'api::page.page': ['title', 'name', 'pageSeo', 'blocks'] }

@@ -91,6 +91,11 @@ const TYPOLOGIES = ['hero', 'text', 'media', 'listing', 'cards', 'cta', 'form', 
 const TAG = /^[^<>\n]{1,24}$/
 const cleanTags = (value) => Array.isArray(value) ? [...new Set(value.filter(tag => typeof tag === 'string' && TAG.test(tag.trim())).map(tag => tag.trim()))].slice(0, 10) : []
 const validTags = (value) => Array.isArray(value) && value.length <= 10 && value.every(tag => typeof tag === 'string' && TAG.test(tag.trim()))
+// Only components that can be inserted directly into a Dynamic Zone are blocks. Nested option/field components still
+// remain in the catalog schemas for previews and metadata, but do not need gallery settings of their own.
+const directComponentUids = (contentTypes, perType = {}) => [...new Set(Object.entries(contentTypes || {})
+  .filter(([uid]) => perType?.[uid]?.enabled !== false)
+  .flatMap(([, schema]) => Object.values(schema?.attributes || {}).filter(attr => attr?.type === 'dynamiczone').flatMap(attr => attr.components || [])))]
 const GUESSES = [['hero', /hero|banner|cover/], ['text', /text|rich|quote|title/], ['media', /image|media|video|gallery|carousel/],
   ['listing', /list|query|archive|related|posts|projects/], ['cards', /card/], ['cta', /cta|button|link/], ['form', /form|contact/],
   ['layout', /wrapper|column|grid|divider|divisor|spacer|section/]]
@@ -556,4 +561,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, directComponentUids, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }

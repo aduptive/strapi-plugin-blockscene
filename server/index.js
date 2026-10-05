@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, directComponentUids, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups, invalidComponents, layoutFields } = require('./groups')
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
@@ -304,7 +304,8 @@ module.exports = {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
         // typology: the value without a Settings override (code config, else the guess), shown as "Automatic".
         const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components, blocks: strapi.plugin(PLUGIN).service('settings').schema().blocks }).components
-        const components = Object.entries(strapi.components || {}).map(([uid, schema]) => ({ uid,
+        const direct = new Set(directComponentUids(strapi.contentTypes, settings.contentTypes))
+        const components = Object.entries(strapi.components || {}).filter(([uid]) => direct.has(uid)).map(([uid, schema]) => ({ uid,
           displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology,
           layoutFields: layoutFields(schema) }))
         const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,
