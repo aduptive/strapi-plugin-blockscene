@@ -45,6 +45,7 @@
  "showCloseAll": "„Alle zuklappen“ anzeigen",
  "toggleHelp": "Die Zonenleiste zeigt einen einzigen Button: Sind beide Optionen an, klappt er auf, solange ein Block zugeklappt ist, sonst klappt er alle zu; ist nur eine an, bietet er nur diese Aktion.",
  "showRowThumbnails": "Blockvorschaubilder in den Zeilen anzeigen",
+ "componentRowThumbnail": "Vorschaubild in der Editorzeile anzeigen",
  "initialState": "Anfangszustand der Akkordeons",
  "states.closed": "Alle geschlossen",
  "states.open": "Alle geöffnet",

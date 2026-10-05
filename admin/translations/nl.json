@@ -45,6 +45,7 @@
  "showCloseAll": "\"Alles inklappen\" tonen",
  "toggleHelp": "De zonebalk toont één knop: staan beide opties aan, dan klapt hij uit zolang er een blok ingeklapt is en klapt hij anders alles in; staat er maar één aan, dan biedt hij alleen die actie.",
  "showRowThumbnails": "Blokminiaturen in de rijen tonen",
+ "componentRowThumbnail": "Miniatuur in de editorrij tonen",
  "initialState": "Beginstand van de accordeons",
  "states.closed": "Alle gesloten",
  "states.open": "Alle open",

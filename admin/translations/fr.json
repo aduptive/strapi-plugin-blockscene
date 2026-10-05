@@ -45,6 +45,7 @@
  "showCloseAll": "Afficher « Tout replier »",
  "toggleHelp": "La barre de la zone affiche un seul bouton : avec les deux options activées, il déplie tant qu'un bloc est replié et sinon les replie tous ; avec une seule, il ne propose que cette action.",
  "showRowThumbnails": "Afficher les miniatures des blocs dans les lignes",
+ "componentRowThumbnail": "Afficher la miniature dans la ligne de l'éditeur",
  "initialState": "État initial des accordéons",
  "states.closed": "Tous fermés",
  "states.open": "Tous ouverts",

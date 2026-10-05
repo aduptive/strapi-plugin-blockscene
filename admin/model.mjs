@@ -170,6 +170,14 @@ const pickable = (zone, config) => {
   const closers = Object.values(config.groups || {});
   return zone.components.filter((uid) => !closers.includes(uid));
 };
+// Ordinary blocks show their row image by default. Group markers are structural,
+// so their default is off; an explicit component setting can override either default.
+export function showRowThumbnail(uid, config = {}) {
+  const configured = config.components?.[uid]?.showRowThumbnail;
+  if (typeof configured === "boolean") return configured;
+  const groups = config.groups || {};
+  return !Object.prototype.hasOwnProperty.call(groups, uid) && !Object.values(groups).includes(uid);
+}
 function entryOf(uid, schema, config) {
   const meta = config.components?.[uid] || {};
   return {

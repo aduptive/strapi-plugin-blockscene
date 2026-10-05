@@ -284,7 +284,8 @@ module.exports = {
         for (const [uid, list] of Object.entries(plugin.service('settings').variants())) base.components[uid] = { ...base.components[uid], variants: list }
         for (const [uid, entry] of Object.entries(settings.components)) {
           base.components[uid] = { ...base.components[uid], ...media[uid], template: entry.template,
-            ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }) }
+            ...(entry.typology && { typology: entry.typology }), ...(entry.tags && { tags: entry.tags }),
+            ...(typeof entry.showRowThumbnail === 'boolean' && { showRowThumbnail: entry.showRowThumbnail }) }
         }
         const hidden = hiddenName(plugin.config('hiddenAttribute')) || null
         // types: what the Strapi 5 layout hook matches an edit layout against (it receives no model uid).

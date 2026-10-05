@@ -45,6 +45,7 @@
  "showCloseAll": "Mostra \"Comprimi tutto\"",
  "toggleHelp": "La barra della zona mostra un solo pulsante: con entrambe le opzioni attive espande finché c'è un blocco compresso, altrimenti li comprime tutti; con una sola, offre solo quell'azione.",
  "showRowThumbnails": "Mostra le miniature dei blocchi nelle righe",
+ "componentRowThumbnail": "Mostra la miniatura nella riga dell'editor",
  "initialState": "Stato iniziale delle fisarmoniche",
  "states.closed": "Tutte chiuse",
  "states.open": "Tutte aperte",

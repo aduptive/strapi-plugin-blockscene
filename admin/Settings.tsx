@@ -407,6 +407,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <Grid data-testid="components-grid">{components.map((component: any) => {
           const entry = settings.components[component.uid] || {}
           const meta = { ...(catalog.components?.[component.uid] || {}), ...(media[component.uid] || {}) }
+          const groupMarker = Boolean(catalog.groups?.[component.uid] || Object.values(catalog.groups || {}).includes(component.uid))
+          const rowThumbnail = entry.showRowThumbnail ?? !groupMarker
           const candidates = candidatesFor(component.uid, meta, catalog)
           return <Card key={component.uid} data-testid={`settings-${component.uid}`}>
             <Thumb candidates={candidates} template={entry.template} palette={settings.palette} noPreview={t.noPreview} eager
@@ -431,6 +433,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
                 onChange={(v: string) => setComponent(component.uid, 'typology', v === 'auto' ? undefined : v)} />
               <TagsField name={`tags-${component.uid}`} label={t.tags} hint={t.tagsHelp} value={entry.tags || []} disabled={!canUpdate || saving}
                 onChange={(tags: string[]) => setComponent(component.uid, 'tags', tags.length ? tags : undefined)} />
+              <ToggleField name={`row-thumbnail-${component.uid}`} label={t.componentRowThumbnail} value={rowThumbnail} disabled={!canUpdate || saving}
+                onChange={(v: boolean) => setComponent(component.uid, 'showRowThumbnail', v)} />
               {meta.variants?.length > 0 && <Typography variant="pi" textColor="neutral600" data-testid={`variants-${component.uid}`}>
                 {t.variantsFromCode}: {meta.variants.map((item: any) => localized(item.label, t.locale) || item.id).join(', ')}</Typography>}
               {catalog.groups?.[component.uid] && <LayoutFields component={component} layout={entry.layout} t={t} disabled={!canUpdate || saving} SelectField={SelectField}

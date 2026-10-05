@@ -45,6 +45,7 @@
  "showCloseAll": "Mostrar «Contraer todo»",
  "toggleHelp": "La barra de la zona muestra un solo botón: con ambas opciones activadas expande mientras haya algún bloque contraído y, si no, los contrae todos; con solo una, ofrece únicamente esa acción.",
  "showRowThumbnails": "Mostrar miniaturas de los bloques en las filas",
+ "componentRowThumbnail": "Mostrar miniatura en la fila del editor",
  "initialState": "Estado inicial de los acordeones",
  "states.closed": "Todos cerrados",
  "states.open": "Todos abiertos",

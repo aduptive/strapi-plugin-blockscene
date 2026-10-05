@@ -145,6 +145,7 @@ function catalog(config = {}) {
         .map(key => [key, entry[key]])
     )
     entries[uid].image = safeUrl(entry.image)
+    if (typeof entry.showRowThumbnail === 'boolean') entries[uid].showRowThumbnail = entry.showRowThumbnail
     if (TYPOLOGIES.includes(entry.typology)) entries[uid].typology = entry.typology
     const tags = cleanTags(entry.tags)
     if (tags.length || entries[uid].category) entries[uid].tags = tags.length ? tags : cleanTags([entries[uid].category])
@@ -199,6 +200,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
       else if (key === 'typology') { if (!TYPOLOGIES.includes(entry.typology)) fail(`Unknown typology for "${uid}"`); clean.typology = entry.typology }
       else if (key === 'tags') { if (!validTags(entry.tags)) fail(`Invalid tags for "${uid}": up to 10, each 1 to 24 characters`); clean.tags = cleanTags(entry.tags) }
       else if (key === 'mediaId') { if (!Number.isInteger(entry.mediaId) || entry.mediaId <= 0) fail(`Invalid media for "${uid}"`); clean.mediaId = entry.mediaId }
+      else if (key === 'showRowThumbnail') { if (typeof entry.showRowThumbnail !== 'boolean') fail(`Invalid row thumbnail setting for "${uid}"`); clean.showRowThumbnail = entry.showRowThumbnail }
       else if (key === 'layout') { if (!validLayout(entry.layout, schemas && (schemas[uid]?.attributes || {}))) fail(`Invalid layout for "${uid}": columnsField (and mobileColumnsField) must name a number, string or numeric enumeration attribute of the component; maxColumns 1 to 12`); clean.layout = structuredClone(entry.layout) }
       else fail(`Unknown component setting "${key}"`)
     }
@@ -252,6 +254,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
     const clean = { ...entry }
     if ('typology' in clean && !TYPOLOGIES.includes(clean.typology)) delete clean.typology
     if ('tags' in clean) { clean.tags = cleanTags(clean.tags); if (!clean.tags.length) delete clean.tags }
+    if ('showRowThumbnail' in clean && typeof clean.showRowThumbnail !== 'boolean') delete clean.showRowThumbnail
     if ('layout' in clean && !validLayout(clean.layout, schemas && (schemas[uid]?.attributes || {}))) delete clean.layout
     if (Object.keys(clean).length) out.components[uid] = clean
   }

@@ -45,6 +45,7 @@
  "showCloseAll": "Show \"Collapse all\"",
  "toggleHelp": "The zone bar shows one button: with both on it expands while any block is collapsed and collapses them all otherwise; with only one on, it offers that action alone.",
  "showRowThumbnails": "Show block thumbnails in the rows",
+ "componentRowThumbnail": "Show thumbnail in the editor row",
  "initialState": "Initial accordion state",
  "states.closed": "All closed",
  "states.open": "All open",

@@ -37,6 +37,7 @@ module.exports = {
           tags: ['Editorial'],
           keywords: 'heading introduction',
           image: '/block-previews/hero.png',
+          showRowThumbnail: false, // optional per-component row thumbnail
         },
       },
     },
@@ -259,8 +260,10 @@ opening or closing the row. The sources are the same as the gallery cards,
 minus the wireframe: a block with no image shows nothing, so nothing new is
 invented for blocks that were never captured. The thumbnail is inserted into
 Strapi's own header through the DOM (no Content Manager patch) and is
-restored when Strapi re-renders the list. Turn it off with the editor option
-`showRowThumbnails: false`.
+restored when Strapi re-renders the list. Configured OPEN and CLOSE group
+markers hide it by default. Override any component with
+`components[uid].showRowThumbnail` in code or on the Settings page, or turn all
+row thumbnails off with the editor option `showRowThumbnails: false`.
 
 ## Row actions
 

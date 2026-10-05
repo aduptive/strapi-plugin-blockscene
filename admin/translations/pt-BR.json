@@ -45,6 +45,7 @@
  "showCloseAll": "Mostrar \"Recolher tudo\"",
  "toggleHelp": "A barra da zona mostra um único botão: com as duas opções ligadas, ele expande enquanto houver algum bloco recolhido e, senão, recolhe todos; com só uma ligada, oferece apenas essa ação.",
  "showRowThumbnails": "Mostrar miniaturas dos blocos nas linhas",
+ "componentRowThumbnail": "Mostrar miniatura na linha do editor",
  "initialState": "Estado inicial dos accordions",
  "states.closed": "Todos fechados",
  "states.open": "Todos abertos",

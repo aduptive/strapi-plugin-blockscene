@@ -57,6 +57,16 @@ test('gallery never offers a configured CLOSE on its own; the OPEN stays', async
   assert.deepEqual(uids({ components: {}, groups: null }).sort(), [...zone.components].sort(), 'no groups config: every allowed component')
 })
 
+test('row thumbnails default off for group markers and remain configurable per component', async () => {
+  const { showRowThumbnail } = await import('../admin/model.mjs')
+  const groups = { 'wrappers.open': 'wrappers.close' }
+  assert.equal(showRowThumbnail('blocks.hero', { groups, components: {} }), true)
+  assert.equal(showRowThumbnail('wrappers.open', { groups, components: {} }), false)
+  assert.equal(showRowThumbnail('wrappers.close', { groups, components: {} }), false)
+  assert.equal(showRowThumbnail('blocks.hero', { groups, components: { 'blocks.hero': { showRowThumbnail: false } } }), false)
+  assert.equal(showRowThumbnail('wrappers.open', { groups, components: { 'wrappers.open': { showRowThumbnail: true } } }), true)
+})
+
 test('accordion memory is scoped per user and zone, tolerates blocked or invalid storage', async () => {
   const { memoryKey, readMemory, writeMemory, initialState } = await import('../admin/model.mjs')
   const key = memoryKey({ base: 'http://cms/admin', userId: 7, contentType: 'api::page.page', zone: 'blocks' })
@@ -95,6 +105,9 @@ test('settings validation rejects invalid colors, templates, UIDs, media and unk
   assert.equal(validateSettings({}, uids).editor.blockPreviewInForm, false, 'compact block preview is off by default')
   assert.throws(() => validateSettings({ editor: { blockPreviewInForm: 'yes' } }, uids), { name: 'ValidationError' })
   assert.equal(TEMPLATES.length, 6)
+  assert.equal(validateSettings({ components: { 'blocks.hero': { showRowThumbnail: false } } }, uids).components['blocks.hero'].showRowThumbnail, false)
+  assert.throws(() => validateSettings({ components: { 'blocks.hero': { showRowThumbnail: 'no' } } }, uids), { name: 'ValidationError' })
+  assert.deepEqual(mergeSaved({ components: { 'blocks.hero': { showRowThumbnail: 'no' } } }, uids).components, {})
   const merged = mergeSaved({ palette: { accent: 'bad' }, components: { 'blocks.gone': { mediaId: 1 }, 'blocks.hero': { mediaId: 2 } }, editor: { initialState: 'open', enabled: 'no', previewMode: 'weird', previewUrl: 'ftp://x' } }, uids)
   assert.equal(merged.palette.accent, DEFAULTS.palette.accent)
   assert.deepEqual(Object.keys(merged.components), ['blocks.hero'])
@@ -122,8 +135,8 @@ test('blockPreviewUrl: placeholders validated on save, expanded and encoded in t
 
 test('admin catalog only exposes declared safe metadata plus resolved overrides', async () => {
   const plugin = require('../server')
-  const values = { components: { 'blocks.hero': { label: 'Hero', image: 'javascript:alert(1)', secret: 'must-not-leak' } }, previewBaseUrl: '/cms/previews', previewVersion: 'bad version!', disabled: false }
-  const saved = { components: { 'blocks.hero': { mediaId: 9, template: 'faq' } }, editor: { enabled: true, initialState: 'open' } }
+  const values = { components: { 'blocks.hero': { label: 'Hero', image: 'javascript:alert(1)', showRowThumbnail: true, secret: 'must-not-leak' } }, previewBaseUrl: '/cms/previews', previewVersion: 'bad version!', disabled: false }
+  const saved = { components: { 'blocks.hero': { mediaId: 9, template: 'faq', showRowThumbnail: false } }, editor: { enabled: true, initialState: 'open' } }
   const strapi = { components: { 'blocks.hero': {} },
     plugin: () => ({ config: key => values[key], service: () => plugin.services.settings({ strapi }) }),
     store: () => ({ get: async () => saved }),
@@ -136,6 +149,7 @@ test('admin catalog only exposes declared safe metadata plus resolved overrides'
   assert.equal(ctx.body.components['blocks.hero'].secret, undefined)
   assert.equal(ctx.body.components['blocks.hero'].manualImage, '/uploads/hero.png')
   assert.equal(ctx.body.components['blocks.hero'].template, 'faq')
+  assert.equal(ctx.body.components['blocks.hero'].showRowThumbnail, false)
   assert.equal(ctx.body.editor.enabled, true); assert.equal(ctx.body.editor.initialState, 'open')
   values.disabled = true
   await plugin.controllers.catalog({ strapi }).find(ctx)
