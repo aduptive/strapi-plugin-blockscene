@@ -6,7 +6,7 @@ const types = { 'api::page.page': ['title'] }
 const rejects = (input) => assert.throws(() => validateSettings(input, [], types), { name: 'ValidationError' }, JSON.stringify(input))
 
 test('page preview toolbar and widths: strict on write, global and per content type', () => {
-  assert.deepEqual(DEFAULTS.editor.previewToolbar, ['modes', 'history', 'devices', 'status', 'actions'])
+  assert.deepEqual(DEFAULTS.editor.previewToolbar, ['modes', 'history', 'versions', 'devices', 'status', 'actions'])
   assert.deepEqual(DEFAULTS.editor.previewDevices, ['fit', 'mobile', 'tablet', 'desktop'])
   const ok = validateSettings({ editor: { previewToolbar: ['actions', 'modes'], previewDevices: ['fit', { label: ' Wide ', width: 1920 }, 'mobile'] },
     contentTypes: { 'api::page.page': { previewToolbar: [], previewDevices: ['desktop'] } } }, [], types)
@@ -31,7 +31,7 @@ test('page preview toolbar and widths: a saved value that no longer validates fa
 
 test('toolbar layout keeps the configured order; status and actions are one right group at the first of them', async () => {
   const { toolbarLayout, TOOLBAR } = await import('../admin/pane.mjs')
-  assert.deepEqual(toolbarLayout(undefined), { before: ['modes', 'history', 'devices'], right: ['status', 'actions'], after: [] })
+  assert.deepEqual(toolbarLayout(undefined), { before: ['modes', 'history', 'versions', 'devices'], right: ['status', 'actions'], after: [] })
   assert.deepEqual(toolbarLayout(TOOLBAR), toolbarLayout(undefined))
   assert.deepEqual(toolbarLayout(['devices', 'actions', 'modes', 'status']), { before: ['devices'], right: ['actions', 'status'], after: ['modes'] })
   assert.deepEqual(toolbarLayout(['history', 'modes']), { before: ['history', 'modes'], right: [], after: [] })

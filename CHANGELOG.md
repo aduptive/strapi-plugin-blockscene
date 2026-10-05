@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Strapi 5, version history Phase 1: a new `versions` toolbar control opens a
+  right drawer with local date/time, actor and action, day grouping and a scoped
+  actor filter. History lists now paginate on the server beyond 100 events.
+  New captures store block totals and added/removed/changed counts; older events
+  show unavailable counts. `history` keeps its Undo/Redo meaning.
+- Selecting a retained version shows a separate read-only preview; returning
+  preserves the current unsaved draft. Request/channel guards reject stale
+  responses and all preview mutation/focus messages. The reference bridge
+  supports read-only browsing; older bridges render with interaction disabled.
+  The existing side-panel load action is preserved. No new restore/diff or
+  named-version/purge behavior is included. Labels use all eight existing locales.
+
 ## 2.0.0-alpha.9 (Strapi 5) and 1.0.0-alpha.9 (Strapi 4) — 2026-09-28
 
 - Fix: saving a Dynamic Zone component in the Content-Type Builder (`strapi

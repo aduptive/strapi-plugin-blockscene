@@ -22,7 +22,7 @@ const DEFAULTS = {
     // Edit view labels that are still the raw attribute name read as "Mobile columns count" (see README "Field labels").
     friendlyLabels: true,
     // Page preview pane (Strapi 5): which toolbar controls show, in order, and the width menu's entries.
-    previewToolbar: ['modes', 'history', 'devices', 'status', 'actions'], previewDevices: ['fit', 'mobile', 'tablet', 'desktop'] },
+    previewToolbar: ['modes', 'history', 'versions', 'devices', 'status', 'actions'], previewDevices: ['fit', 'mobile', 'tablet', 'desktop'] },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -38,7 +38,7 @@ const OPENS = ['modal', 'drawer']
 const LABEL = /^[^<>]{1,40}$/
 // Pane toolbar: an ordered subset of the known controls (none repeated). Width menu: known devices and custom widths
 // ({ label, width }), 1 to 8 entries, no name or width twice.
-const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
+const TOOLBAR = ['modes', 'history', 'versions', 'devices', 'status', 'actions']
 const DEVICE_NAMES = ['fit', 'mobile', 'tablet', 'desktop']
 const previewToolbar = value => Array.isArray(value) && value.every(id => TOOLBAR.includes(id)) && new Set(value).size === value.length
 const DEVICE_LABEL = /^[^<>]{1,24}$/

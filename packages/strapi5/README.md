@@ -96,8 +96,9 @@ The modal is a block browser (80vw wide):
   remembered per browser). Active values show as removable chips with "Clear
   all"; the empty state offers a reset.
 - **Cards**, grouped by typology: facet badges (IMAGE, VIDEO, GALLERY, RICH
-  TEXT, LIST, DYNAMIC, FORM), a star and a hover "+" that inserts at once.
-- A click **magnifies** the block: the card grows into a large panel over the
+  TEXT, LIST, DYNAMIC, FORM), a star and an always-visible preview button.
+  Clicking or focusing the card and pressing Enter inserts it at once.
+- The preview button **magnifies** the block: the card grows into a large panel over the
   grid (sidebar and top bar stay usable, the grid dims underneath) and shrinks
   back into its card on close (close button, Esc or a click on the dimmed
   grid). The animation is transform/opacity only, about 250 ms, and is skipped
@@ -105,8 +106,7 @@ The modal is a block browser (80vw wide):
   with Fit / Mobile / Tablet / Desktop widths (scaled to fit, as in the page
   preview) and a compact strip: label, uid, description, badges, fields (on
   demand), the variant choice (see [Insert variants](#insert-variants)), star
-  and Insert. Double click, "+" or Enter on a focused card inserts without it
-  (the first variant, when the block has variants).
+  and Insert. A direct card insert uses the first variant, when the block has variants.
 
 The magnified preview shows the card's thumbnail at once and fades the live
 page in over it once it has loaded. Live source, first match wins:
@@ -189,7 +189,7 @@ components: {
 - **Choosing**: with two or more variants the magnified block shows them as a
   row of buttons; the live preview follows the choice (`{variant}` in the
   block preview URL, or the variant's block sent through the bridge) and
-  Insert inserts it. Double click, "+" and Enter insert the first variant.
+  Insert inserts it. Clicking the card or pressing Enter inserts the first variant.
   The picker opened from a page preview insertion seam offers the same
   choice. A block without variants behaves as before; Settings, Blockscene
   lists each block's variants read-only.
@@ -397,7 +397,7 @@ ignored (boot continues). `GET /blockscene/settings` returns them as
 | Copy and Paste (`clipboard`) | yes/no | yes |
 | Blocks hidden on the site (`hiddenBlocks`) | `strip` / `flag` / `off` | `strip` |
 | Friendly field labels (`friendlyLabels`, see [Field labels](#field-labels)) | yes/no | yes |
-| Page preview toolbar (`previewToolbar`, see [Pane toolbar](#pane-toolbar)) | ordered list of `modes`, `history`, `devices`, `status`, `actions` | all five |
+| Page preview toolbar (`previewToolbar`, see [Pane toolbar](#pane-toolbar)) | ordered list of `modes`, `history`, `versions`, `devices`, `status`, `actions` | all six (`versions`: Strapi 5) |
 | Page widths (`previewDevices`) | 1 to 8 of `fit`, `mobile`, `tablet`, `desktop`, `{ label, width }` | the four built-in |
 
 Every edit view opens in its content type's mode, else the initial preview
@@ -551,6 +551,7 @@ blocks use the native insertion at a position. Differences:
 
 Which controls the toolbar shows, and in which order, is `previewToolbar`:
 `modes` (Fields, Fields + page, Visual editor), `history` (Undo, Redo),
+`versions` (the version history drawer, Strapi 5),
 `devices` (the width menu), `status` (Draft/Modified/Published and the unsaved
 hint) and `actions` (Save, Publish). A missing id is hidden; `status` and
 `actions` stay one group on the right, placed where the first of them is
@@ -973,11 +974,47 @@ from what the document has now; fields the editor may not update, fields the
 schema no longer has, blocks whose component is no longer allowed, and media or
 related entries that no longer exist are left out and listed.
 
+**Visual editor history (Phase 1).** The preview toolbar's `versions` control
+opens a drawer on the right. It is separate from `history` (Undo/Redo). If
+you already configured `previewToolbar`, add `versions` to that list or enable
+it in Settings. Versions are grouped by local calendar day, with local date
+and time, actor, action, and captured counts: total top-level Dynamic Zone rows
+(including group markers), added, removed and changed against the preceding
+snapshot in that locale. Older or unrecorded events show counts as unavailable;
+they are not retroactively counted as zero. The actor filter includes only
+people/tokens recorded for this document and locale. Lists use server pagination
+(25 per page) and mark events whose snapshots are no longer available.
+
+Selecting an event hydrates its retained snapshot into a separate, read-only
+preview. It never calls the form's `setValues`, saves, publishes or restores
+anything. The banner identifies the version and returns to the current draft,
+including unsaved changes. Fast selections, returning while a load is pending,
+and document/locale/permission changes invalidate old responses. The pre-existing
+side-panel "Load this version" action remains available; restoration and visual
+diff enhancements are separate phases.
+
+The parent rejects every mutation, selection, focus and hover message while
+viewing a version. Each version changes the iframe channel, so delayed messages
+cannot target the current draft after returning. The `update-page` message adds
+`readOnly: true`, sends no editable field/media descriptors and no clipboard.
+The reference bridge in `examples/page-preview` supports this flag, removes
+editing/insertion controls, and announces `capabilities: ['readOnly']` in `ready`.
+Custom bridges should do the same and refuse to queue or send edits when
+read-only. An older bridge can still render the snapshot, but the admin disables
+iframe interaction (including in-frame scrolling) and explains that it needs an
+update. Parent-side protection applies regardless of bridge support. The existing
+`hover` protocol highlights; it does not promise scroll-to-block behavior.
+
+The drawer button also explains whether history is disabled/not configured for
+the type, the entry needs its first save, or `history.read` is missing. Permission
+changes require an administrator; this control cannot grant access.
+
 **Permission.** `Blockscene: Read version history` (`history.read`), plus read
 access to the content type in the Content Manager. Snapshots hold removed and
 unpublished text, so the section is hidden without it. Admin API:
-`GET /blockscene/history/:uid/:documentId?locale=` (the latest 100 events, no
-snapshots) and `GET /blockscene/history-events/:id` (one event, its snapshot and
+`GET /blockscene/history/:uid/:documentId?locale=&page=1&pageSize=25&actor=`
+(no snapshots; `results`, `pagination`, scoped `actors` and resolved `locale`)
+and `GET /blockscene/history-events/:id` (one event, its snapshot and
 the media and relation targets that still exist).
 
 **Retention.** Snapshots are kept `retentionDays` (90) and at most
@@ -986,6 +1023,10 @@ kept `eventDays` (365, at least `retentionDays`). A cron job added by the plugin
 runs nightly at 03:00 server time, in batches of 500; it only empties snapshots
 and deletes events, never media files, and running it on several instances is
 harmless.
+These are configurable limits, not a guarantee that a version from a week ago
+still exists: frequent changes can exceed `maxSnapshots` earlier. The snapshot
+cap is per document across locales; event metadata may outlive its snapshot.
+Naming versions and protecting them from purge are not implemented in Phase 1.
 
 ```js
 // config/plugins.js

@@ -99,8 +99,8 @@ function diffRows(before = [], after = []) {
 // Zone the rows added, removed and changed. `before` null: the first version.
 function summarize(before, after, schema) {
   const zones = Object.entries(schema?.attributes || {}).filter(([, attr]) => attr?.type === 'dynamiczone').map(([name]) => name)
-  const blocks = { added: 0, removed: 0, changed: 0 }
-  if (!before) return { initial: true, fields: [], blocks }
+  const blocks = { total: zones.reduce((n, name) => n + (Array.isArray(after?.[name]) ? after[name].length : 0), 0), added: 0, removed: 0, changed: 0 }
+  if (!before) return { initial: true, fields: [], blocks: { ...blocks, added: blocks.total } }
   const names = [...new Set([...Object.keys(before), ...Object.keys(after || {})])]
   const fields = names.filter(name => !zones.includes(name) && !same(before[name], after?.[name])).sort()
   for (const name of zones) for (const { op } of diffRows(before[name], after?.[name])) if (op !== 'same') blocks[op]++

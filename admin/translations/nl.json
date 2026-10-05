@@ -415,5 +415,21 @@
  "layoutOff": "Geen raster",
  "layoutNoMobile": "Geen",
  "layoutHelp": "De blokken van de groep verschijnen als raster in het formulier, met het aantal kolommen van dit blok.",
- "layoutNoFields": "Dit blok heeft geen veld dat een aantal kolommen kan bevatten."
+ "layoutNoFields": "Dit blok heeft geen veld dat een aantal kolommen kan bevatten.",
+ "toolbar.versions": "Versiegeschiedenis",
+ "versionsDenied": "Vraag een beheerder om de Blockscene-machtiging Versiegeschiedenis lezen.",
+ "versionsDisabled": "Geschiedenis is niet ingeschakeld voor dit inhoudstype. Vraag een beheerder dit in Settings > Blockscene in te schakelen (settings.history.enabled).",
+ "versionsNew": "Sla dit item eerst op om de geschiedenis te starten.",
+ "versionsPerson": "Filter op persoon",
+ "versionsEveryone": "Iedereen",
+ "versionsCounts": "{total} blokken",
+ "versionsCountsMissing": "Aantal blokken niet beschikbaar (oudere of niet vastgelegde gebeurtenis).",
+ "versionsPage": "Pagina {page} van {count}",
+ "versionsPrevious": "Vorige",
+ "versionsNext": "Volgende",
+ "versionsViewing": "Versie van {date} door {person} bekijken (alleen-lezen).",
+ "versionsCurrent": "Terug naar huidig concept",
+ "versionsMissing": "Sommige blokken, velden, media of relaties zijn niet meer beschikbaar in dit voorbeeld.",
+ "versionsBridgeLegacy": "Deze bridge ondersteunt geen alleen-lezen navigatie. Interactie is uitgeschakeld; werk de bridge bij voor readOnly.",
+ "historyExpired": "Snapshot niet meer beschikbaar"
 }

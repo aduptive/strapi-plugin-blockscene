@@ -17,7 +17,6 @@ const CAPTURED = { create: 'create', clone: 'create', update: 'update', publish:
 const CRON = 'blocksceneHistoryPurge'
 const BATCH = 500
 const DAY = 24 * 60 * 60 * 1000
-const LIST_LIMIT = 100
 const ACTORS_LIMIT = 500
 const SEARCH_LIMIT = 200
 
@@ -149,14 +148,19 @@ function historyService({ strapi }) {
       return name && name !== 'id' && schemaOf(uid)?.attributes?.[name] && !['relation', 'media', 'component', 'dynamiczone', 'password', 'json', 'blocks'].includes(schemaOf(uid).attributes[name].type) ? name : null
     },
     // Latest events of one document and locale, newest first; `stored`: its snapshot (or an identical one) can be loaded.
-    async list({ uid, documentId, locale }) {
-      const where = { contentType: uid, relatedDocumentId: documentId, locale: locale || null }
-      const [list, kept] = await Promise.all([
-        events().findMany({ select: ['id', 'action', 'actor', 'actorName', 'at', 'summary', 'hash', 'size'], where, orderBy: [{ at: 'desc' }, { id: 'desc' }], limit: LIST_LIMIT }),
-        events().findMany({ select: ['hash'], where: { ...where, size: { $gt: 0 } } }),
+    async list({ uid, documentId, locale, actor = '', page = 1, pageSize = 25 }) {
+      const scope = { contentType: uid, relatedDocumentId: documentId, locale: locale || null }
+      const where = { ...scope, ...(actor && { actor }) }
+      const [list, kept, total, people] = await Promise.all([
+        events().findMany({ select: ['id', 'action', 'actor', 'actorName', 'at', 'summary', 'hash', 'size'], where, orderBy: [{ at: 'desc' }, { id: 'desc' }], offset: (page - 1) * pageSize, limit: pageSize }),
+        events().findMany({ select: ['hash'], where: { ...scope, size: { $gt: 0 } } }),
+        events().count({ where }),
+        events().findMany({ select: ['actor', 'actorName'], where: scope, orderBy: [{ at: 'desc' }, { id: 'desc' }] }),
       ])
       const hashes = new Set(kept.map(row => row.hash))
-      return list.map(({ hash, size, ...event }) => ({ ...event, stored: Boolean(hash && hashes.has(hash)) }))
+      const actors = [...new Map(people.slice().reverse().map(({ actor, actorName }) => [actor, { actor, actorName }])).values()]
+      return { results: list.map(({ hash, size, ...event }) => ({ ...event, stored: Boolean(hash && hashes.has(hash)) })),
+        pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) }, actors, locale: locale || null }
     },
     // One event with its snapshot (from an identical event when this one was deduplicated) and what loading it needs:
     // the media files and relation targets that still exist (relation labels from the Content Manager's main field).
@@ -345,11 +349,14 @@ const historyController = ({ strapi }) => ({
   async list(ctx) {
     const { uid, documentId } = ctx.params || {}
     const locale = ctx.query?.locale || ''
-    if (!String(uid).startsWith('api::') || !strapi.contentTypes?.[uid] || !DOCUMENT_ID.test(documentId || '') || (locale && !LOCALE.test(locale))) return ctx.badRequest('Invalid content type, document or locale')
+    const actor = ctx.query?.actor || ''
+    const page = int(ctx.query?.page, 1, 1000000), pageSize = int(ctx.query?.pageSize, 25, 100)
+    if (typeof actor !== 'string' || (actor && !ACTOR.test(actor)) || [page, pageSize].some(Number.isNaN)) return ctx.badRequest('Invalid history filters')
+    if (!String(uid).startsWith('api::') || !strapi.contentTypes?.[uid] || !DOCUMENT_ID.test(documentId || '') || typeof locale !== 'string' || (locale && !LOCALE.test(locale))) return ctx.badRequest('Invalid content type, document or locale')
     if (!canRead(strapi, ctx, uid)) return ctx.forbidden()
     // No locale on a localized type: the default one, as the Content Manager opens it.
     const history = strapi.plugin(PLUGIN).service('history')
-    ctx.body = { results: await history.list({ uid, documentId, locale: (await history.scope(uid, locale || undefined))[0] }) }
+    ctx.body = await history.list({ uid, documentId, locale: (await history.scope(uid, locale || undefined))[0], actor, page, pageSize })
   },
   async find(ctx) {
     const id = Number(ctx.params?.id)

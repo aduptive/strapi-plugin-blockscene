@@ -415,5 +415,21 @@
  "layoutOff": "Kein Raster",
  "layoutNoMobile": "Keines",
  "layoutHelp": "Die Blöcke der Gruppe erscheinen im Formular als Raster, mit der Spaltenzahl dieses Blocks.",
- "layoutNoFields": "Dieser Block hat kein Feld, das eine Spaltenzahl enthalten kann."
+ "layoutNoFields": "Dieser Block hat kein Feld, das eine Spaltenzahl enthalten kann.",
+ "toolbar.versions": "Versionsverlauf",
+ "versionsDenied": "Bitte einen Administrator um die Blockscene-Berechtigung zum Lesen des Versionsverlaufs.",
+ "versionsDisabled": "Der Verlauf ist für diesen Inhaltstyp nicht aktiviert. Bitte einen Administrator, ihn unter Settings > Blockscene zu aktivieren (settings.history.enabled).",
+ "versionsNew": "Speichere diesen Eintrag zuerst, um seinen Verlauf zu beginnen.",
+ "versionsPerson": "Nach Person filtern",
+ "versionsEveryone": "Alle Personen",
+ "versionsCounts": "{total} Blöcke",
+ "versionsCountsMissing": "Blockanzahl nicht verfügbar (älteres oder nicht aufgezeichnetes Ereignis).",
+ "versionsPage": "Seite {page} von {count}",
+ "versionsPrevious": "Zurück",
+ "versionsNext": "Weiter",
+ "versionsViewing": "Version vom {date} von {person} (schreibgeschützt).",
+ "versionsCurrent": "Zurück zum aktuellen Entwurf",
+ "versionsMissing": "Einige Blöcke, Felder, Medien oder Beziehungen sind in dieser Vorschau nicht mehr verfügbar.",
+ "versionsBridgeLegacy": "Diese Bridge unterstützt keine schreibgeschützte Navigation. Interaktion ist deaktiviert; aktualisiere die Bridge für readOnly.",
+ "historyExpired": "Snapshot nicht mehr verfügbar"
 }

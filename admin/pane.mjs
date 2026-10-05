@@ -1,6 +1,6 @@
 // Page preview pane configuration (Strapi 5): toolbar layout, width menu entries and the sidebar panels that a project
 // or another plugin registers through `app.getPlugin('blockscene').apis.registerPanel`. Same rules as server/settings.js.
-export const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
+export const TOOLBAR = ['modes', 'history', 'versions', 'devices', 'status', 'actions']
 const RIGHT = ['status', 'actions']
 
 // Known ids in the configured order (unknown or repeated ones ignored). Status and actions stay one right-aligned group,

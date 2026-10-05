@@ -415,5 +415,21 @@
  "layoutOff": "Pas de grille",
  "layoutNoMobile": "Aucun",
  "layoutHelp": "Les blocs du groupe s'affichent en grille dans le formulaire, avec le nombre de colonnes de ce bloc.",
- "layoutNoFields": "Ce bloc n'a aucun champ pouvant contenir un nombre de colonnes."
+ "layoutNoFields": "Ce bloc n'a aucun champ pouvant contenir un nombre de colonnes.",
+ "toolbar.versions": "Historique des versions",
+ "versionsDenied": "Demandez à un administrateur la permission Lire l’historique des versions de Blockscene.",
+ "versionsDisabled": "L’historique n’est pas activé pour ce type de contenu. Demandez à un administrateur de l’activer dans Settings > Blockscene (settings.history.enabled).",
+ "versionsNew": "Enregistrez d’abord ce contenu pour commencer son historique.",
+ "versionsPerson": "Filtrer par personne",
+ "versionsEveryone": "Tout le monde",
+ "versionsCounts": "{total} blocs",
+ "versionsCountsMissing": "Nombre de blocs indisponible (événement ancien ou non enregistré).",
+ "versionsPage": "Page {page} sur {count}",
+ "versionsPrevious": "Précédente",
+ "versionsNext": "Suivante",
+ "versionsViewing": "Version du {date} par {person} (lecture seule).",
+ "versionsCurrent": "Revenir au brouillon actuel",
+ "versionsMissing": "Certains blocs, champs, médias ou relations ne sont plus disponibles dans cet aperçu.",
+ "versionsBridgeLegacy": "Cette bridge ne prend pas en charge la navigation en lecture seule. L’interaction est désactivée ; mettez la bridge à jour pour prendre en charge readOnly.",
+ "historyExpired": "Snapshot indisponible"
 }

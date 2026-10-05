@@ -1,5 +1,12 @@
 # Local integration laboratory
 
+History drawer (Strapi 5): after refreshing, building and starting the isolated
+lab, run `node scripts/history-drawer-smoke.mjs` (or set `SMOKE_PORT`). It records
+103 test versions, checks pagination, read-only protocol protection, concurrent
+loads, returning to an unsaved draft, locale navigation, and keyboard focus.
+It restores the saved settings and deletes its test entry; artifacts are under
+`artifacts/history-drawer*`. Never point the lab at a production database.
+
 The two repositories are siblings: `strapi-plugin-blockscene` and
 `strapi-plugin-image-optimization`. The original `strapi-block-picker`
 experiment is untouched. No client database or frontend is used here.

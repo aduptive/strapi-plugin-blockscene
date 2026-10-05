@@ -105,6 +105,9 @@ export const hoverKey = (key, rows) => key === null ? null
 export function isPreviewMessage(event, origin, source, channel, type) {
   return event.origin === origin && event.source === source && event.data?.protocol === PROTOCOL && event.data?.channel === channel && event.data?.type === type
 }
+// Historical previews never act on the live form, including select/focus/hover. Only the handshake is accepted.
+export const previewMessageAllowed = (event, origin, source, channel, readOnly) =>
+  isPreviewMessage(event, origin, source, channel, event.data?.type) && (!readOnly || event.data?.type === 'ready')
 // Insertion gap resolved at confirmation time from the neighbouring key: null
 // means "at the start"; a key that no longer exists yields -1 (abort, never append).
 export function insertIndex(rows, after) {

@@ -415,5 +415,21 @@
  "layoutOff": "No grid",
  "layoutNoMobile": "None",
  "layoutHelp": "The group's blocks show as a grid in the form, with the column count this block holds.",
- "layoutNoFields": "This block has no field that can hold a column count."
+ "layoutNoFields": "This block has no field that can hold a column count.",
+ "toolbar.versions": "Version history",
+ "versionsDenied": "Ask an administrator to grant the Blockscene Read version history permission.",
+ "versionsDisabled": "History is not enabled for this content type. Ask an administrator to enable it in Settings > Blockscene (settings.history.enabled).",
+ "versionsNew": "Save this entry first to start its history.",
+ "versionsPerson": "Filter by person",
+ "versionsEveryone": "Everyone",
+ "versionsCounts": "{total} blocks",
+ "versionsCountsMissing": "Block counts unavailable (older or unrecorded event).",
+ "versionsPage": "Page {page} of {count}",
+ "versionsPrevious": "Previous",
+ "versionsNext": "Next",
+ "versionsViewing": "Viewing version of {date} by {person} (read-only).",
+ "versionsCurrent": "Back to current draft",
+ "versionsMissing": "Some blocks, fields, media or relations are no longer available in this preview.",
+ "versionsBridgeLegacy": "This preview bridge does not support read-only browsing. Interaction is disabled; update the bridge to support readOnly.",
+ "historyExpired": "Snapshot no longer available"
 }

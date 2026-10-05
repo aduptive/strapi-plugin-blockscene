@@ -31,6 +31,8 @@ export function History({ model, documentId, schema, components, editable, disab
   const initialValues = useForm("BlocksceneVersions", (state: any) => state.initialValues);
   const setValues = useForm("BlocksceneVersions", (state: any) => state.setValues);
   const [events, setEvents] = React.useState<any[] | null>(null);
+  const [pagination, setPagination] = React.useState<any>(null);
+  const [moreLoading, setMoreLoading] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
   const [shown, setShown] = React.useState(PAGE);
   const [open, setOpen] = React.useState<any>(null);
@@ -38,18 +40,32 @@ export function History({ model, documentId, schema, components, editable, disab
   const [loading, setLoading] = React.useState(false);
   const [refresh, reload] = React.useReducer((n: number) => n + 1, 0);
   const allowed = Boolean(allowedActions?.canRead);
+  const scope = `${model}:${documentId}:${locale}:${allowed}`;
+  const latestScope = React.useRef(scope);
+  latestScope.current = scope;
   // A save re-initialises the form: the list is read again (the save made a new version).
   React.useEffect(() => {
     if (!allowed || !documentId) return;
     let active = true;
     setFailed(false);
     get(`/blockscene/history/${encodeURIComponent(model)}/${encodeURIComponent(documentId)}${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`)
-      .then(({ data }: any) => active && setEvents(Array.isArray(data?.results) ? data.results : []))
+      .then(({ data }: any) => { if (active) { setEvents(Array.isArray(data?.results) ? data.results : []); setPagination(data?.pagination); } })
       .catch(() => active && setFailed(true));
     return () => { active = false; };
   }, [allowed, get, model, documentId, locale, initialValues, refresh]);
   // Another document or locale: nothing of the previous one stays open.
-  React.useEffect(() => { setOpen(null); setReport(null); setShown(PAGE); }, [model, documentId, locale]);
+  React.useEffect(() => { setOpen(null); setReport(null); setShown(PAGE); setEvents(null); setPagination(null); setMoreLoading(false); }, [model, documentId, locale]);
+  const more = async () => {
+    if (shown < (events?.length || 0)) return setShown(shown + PAGE);
+    setMoreLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String((pagination?.page || 1) + 1), ...(locale && { locale }) });
+      const { data } = await get(`/blockscene/history/${encodeURIComponent(model)}/${encodeURIComponent(documentId)}?${params}`);
+      if (latestScope.current !== scope) return;
+      setEvents(previous => [...(previous || []), ...(data?.results || [])]); setPagination(data?.pagination); setShown(shown + PAGE);
+    } catch { if (latestScope.current === scope) setFailed(true); }
+    finally { if (latestScope.current === scope) setMoreLoading(false); }
+  };
   if (isLoading || !allowed || !documentId) return null;
   const name = (uid: string) => components?.[uid]?.info?.displayName || uid;
   const when = (at: string) => { try { return new Date(at).toLocaleString(t.locale, { dateStyle: "medium", timeStyle: "short" }); } catch { return at; } };
@@ -126,7 +142,7 @@ export function History({ model, documentId, schema, components, editable, disab
               </Box>}
             </li>;
           })}
-          {events.length > shown && <Flex><Button variant="tertiary" size="S" onClick={() => setShown(shown + PAGE)}>{t.historyShowMore}</Button></Flex>}
+          {(events.length > shown || pagination?.page < pagination?.pageCount) && <Flex><Button variant="tertiary" size="S" onClick={more} loading={moreLoading} disabled={moreLoading}>{t.historyShowMore}</Button></Flex>}
         </Flex>}
     </Flex>
   );
