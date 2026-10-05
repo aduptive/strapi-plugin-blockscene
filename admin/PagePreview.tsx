@@ -14,6 +14,7 @@ import {
   mediaAttribute,
   moveGroup,
   removeGroup,
+  unwrapGroup,
   groupRange,
   getIn,
   hoverKey,
@@ -520,6 +521,7 @@ export function PagePreview({
   const [failed, setFailed] = React.useState(false);
   const [attempt, retry] = React.useReducer((n: number) => n + 1, 0);
   const [picking, setPicking] = React.useState<any>(null);
+  const [deletingGroup, setDeletingGroup] = React.useState<{ key: string; label: string; count: number } | null>(null);
   // Block hovered in the page (key), its form row when out of view, and the grace before a clear lands.
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [edge, setEdge] = React.useState<"up" | "down" | null>(null);
@@ -869,12 +871,17 @@ export function PagePreview({
         return;
       }
       if (is("delete-group") && canEdit && groups) {
-        const next = removeGroup(
-          latest.current,
-          String(event.data.key),
-          groups,
-        );
-        if (next) onChange(zone!, next);
+        const key = String(event.data.key);
+        const start = latest.current.findIndex((row: any) => blockKey(row) === key);
+        if (start < 0) return;
+        const [, end] = groupRange(latest.current, start, groups);
+        if (end <= start || latest.current[end]?.__component !== groups[latest.current[start]?.__component]) return;
+        const closes = new Set(Object.values(groups));
+        setDeletingGroup({
+          key,
+          label: components?.[latest.current[start]?.__component]?.info?.displayName || latest.current[start]?.__component || "",
+          count: latest.current.slice(start + 1, end).filter((row: any) => !closes.has(row?.__component)).length,
+        });
         return;
       }
       if (is("insert-group") && canEdit && groups) {
@@ -1086,6 +1093,12 @@ export function PagePreview({
       applyWidth(map[event.key], true);
     }
   };
+  const confirmGroupDelete = (keepBlocks: boolean) => {
+    if (!deletingGroup || !zone) return;
+    const next = keepBlocks ? unwrapGroup(latest.current, deletingGroup.key, groups) : removeGroup(latest.current, deletingGroup.key, groups);
+    setDeletingGroup(null);
+    if (next) onChange(zone, next);
+  };
   return (
     // Hidden anchor in the side panels column: split mode and the sidebar items find the edit view's grid from here.
     <div ref={anchor}>
@@ -1231,6 +1244,21 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
           </Pane>,
           document.body,
         )}
+      {deletingGroup && (
+        <Modal open width="48rem" onOpenChange={(open: boolean) => !open && setDeletingGroup(null)} trigger={null} title={t.confirmDeleteGroupTitle}>
+          <Flex direction="column" alignItems="stretch" gap={4} data-testid="preview-confirm-delete-group">
+            <Typography>{t.f("confirmDeleteGroup", { name: deletingGroup.label, count: deletingGroup.count })}</Typography>
+            {deletingGroup.count > 0 && (
+              <Typography variant="pi" textColor="neutral600">{t.f("confirmDeleteGroupHint", { count: deletingGroup.count })}</Typography>
+            )}
+            <Flex gap={2} justifyContent="flex-end">
+              <Button variant="tertiary" onClick={() => setDeletingGroup(null)}>{t.cancel}</Button>
+              {deletingGroup.count > 0 && <Button variant="secondary" onClick={() => confirmGroupDelete(true)}>{t.keepGroupBlocks}</Button>}
+              <Button variant="danger" onClick={() => confirmGroupDelete(false)}>{t.f("deleteGroupAndBlocks", { count: deletingGroup.count })}</Button>
+            </Flex>
+          </Flex>
+        </Modal>
+      )}
       {inserting && insertAttr && (
         <PickerModal
           zone={{

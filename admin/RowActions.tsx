@@ -13,7 +13,9 @@ import {
   isGroupMarker,
   pasteProblem,
   readClip,
+  removeGroup,
   setHidden,
+  unwrapGroup,
   writeClip,
 } from "./rows.mjs";
 import { useMessages } from "./messages";
@@ -209,10 +211,16 @@ export function useRowActions({ zones, components, catalog, form }: any) {
     if (hiddenName) form.setRows(zoneName, setHidden(rows, index, groups, hiddenName, rows[index]?.[hiddenName] !== true));
   };
   const paste = (zoneName: string, at?: number) => pasteInto(form, zoneOf(zoneName), clip, components, groups, t, at);
+  const changeGroup = (zoneName: string, key: string, keepBlocks: boolean) => {
+    const rows = form.rows(zoneName);
+    const next = keepBlocks ? unwrapGroup(rows, key, groups) : removeGroup(rows, key, groups);
+    if (next) form.setRows(zoneName, next);
+  };
   // Paste is offered where the copied components are allowed; room and group balance are still checked on click, with feedback.
   const pastable = (zoneName: string) => !["empty", "notAllowed"].includes(pasteProblem(clip, zoneOf(zoneName), form.rows(zoneName), components, groups)?.code);
   const selectable = (zoneName: string): string[] => form.rows(zoneName).filter((row: any) => canAct(row, groups)).map((row: any) => blockKey(row)).filter(Boolean);
-  return { t, editor, groups, hiddenName, clip, selection, setSelection, busy, form, labelOf, duplicate, copy, toggleHidden, paste, pastable, selectable, isMarker: (row: any) => isGroupMarker(row, groups) };
+  return { t, editor, groups, hiddenName, clip, selection, setSelection, busy, form, labelOf, duplicate, copy, toggleHidden, paste, pastable, selectable, changeGroup,
+    isMarker: (row: any) => isGroupMarker(row, groups) };
 }
 
 const RowButton = styled.button<{ $on?: boolean }>`
@@ -233,13 +241,15 @@ export function RowActions({ zones, actions, Modal }: any) {
   const a = actions;
   const e = a?.editor || {};
   const anchors = useAnchors(zones, Boolean(a) && Boolean(a.hiddenName || e.duplicate !== false || e.clipboard !== false || a.selection), a?.selection?.zone || null);
-  const [confirm, setConfirm] = React.useState<{ button: HTMLElement; label: string; marker: boolean } | null>(null);
+  const [confirm, setConfirm] = React.useState<{
+    button: HTMLElement; label: string; kind: "block" | "group"; zone: string; key: string; count: number;
+  } | null>(null);
   const bypass = React.useRef(false);
   const latest = React.useRef({ zones, a });
   latest.current = { zones, a };
   // Capture phase on the document: the native handler (React's root listener) never sees the first click.
   React.useEffect(() => {
-    if (!a || e.confirmDelete === false) return;
+    if (!a) return;
     const onClick = (event: MouseEvent) => {
       const button = (event.target as HTMLElement | null)?.closest?.("button");
       if (!button || bypass.current) return;
@@ -249,10 +259,25 @@ export function RowActions({ zones, actions, Modal }: any) {
         const headers = toggles(list) as HTMLElement[];
         const index = headers.findIndex((toggle) => trashOf(toggle) === button);
         if (index < 0) return;
+        const row = latest.current.a?.form.rows(zone.name)[index];
+        const marker = Boolean(latest.current.a?.isMarker(row));
+        // Ordinary rows keep the configured native behaviour. Groups are always protected as one structural unit.
+        if (!marker && e.confirmDelete === false) return;
         event.preventDefault();
         event.stopPropagation();
-        const row = latest.current.a?.form.rows(zone.name)[index];
-        setConfirm({ button, label: headers[index].textContent?.trim() || latest.current.a?.labelOf(row), marker: Boolean(latest.current.a?.isMarker(row)) });
+        // CLOSE is an implementation detail of its OPEN. It must never be removed by itself.
+        if (marker && !canAct(row, latest.current.a?.groups)) return;
+        const key = blockKey(row) || "";
+        const rows = latest.current.a.form.rows(zone.name);
+        const range = marker ? actionRange(rows, index, latest.current.a.groups) : [index, index];
+        setConfirm({
+          button,
+          label: latest.current.a?.labelOf(row) || headers[index].textContent?.trim(),
+          kind: marker ? "group" : "block",
+          zone: zone.name,
+          key,
+          count: marker ? rows.slice(range[0] + 1, range[1]).filter((item: any) => canAct(item, latest.current.a.groups)).length : 0,
+        });
         return;
       }
     };
@@ -280,6 +305,11 @@ export function RowActions({ zones, actions, Modal }: any) {
     } finally {
       bypass.current = false;
     }
+  };
+  const confirmGroup = (keepBlocks: boolean) => {
+    const target = confirm;
+    setConfirm(null);
+    if (target?.kind === "group") a.changeGroup(target.zone, target.key, keepBlocks);
   };
   return (
     <>
@@ -338,13 +368,21 @@ ol[aria-describedby] > li button[data-strapi-accordion-toggle] > span:last-child
         );
       })}
       {confirm && (
-        <Modal open width="48rem" onOpenChange={(open: boolean) => !open && setConfirm(null)} trigger={null} title={t.confirmDeleteTitle}>
+        <Modal open width="48rem" onOpenChange={(open: boolean) => !open && setConfirm(null)} trigger={null}
+          title={confirm.kind === "group" ? t.confirmDeleteGroupTitle : t.confirmDeleteTitle}>
           <Flex direction="column" alignItems="stretch" gap={4} data-testid="row-confirm-delete">
-            <Typography>{t.f("confirmDelete", { name: confirm.label })}</Typography>
-            {confirm.marker && <Typography variant="pi" textColor="neutral600">{t.confirmDeleteMarker}</Typography>}
+            <Typography>{t.f(confirm.kind === "group" ? "confirmDeleteGroup" : "confirmDelete", { name: confirm.label, count: confirm.count })}</Typography>
+            {confirm.kind === "group" && confirm.count > 0 && (
+              <Typography variant="pi" textColor="neutral600">{t.f("confirmDeleteGroupHint", { count: confirm.count })}</Typography>
+            )}
             <Flex gap={2} justifyContent="flex-end">
               <Button variant="tertiary" onClick={() => setConfirm(null)} data-testid="row-confirm-cancel">{t.cancel}</Button>
-              <Button variant="danger" onClick={confirmDelete} data-testid="row-confirm-ok">{t.delete}</Button>
+              {confirm.kind === "group" && confirm.count > 0 && (
+                <Button variant="secondary" onClick={() => confirmGroup(true)} data-testid="row-confirm-unwrap">{t.keepGroupBlocks}</Button>
+              )}
+              <Button variant="danger" onClick={confirm.kind === "group" ? () => confirmGroup(false) : confirmDelete} data-testid="row-confirm-ok">
+                {confirm.kind === "group" ? t.f("deleteGroupAndBlocks", { count: confirm.count }) : t.delete}
+              </Button>
             </Flex>
           </Flex>
         </Modal>

@@ -149,7 +149,7 @@ test('admin catalog only exposes declared safe metadata plus resolved overrides'
 })
 
 test('layout groups: OPEN/CLOSE map, tree, whole-group moves/removal, gap resolution, validation policy', async () => {
-  const { groupRows, moveGroup, removeGroup, topLevelRanges, insertIndex, blockKey, validateGroups, safeGroups } = await import('../admin/preview.mjs')
+  const { groupRows, moveGroup, removeGroup, unwrapGroup, topLevelRanges, insertIndex, blockKey, validateGroups, safeGroups } = await import('../admin/preview.mjs')
   const g = { 'wrappers.columns': 'wrappers.close', 'wrappers.join': 'wrappers.close' }
   const flat = [{ id: 1, __component: 'blocks.a' }, { id: 2, __component: 'wrappers.columns' }, { id: 3, __component: 'blocks.b' }, { id: 4, __component: 'blocks.c' }, { id: 5, __component: 'wrappers.close' }, { id: 6, __component: 'blocks.d' }]
   const tree = groupRows(flat, g)
@@ -160,7 +160,12 @@ test('layout groups: OPEN/CLOSE map, tree, whole-group moves/removal, gap resolu
   assert.deepEqual(moveGroup(flat, 'wrappers.columns#2', 'down', g).map(r => r.id), [1, 6, 2, 3, 4, 5])
   assert.equal(moveGroup(flat, 'blocks.a#1', 'up', g), null); assert.equal(moveGroup(flat, 'wrappers.columns#2', 'up', null), null, 'no groups config, no moves')
   assert.deepEqual(removeGroup(flat, 'wrappers.columns#2', g).map(r => r.id), [1, 6], 'removing a group drops OPEN, children and CLOSE together')
+  assert.deepEqual(unwrapGroup(flat, 'wrappers.columns#2', g).map(r => r.id), [1, 3, 4, 6], 'unwrapping drops only OPEN and CLOSE')
   assert.equal(removeGroup(flat, 'blocks.a#1', g), null)
+  assert.equal(unwrapGroup(flat, 'blocks.a#1', g), null)
+  const unclosed = [{ id: 7, __component: 'wrappers.columns' }, { id: 8, __component: 'blocks.a' }]
+  assert.equal(removeGroup(unclosed, 'wrappers.columns#7', g), null, 'an unbalanced group is never removed as a range')
+  assert.equal(unwrapGroup(unclosed, 'wrappers.columns#7', g), null, 'an unbalanced group is never unwrapped')
   assert.deepEqual(groupRows(flat, null).map(n => n.type), ['block', 'block', 'block', 'block', 'block', 'block'], 'without config every row is an ordinary block')
   assert.equal(insertIndex(flat, 'wrappers.columns#2'), 2, 'gap after the opener inserts inside the group')
   assert.equal(insertIndex(flat, 'wrappers.close#5'), 5, 'gap after the close inserts after the group')

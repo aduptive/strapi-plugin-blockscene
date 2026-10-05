@@ -117,4 +117,4 @@ export function insertIndex(rows, after) {
 }
 
 // Layout groups live in ../server/groups.js (shared with the publish guard) and are re-exported here.
-export { groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, validateGroups, safeGroups } from '../server/groups.js'
+export { groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, unwrapGroup, validateGroups, safeGroups } from '../server/groups.js'

@@ -112,7 +112,18 @@ function removeGroup(rows, key, g) {
   const start = rows.findIndex(row => blockKey(row) === String(key))
   if (start < 0 || !isOpener(rows[start], g)) return null
   const [, end] = groupRange(rows, start, g)
+  if (end <= start || uidOf(rows[end]) !== g[uidOf(rows[start])]) return null
   return [...rows.slice(0, start), ...rows.slice(end + 1)]
+}
+// New flat list without the OPEN and CLOSE markers, keeping every child in place.
+// Only balanced groups can be unwrapped: malformed content stays visible for the diagnostics to repair.
+function unwrapGroup(rows, key, g) {
+  if (!g) return null
+  const start = rows.findIndex(row => blockKey(row) === String(key))
+  if (start < 0 || !isOpener(rows[start], g)) return null
+  const [, end] = groupRange(rows, start, g)
+  if (end <= start || uidOf(rows[end]) !== g[uidOf(rows[start])]) return null
+  return [...rows.slice(0, start), ...rows.slice(start + 1, end), ...rows.slice(end + 1)]
 }
 
 // Layout grid (settings `components[uid].layout`, see README "Layout grid"): the OPEN attribute that holds its column
@@ -142,5 +153,5 @@ function layoutColumns(row, layout, schema) {
   return { desktop: read(layout.columnsField), mobile: layout.mobileColumnsField ? read(layout.mobileColumnsField) : null }
 }
 
-module.exports = { safeGroups, validateGroups, invalidComponents, groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, blockKey, isOpener, isClose,
+module.exports = { safeGroups, validateGroups, invalidComponents, groupRange, groupRows, topLevelRanges, moveGroup, removeGroup, unwrapGroup, blockKey, isOpener, isClose,
   MAX_COLUMNS, parseColumns, layoutFields, validLayout, layoutColumns }

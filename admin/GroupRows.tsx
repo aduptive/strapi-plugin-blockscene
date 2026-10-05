@@ -20,6 +20,7 @@ const DEPTH = "data-blockscene-depth";
 const KIND = "data-blockscene-group";
 const FOLD = "data-blockscene-fold";
 const COUNT = "data-blockscene-fold-count";
+const INSERT = "data-blockscene-group-insert";
 // Layout grid: the box appended to a grid OPEN's <li>, where LayoutGrid is portalled. Its children rows are hidden like
 // a folded group's (FOLDED: Expand all and the zone toggle skip them too) but stay mounted.
 const GRID_BOX = "data-blockscene-grid";
@@ -28,8 +29,8 @@ const STEP = "2.4rem";
 const folded = new Set<string>();
 // Grid groups switched to the list view, for the session (same keys as folded).
 const listed = new Set<string>();
-type Anchor = { el: HTMLElement; countEl: HTMLElement | null; zone: string; index: number; id: string; count: number; open: boolean; label: string;
-  layout: any; gridEl: HTMLElement | null };
+type Anchor = { el: HTMLElement; countEl: HTMLElement | null; insertEl: HTMLElement | null; after: string | null; full: boolean;
+  zone: string; index: number; id: string; count: number; open: boolean; label: string; layout: any; gridEl: HTMLElement | null };
 const set = (el: HTMLElement, name: string, value: string | null) => {
   if (value === null) el.hasAttribute(name) && el.removeAttribute(name);
   else if (el.getAttribute(name) !== value) el.setAttribute(name, value);
@@ -48,6 +49,14 @@ const Fold = styled.span<{ $open: boolean }>`
 const Count = styled.span`
   margin-right: 4px; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap;
   color: ${({ theme }) => theme.colors.primary700}; background: ${({ theme }) => theme.colors.primary100};
+`;
+const GroupInsert = styled.button`
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 42px; padding: 8px 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.primary600}; border-radius: 4px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary600}; background: ${({ theme }) => theme.colors.neutral0};
+  &:hover:not(:disabled) { background: ${({ theme }) => theme.colors.primary100}; }
+  &:disabled { opacity: 0.5; cursor: default; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary600}; outline-offset: 1px; }
 `;
 
 export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null, components, catalog, openBlock, openInsert }: any) {
@@ -158,19 +167,35 @@ export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null
         // Per row: whether it shows its group as a grid (a configured layout, the grid view, not folded, not itself inside
         // a grid or a folded group). Parents come first in the list, so theirs is known when a child is reached.
         const grid: boolean[] = [];
+        const anchorByOpen = new Map<number, Anchor>();
         lis.forEach((li, i) => {
           const o = outline[i];
           seen.add(li);
           set(li, DEPTH, o.depth ? String(o.depth) : null);
           if (o.depth) li.style.setProperty("--bs-depth", String(o.depth));
           set(li, KIND, o.kind === "block" ? null : o.kind);
-          // A CLOSE belongs to its own group but stays visible under that group's grid (it reads as the group's end).
-          const inGrid = (o.kind === "close" ? o.parents.slice(0, -1) : o.parents).some((p) => grid[p]);
+          // Rows inside a grid, including its CLOSE implementation marker, stay mounted but hidden.
+          const inGrid = o.parents.some((p) => grid[p]);
           const hidden = o.parents.some(isFolded) || inGrid;
           set(li, FOLDED, hidden ? "" : null);
           const layout = o.kind === "open" && o.end != null ? layouts?.[rows[i].__component] || null : null;
           const toggle = li.querySelector<HTMLElement>("button[aria-expanded]");
           grid[i] = Boolean(layout && toggle?.parentElement) && !hidden && !isFolded(i) && !listed.has(idOf(i));
+          if (o.kind === "close") {
+            const open = o.parents[o.parents.length - 1];
+            const anchor = anchorByOpen.get(open);
+            if (anchor && !grid[open] && !hidden) {
+              let insertEl = li.querySelector<HTMLElement>(`:scope > [${INSERT}]`);
+              if (!insertEl) {
+                insertEl = document.createElement("div");
+                insertEl.setAttribute(INSERT, "");
+                li.appendChild(insertEl);
+              }
+              anchor.insertEl = insertEl;
+              anchor.after = blockKey(rows[Math.max(open, i - 1)]);
+            }
+            return;
+          }
           if (o.kind !== "open" || o.end == null || !toggle?.parentElement) return;
           let gridEl = li.querySelector<HTMLElement>(`:scope > [${GRID_BOX}]`);
           if (grid[i] && !gridEl) {
@@ -195,15 +220,20 @@ export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null
             countEl.style.cssText = "display:inline-flex;align-items:center";
             actions.insertBefore(countEl, actions.firstChild);
           }
-          next.push({ el, countEl, zone: zone.name, index: i, id: idOf(i), count: o.count || 0, open: !isFolded(i), label: labelOf(rows[i]), layout, gridEl });
+          const anchor: Anchor = { el, countEl, insertEl: null, after: null, full: Boolean(zone.full), zone: zone.name, index: i, id: idOf(i),
+            count: o.count || 0, open: !isFolded(i), label: labelOf(rows[i]), layout, gridEl };
+          next.push(anchor);
+          anchorByOpen.set(i, anchor);
         });
       }
     landed.current = null;
     for (const li of document.querySelectorAll<HTMLElement>(`li[${DEPTH}], li[${KIND}], li[${FOLDED}]`))
       if (!seen.has(li)) for (const name of [DEPTH, KIND, FOLDED]) li.removeAttribute(name);
-    for (const el of document.querySelectorAll<HTMLElement>(`[${FOLD}], [${COUNT}], [${GRID_BOX}]`)) if (!next.some((a) => a.el === el || a.countEl === el || a.gridEl === el)) el.remove();
+    for (const el of document.querySelectorAll<HTMLElement>(`[${FOLD}], [${COUNT}], [${GRID_BOX}], [${INSERT}]`))
+      if (!next.some((a) => a.el === el || a.countEl === el || a.gridEl === el || a.insertEl === el)) el.remove();
     setAnchors((prev) =>
-      prev.length === next.length && prev.every((a, i) => (["el", "countEl", "id", "index", "count", "open", "label", "layout", "gridEl"] as const).every((k) => a[k] === next[i][k])) ? prev : next,
+      prev.length === next.length && prev.every((a, i) => (["el", "countEl", "insertEl", "after", "full", "id", "index", "count", "open", "label", "layout", "gridEl"] as const)
+        .every((k) => a[k] === next[i][k])) ? prev : next,
     );
   };
   React.useEffect(() => {
@@ -218,7 +248,7 @@ export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
-      for (const el of document.querySelectorAll(`[${FOLD}], [${COUNT}], [${GRID_BOX}]`)) el.remove();
+      for (const el of document.querySelectorAll(`[${FOLD}], [${COUNT}], [${GRID_BOX}], [${INSERT}]`)) el.remove();
       for (const li of document.querySelectorAll(`li[${DEPTH}], li[${KIND}], li[${FOLDED}]`)) for (const name of [DEPTH, KIND, FOLDED]) li.removeAttribute(name);
     };
   }, []);
@@ -236,10 +266,8 @@ export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null
 ${list}[${DEPTH}] { padding-left: calc(var(--bs-depth) * ${STEP}); background: repeating-linear-gradient(to right, ${line} 0 2px, transparent 2px ${STEP}) 1.1rem 0 / calc(var(--bs-depth) * ${STEP}) 100% no-repeat; }
 ${list}[${FOLDED}]:not([data-bp-block-modal]) { display: none !important; }
 ${list}[data-bp-block-modal] { padding-left: 0 !important; background-image: none !important; }
-${list}[${KIND}="close"] [data-handler-id] { display: none !important; }
-${list}[${KIND}="close"] button[aria-expanded]:first-of-type { min-height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0.7; }
-${list}[${KIND}="close"] button[aria-expanded]:first-of-type + * { padding-top: 0 !important; padding-bottom: 0 !important; }
-${list}[${KIND}="close"] button[aria-expanded] [data-blockscene-row-thumb] { display: none; }`}</style>
+${list}[${KIND}="close"] > *:not([${INSERT}]) { display: none !important; }
+${list}[${KIND}="close"] [${INSERT}] { display: block; padding: 8px 12px; }`}</style>
       {anchors.map((a) =>
         createPortal(
           <Fold role="button" tabIndex={0} $open={a.open} aria-expanded={a.open} data-testid={`group-fold-${a.zone}-${a.index}`}
@@ -278,6 +306,18 @@ ${list}[${KIND}="close"] button[aria-expanded] [data-blockscene-row-thumb] { dis
             )
           : null;
       })}
+      {anchors.map((a) =>
+        a.insertEl
+          ? createPortal(
+              <GroupInsert type="button" disabled={a.full} title={a.full ? t.zoneFull : undefined}
+                data-testid={`group-add-${a.zone}-${a.index}`} onClick={() => openInsert?.(a.zone, a.after)}>
+                <Icon name="plus" size={14} />{t.f("groupAdd", { label: a.label })}
+              </GroupInsert>,
+              a.insertEl,
+              `insert:${a.zone}:${a.index}`,
+            )
+          : null,
+      )}
     </>
   );
 }
