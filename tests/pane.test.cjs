@@ -39,6 +39,16 @@ test('toolbar layout keeps the configured order; status and actions are one righ
   assert.deepEqual(toolbarLayout(['modes', 'x', 'modes']), { before: ['modes'], right: [], after: [] }, 'unknown and repeated ids are ignored')
 })
 
+test('preview pane clears a full-width sticky Strapi navigation and ignores old vertical navigation', async () => {
+  const { topNavigationInset } = await import('../admin/pane.mjs')
+  const mobile = { position: 'sticky', rect: { top: 0, bottom: 65, left: 0, right: 1000, height: 65 } }
+  const desktop = { position: 'sticky', rect: { top: 0, bottom: 850, left: 0, right: 64, height: 850 } }
+  assert.equal(topNavigationInset([mobile], 1000), 65)
+  assert.equal(topNavigationInset([desktop], 1000), 0)
+  assert.equal(topNavigationInset([{ ...mobile, position: 'static' }], 1000), 0)
+  assert.equal(topNavigationInset([{ ...mobile, rect: { ...mobile.rect, right: 900 } }], 1000), 0)
+})
+
 test('width menu entries: built-in names, custom widths with a size icon, fallback to the built-in list', async () => {
   const { deviceEntries } = await import('../admin/pane.mjs')
   const devices = { fit: 0, mobile: 390, tablet: 834, desktop: 1440 }

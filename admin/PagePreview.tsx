@@ -24,7 +24,7 @@ import {
   validateFocus,
 } from "./preview.mjs";
 import { DEVICES, frameStyle, useStageSize, stageBackground } from "./devices";
-import { deviceEntries, panelsFor, toolbarLayout } from "./pane.mjs";
+import { deviceEntries, panelsFor, toolbarLayout, topNavigationInset } from "./pane.mjs";
 import { Guard } from "./Guard";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
@@ -131,6 +131,25 @@ function useMainRect() {
     };
   }, []);
   return rect;
+}
+function useAdminTopInset() {
+  const [inset, setInset] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const navs = () => [...document.querySelectorAll<HTMLElement>("nav")];
+    const measure = () => setInset(topNavigationInset(navs().map((nav) => ({
+      position: getComputedStyle(nav).position,
+      rect: nav.getBoundingClientRect(),
+    })), window.innerWidth));
+    measure();
+    const observer = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
+    navs().forEach((nav) => observer?.observe(nav));
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  return inset;
 }
 // Split divider: always visible (4 px, neutral) with a grip pill; primary on hover, drag or focus. 12 px hit area.
 const Handle = styled.div`
@@ -515,6 +534,7 @@ export function PagePreview({
     return v > 0 && v < 1 ? v : 0.5;
   });
   const main = useMainRect();
+  const topInset = useAdminTopInset();
   const vw = main.width; // editor content area, not the viewport
   const [dragging, setDragging] = React.useState(false);
   const [ready, setReady] = React.useState(false);
@@ -1126,6 +1146,7 @@ export function PagePreview({
             data-testid="page-preview-pane"
             aria-label={t.previewPane}
             style={{
+              top: topInset,
               left:
                 mode === "preview" || narrow
                   ? main.left
