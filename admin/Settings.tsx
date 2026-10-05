@@ -14,6 +14,27 @@ const Card = styled.div`
   display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 4px;
   border: 1px solid ${({ theme }) => theme.colors.neutral200}; background: ${({ theme }) => theme.colors.neutral0};
 `
+const ContentTypeGrid = styled.div`
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; align-items: start;
+`
+const ContentTypeCard = styled.div`
+  display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.neutral200}; background: ${({ theme }) => theme.colors.neutral0};
+`
+const ContentTypeTop = styled.div`
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 240px); gap: 16px; align-items: end;
+  @media (max-width: 520px) { grid-template-columns: 1fr; }
+`
+const Advanced = styled.details`
+  border-top: 1px solid ${({ theme }) => theme.colors.neutral200}; padding-top: 12px;
+  summary { cursor: pointer; color: ${({ theme }) => theme.colors.neutral800}; font-size: 13px; font-weight: 600; }
+  summary::marker { color: ${({ theme }) => theme.colors.neutral500}; }
+  &[open] summary { margin-bottom: 16px; }
+`
+const ToolbarSection = styled.div`
+  display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding-top: 16px;
+  border-top: 1px solid ${({ theme }) => theme.colors.neutral200};
+`
 // Header with the change state and Save. The admin scrolls an inner container behind an `overflow: auto` wrapper, so
 // CSS `position: sticky` never reaches the scroller: once the in-flow header leaves the viewport, a fixed bar sized to
 // the content area (`#main-content`, as the page preview pane does) takes over with the same controls.
@@ -165,10 +186,9 @@ function SidebarEditor({ type, entry, set, t, disabled, SelectField, TextField }
   const move = (index: number, by: number) => { const next = [...items]; [next[index], next[index + by]] = [next[index + by], next[index]]; save(next) }
   const fields = (type.attributes || []).filter((attr: any) => !SYSTEM_FIELDS.includes(attr.name))
   const id = (name: string, index?: number) => `sidebar-${name}-${type.uid}${index === undefined ? '' : `-${index}`}`
-  return <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4} data-testid={`sidebar-editor-${type.uid}`}>
-    <Typography variant="delta" tag="h3">{t.f('sidebarTitle', { name: type.displayName })}</Typography>
+  return <Flex direction="column" alignItems="stretch" gap={3} data-testid={`sidebar-editor-${type.uid}`}>
     <Typography variant="pi" textColor="neutral600">{t.sidebarHelp}</Typography>
-    <Box style={{ maxWidth: 240 }}><SelectField name={id('position')} label={t.sidebarPosition} value={entry.sidebarPosition || 'left'} disabled={disabled}
+    <Box><SelectField name={id('position')} label={t.sidebarPosition} value={entry.sidebarPosition || 'left'} disabled={disabled}
       options={['left', 'right', 'bottom'].map(value => ({ value, label: t.positions[value] }))} onChange={(v: string) => set('sidebarPosition', v, 'left')} /></Box>
     {items.map((item, index) => <Item key={index} data-testid={id('item', index)}>
       <Flex gap={4} alignItems="flex-end" wrap="wrap">
@@ -380,9 +400,9 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
       {section === 'history' && data.historyTypes && settings.history && <HistorySettings types={data.historyTypes} history={settings.history} t={t} disabled={!canUpdate || saving} ToggleField={ToggleField} TextField={TextField}
         set={(key: string, value: unknown) => update(s => { s.history = { ...s.history, [key]: value }; return s })} />}
       {section === 'history' && !data.historyTypes && <Box padding={6} background="neutral0" hasRadius><Typography textColor="neutral600">{t.historyUnavailable}</Typography></Box>}
-      {section === 'content-types' && (data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
-        <Typography variant="pi" textColor="neutral600">{t.contentTypesHelp}</Typography>
-        {data.contentTypes.map((type: any) => {
+      {section === 'content-types' && (data.contentTypes || []).length > 0 && <Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
+        <Box padding={4} background="neutral0" hasRadius><Typography variant="pi" textColor="neutral600">{t.contentTypesHelp}</Typography></Box>
+        <ContentTypeGrid>{data.contentTypes.map((type: any) => {
           const entry = settings.contentTypes?.[type.uid] || {}
           // Only overrides are stored: back to the default removes the key.
           const set = (key: string, value: unknown, fallback: unknown) => update(s => {
@@ -392,26 +412,30 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
             if (Object.keys(next).length) s.contentTypes[type.uid] = next; else delete s.contentTypes[type.uid]
             return s
           })
-          return <Flex key={type.uid} direction="column" alignItems="stretch" gap={4}>
-          <Flex gap={6} alignItems="flex-end" wrap="wrap" data-testid={`content-type-${type.uid}`}>
-            <Box style={{ minWidth: 220 }}><ToggleField name={`type-enabled-${type.uid}`} label={type.displayName} value={entry.enabled !== false} disabled={!canUpdate || saving}
+          const customized = Boolean(entry.sidebar?.length || entry.sidebarPosition || entry.previewToolbar || entry.previewDevices)
+          return <ContentTypeCard key={type.uid} data-testid={`content-type-${type.uid}`}>
+          <ContentTypeTop>
+            <Box><ToggleField name={`type-enabled-${type.uid}`} label={type.displayName} value={entry.enabled !== false} disabled={!canUpdate || saving}
               onChange={(v: boolean) => set('enabled', v, true)} /></Box>
-            <Box style={{ minWidth: 240 }}><SelectField name={`type-mode-${type.uid}`} label={t.typeMode} value={entry.previewMode || 'default'} disabled={!canUpdate || saving || entry.enabled === false}
+            <Box><SelectField name={`type-mode-${type.uid}`} label={t.typeMode} value={entry.previewMode || 'default'} disabled={!canUpdate || saving || entry.enabled === false}
               options={[{ value: 'default', label: t.f('modeDefault', { mode: t.modes[editor.previewMode || 'form'] }) }, ...['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))]}
               onChange={(v: string) => set('previewMode', v, 'default')} /></Box>
-          </Flex>
-          {entry.enabled !== false && <SidebarEditor type={type} entry={entry} set={set} t={t} disabled={!canUpdate || saving} SelectField={SelectField} TextField={TextField} />}
-          {/* Own toolbar: starts as a copy of the global one; off removes both keys (the global ones apply again). */}
-          {entry.enabled !== false && <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4}>
+          </ContentTypeTop>
+          {entry.enabled !== false && <Advanced defaultOpen={customized}>
+            <summary>{t.typeAdvanced}</summary>
+            <SidebarEditor type={type} entry={entry} set={set} t={t} disabled={!canUpdate || saving} SelectField={SelectField} TextField={TextField} />
+            {/* Own toolbar: starts as a copy of the global one; off removes both keys (the global ones apply again). */}
+            <ToolbarSection>
             <ToggleField name={`type-pane-${type.uid}`} label={t.f('paneTypeOverride', { name: type.displayName })} value={Boolean(entry.previewToolbar || entry.previewDevices)} disabled={!canUpdate || saving}
               onChange={(v: boolean) => { set('previewToolbar', v ? [...(editor.previewToolbar || TOOLBAR)] : undefined, undefined); set('previewDevices', v ? structuredClone(editor.previewDevices || DEVICE_NAMES) : undefined, undefined) }} />
             {(entry.previewToolbar || entry.previewDevices) && <PaneEditor id={`type-${type.uid}`} versions={Boolean(data.historyTypes)} toolbar={entry.previewToolbar || editor.previewToolbar || TOOLBAR} devices={entry.previewDevices || editor.previewDevices || DEVICE_NAMES}
               t={t} disabled={!canUpdate || saving} TextField={TextField} set={(key: string, value: unknown) => set(key, value, undefined)} />}
-          </Flex>}
-          </Flex>
-        })}
+            </ToolbarSection>
+          </Advanced>}
+          </ContentTypeCard>
+        })}</ContentTypeGrid>
         {badSidebar && <Typography role="alert" textColor="danger600">{t.sidebarInvalidSave}</Typography>}
-      </Flex></Box>}
+      </Flex>}
       {section === 'gallery' && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <Typography variant="beta" tag="h2">{t.components}</Typography>
         <Searchbar name="component-filter" value={filter} placeholder={t.filter} clearLabel={t.clear} onClear={() => setFilter('')} onChange={(e: any) => setFilter(e.target.value)}>{t.filter}</Searchbar>

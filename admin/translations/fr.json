@@ -138,6 +138,7 @@
  "contentTypes": "Types de contenu",
  "contentTypesHelp": "La galerie, les accordéons et l'aperçu de page fonctionnent sur ces types de contenu (ceux qui ont une Dynamic Zone). Désactivez-en un pour garder son édition native. « S'ouvre en » définit le mode de départ de chaque vue d'édition de ce type ; l'éditeur peut toujours changer pendant l'édition.",
  "typeMode": "S'ouvre en",
+ "typeAdvanced": "Options de l'éditeur visuel",
  "modeDefault": "Par défaut ({mode})",
  "blockModalDone": "Terminé",
  "crashed": "Blockscene s'est arrêté ici à cause d'une erreur. L'éditeur natif n'est pas touché. Si cela se reproduit, désactivez Blockscene dans Settings, Blockscene.",

@@ -138,6 +138,7 @@
  "contentTypes": "Tipos de conteúdo",
  "contentTypesHelp": "A galeria, os accordions e o preview da página funcionam nestes tipos de conteúdo (os que têm uma zona dinâmica). Desligue um para deixar a edição dele nativa. \"Abre em\" é como toda tela de edição desse tipo começa; quem edita ainda pode trocar durante a edição.",
  "typeMode": "Abre em",
+ "typeAdvanced": "Opções do editor visual",
  "modeDefault": "Padrão ({mode})",
  "blockModalDone": "Concluir",
  "crashed": "O Blockscene parou aqui por causa de um erro. O editor nativo não foi afetado. Se acontecer de novo, desligue o Blockscene em Settings, Blockscene.",

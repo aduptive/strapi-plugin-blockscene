@@ -687,6 +687,8 @@ try {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     await page.goto('/admin/settings/blockscene/content-types')
     const uid = 'api::page.page'
+    const card = page.getByTestId(`content-type-${uid}`)
+    await card.getByText('Visual editor options', { exact: true }).click()
     const editor = page.getByTestId(`sidebar-editor-${uid}`)
     await editor.waitFor()
     await page.getByTestId(`sidebar-add-${uid}`).click()
