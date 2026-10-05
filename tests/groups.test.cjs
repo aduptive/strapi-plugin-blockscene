@@ -79,6 +79,16 @@ test('keep groups together: a moved OPEN takes its members; own range, nesting, 
   assert.equal(K(list('A', 'O1', 'c', 'C1', 'B'), settled, g), null)
 })
 
+test('dragging an OPEN upward keeps its members when adjacent hover steps have no actor', async () => {
+  const { keepGroupsTogether } = await import('../admin/rows.mjs')
+  const before = list('A', 'X', 'Y', 'O1', 'L', 'R', 'C1')
+  const firstHover = list('A', 'X', 'O1', 'Y', 'L', 'R', 'C1')
+  const firstSettled = keepGroupsTogether(before, firstHover, g, null)
+  assert.deepEqual(ids(firstSettled), ['A', 'X', 'O1', 'L', 'R', 'C1', 'Y'])
+  const secondHover = list('A', 'O1', 'X', 'L', 'R', 'C1', 'Y')
+  assert.deepEqual(ids(keepGroupsTogether(firstSettled, secondHover, g, null)), ['A', 'O1', 'L', 'R', 'C1', 'X', 'Y'])
+})
+
 test('error rows: nested (Strapi 5) and flat (Strapi 4) error shapes', async () => {
   const { errorRows } = await import('../admin/rows.mjs')
   assert.deepEqual(errorRows({ blocks: [undefined, undefined, { title: 'Required' }] }, 'blocks'), [2])
