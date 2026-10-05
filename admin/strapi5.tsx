@@ -29,6 +29,7 @@ import { Gallery } from "./Gallery";
 import { GroupDiagnostics, PagePreview, ZoneBarTools, useEditorState, usePreviewZone } from "./PagePreview";
 import { usePreviewHost5 } from "./host5";
 import { History, HISTORY_READ } from "./History";
+import { useVersions } from "./Versions";
 import { validateGroups } from "./preview.mjs";
 import { Icon, ICON_NAMES } from "./icons";
 import { registerPanel } from "./pane.mjs";
@@ -40,6 +41,7 @@ import { useCatalog, labelsHook } from "./catalog";
 import { registerTrads } from "./messages";
 import { setLazyConfig, wrapCustomFields } from "./LazyInput";
 import { ContentPage, contentMenuLink } from "./Activity";
+import { StarterKits } from "./StarterKits";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   // Controlled callers (row previews, insertion gaps) pass no trigger: Dialog.Trigger requires a single element child.
@@ -174,6 +176,8 @@ function Workspace({ scope }: any) {
     previewToolbar: typeSettings.previewToolbar || catalog.editor.previewToolbar, previewDevices: typeSettings.previewDevices || catalog.editor.previewDevices };
   const host = usePreviewHost5();
   const state = useEditorState(editor, host);
+  const versions = useVersions(host, catalog?.history);
+  const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
   const add = (zone: any, uid: string, preset?: any) => {
     const values = formValues ?? c.form.values;
     const close = catalog?.groups?.[uid];
@@ -201,6 +205,7 @@ function Workspace({ scope }: any) {
   };
   return (
     <>
+      <StarterKits creating={creating} kits={catalog.kits?.[c.model]} zones={zones} components={c.components} form={form} Modal={Modal} docKey={docKey} />
       <Gallery
         zones={zones}
         components={c.components}
@@ -212,7 +217,7 @@ function Workspace({ scope }: any) {
         put={put}
         editor={catalog.editor}
         catalog={catalog}
-        docKey={`${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`}
+        docKey={docKey}
         contentType={c.model}
         userId={user?.id}
         form={form}
@@ -221,6 +226,7 @@ function Workspace({ scope }: any) {
         openInsert={state.openInsert}
       />
       <PagePreview
+        versions={versions}
         editor={editor}
         state={state}
         host={host}

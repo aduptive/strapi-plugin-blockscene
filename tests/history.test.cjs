@@ -69,9 +69,9 @@ test('history: block diff pairs identical rows, then changed rows by component',
   assert.deepEqual(ops([hero('a'), text('b')], [text('b'), hero('a')]).filter(op => !op.startsWith('same')).length, 2, 'a move is one removal and one addition')
   assert.deepEqual(ops([], []), [])
   const before = { title: 'A', slug: 's', blocks: [hero('a'), text('b')] }
-  assert.deepEqual(summarize(null, before, page), { initial: true, fields: [], blocks: { added: 0, removed: 0, changed: 0 } })
-  assert.deepEqual(summarize(before, { title: 'B', blocks: [hero('z'), text('b'), text('c')] }, page), { fields: ['slug', 'title'], blocks: { added: 1, removed: 0, changed: 1 } })
-  assert.deepEqual(summarize(before, before, page), { fields: [], blocks: { added: 0, removed: 0, changed: 0 } })
+  assert.deepEqual(summarize(null, before, page), { initial: true, fields: [], blocks: { total: 2, added: 2, removed: 0, changed: 0 } })
+  assert.deepEqual(summarize(before, { title: 'B', blocks: [hero('z'), text('b'), text('c')] }, page), { fields: ['slug', 'title'], blocks: { total: 3, added: 1, removed: 0, changed: 1 } })
+  assert.deepEqual(summarize(before, before, page), { fields: [], blocks: { total: 2, added: 0, removed: 0, changed: 0 } })
 })
 
 test('history: media ids and relation targets a snapshot references', () => {
@@ -85,6 +85,8 @@ function fakeStrapi() {
   const rows = []
   const match = (row, where) => Object.entries(where || {}).every(([key, value]) => value && typeof value === 'object' && '$gt' in value ? row[key] > value.$gt : row[key] === value)
   const events = {
+    findMany: async ({ where, offset = 0, limit = Infinity }) => rows.filter(row => match(row, where)).sort((a, b) => b.id - a.id).slice(offset, offset + limit),
+    count: async ({ where }) => rows.filter(row => match(row, where)).length,
     findOne: async ({ where }) => rows.filter(row => match(row, where)).sort((a, b) => b.id - a.id)[0] || null,
     create: async ({ data }) => { const row = { id: rows.length + 1, ...data }; rows.push(row); return row },
   }
@@ -104,11 +106,69 @@ test('history: identical snapshots are stored once (hash dedupe), the event is s
   assert.deepEqual(rows[0].snapshot, snapshot); assert.equal(rows[0].summary.initial, true); assert.ok(rows[0].size > 0)
   assert.equal(rows[1].snapshot, null, 'same content (only ids and timestamps differ): not stored again'); assert.equal(rows[1].size, 0)
   assert.equal(rows[1].hash, rows[0].hash)
-  assert.deepEqual(rows[1].summary, { fields: [], blocks: { added: 0, removed: 0, changed: 0 } })
+  assert.deepEqual(rows[1].summary, { fields: [], blocks: { total: 3, added: 0, removed: 0, changed: 0 } })
   assert.equal(rows[2].snapshot.title, 'Home 2'); assert.deepEqual(rows[2].summary.fields, ['title'])
   assert.ok(rows[3].snapshot, 'another locale has its own versions'); assert.equal(rows[3].actorName, 'Ana')
   await service.record({ ...at, action: 'update', missing: true })
   assert.deepEqual(rows[4].summary, { missing: true }); assert.equal(rows[4].snapshot, null); assert.equal(rows[4].hash, null)
+})
+
+test('history: server pagination reaches past 100; actor choices and snapshots stay in document/locale scope', async () => {
+  const { rows, strapi } = fakeStrapi()
+  const service = historyService({ strapi })
+  for (let id = 1; id <= 127; id++) rows.push({ id, contentType: 'api::page.page', relatedDocumentId: 'doc1', locale: 'en',
+    actor: `admin:${id % 2 + 1}`, actorName: id % 2 ? 'Ana' : 'Bob', hash: 'same', size: id === 1 ? 20 : 0 })
+  rows.push({ id: 128, contentType: 'api::page.page', relatedDocumentId: 'other', locale: 'en', actor: 'admin:9', actorName: 'Other doc', hash: 'other', size: 20 },
+    { id: 129, contentType: 'api::page.page', relatedDocumentId: 'doc1', locale: 'fr', actor: 'admin:8', actorName: 'French', hash: 'fr', size: 20 })
+  const scope = { uid: 'api::page.page', documentId: 'doc1', locale: 'en' }
+  const first = await service.list(scope)
+  assert.equal(first.results.length, 25); assert.equal(first.results[0].id, 127)
+  assert.deepEqual(first.pagination, { page: 1, pageSize: 25, total: 127, pageCount: 6 })
+  assert.equal(first.results[0].stored, true, 'deduplicated snapshot still available')
+  assert.deepEqual(first.actors.map(p => p.actor).sort(), ['admin:1', 'admin:2'])
+  const last = await service.list({ ...scope, page: 6 })
+  assert.deepEqual(last.results.map(row => row.id), [2, 1], 'no silent cut at 100')
+  const filtered = await service.list({ ...scope, actor: 'admin:1' })
+  assert.equal(filtered.pagination.total, 63); assert.ok(filtered.results.every(row => row.actor === 'admin:1'))
+  assert.equal(filtered.actors.length, 2, 'filter choices remain scoped to this document, not the selected actor')
+  const unknown = await service.list({ ...scope, actor: 'admin:9' })
+  assert.equal(unknown.results.length, 0); assert.equal(unknown.pagination.total, 0)
+})
+
+test('history: list validates pagination/actors and refuses unreadable documents before querying', async () => {
+  const { historyController } = require('../server/history')
+  let denied = false, calls = 0, received
+  const service = { scope: async () => ['en'], list: async args => { calls++; received = args; return { results: [], pagination: { total: 0 } } } }
+  const strapi = { contentTypes: { 'api::page.page': page }, plugin: name => name === 'blockscene' ? { service: () => service }
+    : { service: () => ({ create: () => ({ cannot: { read: () => denied } }) }) } }
+  const controller = historyController({ strapi })
+  const ctx = query => ({ params: { uid: 'api::page.page', documentId: 'doc1' }, query, state: {}, badRequest: () => 'bad', forbidden: () => 'denied' })
+  for (const query of [{ page: 0 }, { page: '1.5' }, { pageSize: 101 }, { actor: 'admin:abc' }, { actor: ['admin:1'] }, { locale: 'en/other' }])
+    assert.equal(await controller.list(ctx(query)), 'bad')
+  assert.equal(calls, 0)
+  denied = true; assert.equal(await controller.list(ctx({})), 'denied'); assert.equal(calls, 0)
+  denied = false; const allowed = ctx({ page: '5', pageSize: '25', actor: 'admin:1' }); await controller.list(allowed)
+  assert.deepEqual(received, { uid: 'api::page.page', documentId: 'doc1', locale: 'en', actor: 'admin:1', page: 5, pageSize: 25 })
+  assert.deepEqual(allowed.body, { results: [], pagination: { total: 0 } })
+})
+
+test('historical preview: protocol gate refuses every edit/focus/hover message and stale channel', async () => {
+  const { previewMessageAllowed, PROTOCOL, projectPage } = await import('../admin/preview.mjs')
+  const source = {}, origin = 'https://cms.example', channel = 'version-1'
+  const event = type => ({ origin, source, data: { protocol: PROTOCOL, channel, type } })
+  assert.equal(previewMessageAllowed(event('ready'), origin, source, channel, true), true)
+  for (const type of ['insert', 'paste', 'insert-group', 'move-group', 'delete-group', 'edit', 'media', 'media-remove', 'focus', 'select', 'hover', 'unknown']) {
+    assert.equal(previewMessageAllowed(event(type), origin, source, channel, true), false, type)
+    assert.equal(previewMessageAllowed(event(type), origin, source, channel, false), true, 'live preview keeps its existing validation')
+  }
+  for (const patch of [{ origin: 'https://evil.example' }, { source: {} }, { data: { protocol: PROTOCOL, channel: 'old', type: 'ready' } }])
+    assert.equal(previewMessageAllowed({ ...event('ready'), ...patch }, origin, source, channel, true), false)
+  const { loadVersion } = await import('../admin/versions.mjs')
+  const draft = { blocks: [{ id: 40, __component: 'blocks.hero', heading: 'Unsaved' }] }, before = structuredClone(draft)
+  const version = loadVersion(snapshot, { schema: page, components: schemas, media: { 3: { id: 3, url: '/uploads/picture.png' } }, editable: name => name === 'blocks' })
+  const blocks = projectPage(version.values.blocks, schemas, origin)
+  assert.equal(blocks[0].data.image.url, 'https://cms.example/uploads/picture.png')
+  assert.equal(blocks[0].data.heading, 'Hi'); assert.deepEqual(draft, before, 'hydration/projection never writes the draft')
 })
 
 test('history: settings validation, lenient read, coverage and retention', () => {

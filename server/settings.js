@@ -22,7 +22,7 @@ const DEFAULTS = {
     // Edit view labels that are still the raw attribute name read as "Mobile columns count" (see README "Field labels").
     friendlyLabels: true,
     // Page preview pane (Strapi 5): which toolbar controls show, in order, and the width menu's entries.
-    previewToolbar: ['modes', 'history', 'devices', 'status', 'actions'], previewDevices: ['fit', 'mobile', 'tablet', 'desktop'] },
+    previewToolbar: ['modes', 'history', 'versions', 'devices', 'status', 'actions'], previewDevices: ['fit', 'mobile', 'tablet', 'desktop'] },
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
@@ -38,7 +38,7 @@ const OPENS = ['modal', 'drawer']
 const LABEL = /^[^<>]{1,40}$/
 // Pane toolbar: an ordered subset of the known controls (none repeated). Width menu: known devices and custom widths
 // ({ label, width }), 1 to 8 entries, no name or width twice.
-const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
+const TOOLBAR = ['modes', 'history', 'versions', 'devices', 'status', 'actions']
 const DEVICE_NAMES = ['fit', 'mobile', 'tablet', 'desktop']
 const previewToolbar = value => Array.isArray(value) && value.every(id => TOOLBAR.includes(id)) && new Set(value).size === value.length
 const DEVICE_LABEL = /^[^<>]{1,24}$/
@@ -452,6 +452,92 @@ function validateVariants(config, schemas = {}, notes = []) {
   return out
 }
 
+function requiredProblems(schema, values, schemas, path, media, problems) {
+  for (const [field, attr] of Object.entries(schema?.attributes || {})) {
+    const at = `${path}.${field}`
+    const supplied = Object.hasOwn(values, field)
+    const value = supplied ? values[field] : attr.default
+    if (attr.type === 'media' || attr.type === 'relation') {
+      if (attr.required && !supplied) media.push(at)
+      continue
+    }
+    if (attr.type === 'component') {
+      const nested = schemas[attr.component]
+      if (!nested) { problems.push(`${at}: unknown component "${attr.component}"`); continue }
+      if (attr.repeatable) {
+        const minimum = Math.max(attr.min ?? 0, attr.required ? 1 : 0)
+        const items = supplied ? value : Array.from({ length: minimum }, () => ({}))
+        if (!Array.isArray(items) || items.length < minimum) problems.push(`${at} requires at least ${minimum} item${minimum === 1 ? '' : 's'}`)
+        else items.forEach((item, index) => requiredProblems(nested, item, schemas, `${at}[${index}]`, media, problems))
+      } else if (supplied && value === null) {
+        if (attr.required) problems.push(`${at} is required`)
+      } else if (supplied || attr.required) requiredProblems(nested, supplied ? value : {}, schemas, at, media, problems)
+      continue
+    }
+    if (attr.required && (value === undefined || value === null || value === '')) problems.push(`${at} is required`)
+  }
+}
+
+// Code-only starter kits: named initial rows per Dynamic Zone. Rows use the Content API shape so fixtures can be pasted
+// directly; values share the variant validator and never carry install-specific media/relation ids.
+function validateKits(input, contentTypes = {}, schemas = {}, groups = null, notes = []) {
+  if (input === null || input === undefined) return {}
+  if (!plain(input) || JSON.stringify(input).length > 256 * 1024) { notes.push('expected an object up to 256 KB'); return {} }
+  const out = {}
+  for (const [uid, kits] of Object.entries(input)) {
+    const type = contentTypes[uid]
+    if (!type || !uid.startsWith('api::')) { notes.push(`${uid}: unknown content type`); continue }
+    if (!Array.isArray(kits) || kits.length > 12) { notes.push(`${uid}: kits must be a list of at most 12`); continue }
+    const ids = new Set()
+    for (const kit of kits) {
+      const name = `${uid} kit "${kit?.id ?? '?'}"`
+      try {
+        if (!plain(kit) || Object.keys(kit).some(key => !['id', 'label', 'locales', 'zones'].includes(key))) throw new Error('expected { id, label, locales?, zones }')
+        if (!text(kit.id) || !VARIANT.id.test(kit.id) || ids.has(kit.id)) throw new Error('id must be 1 to 40 lowercase letters, digits, "-" or "_", unique per content type')
+        if (!fieldText(kit.label, 60)) throw new Error('label must be a string of 1 to 60 characters, or { "<locale>": string }')
+        if (kit.locales !== undefined && (!Array.isArray(kit.locales) || !kit.locales.length || kit.locales.length > 20 || kit.locales.some(locale => !text(locale) || !LOCALE.test(locale)))) throw new Error('locales must be 1 to 20 locale codes')
+        if (!plain(kit.zones) || !Object.keys(kit.zones).length) throw new Error('zones must be a non-empty object')
+        const zones = {}
+        for (const [zoneName, rows] of Object.entries(kit.zones)) {
+          const zone = type.attributes?.[zoneName]
+          if (zone?.type !== 'dynamiczone') throw new Error(`unknown Dynamic Zone "${zoneName}"`)
+          if (!Array.isArray(rows) || !rows.length || rows.length > 50) throw new Error(`${zoneName} must contain 1 to 50 rows`)
+          const clean = []
+          for (let index = 0; index < rows.length; index++) {
+            const row = rows[index]
+            if (!plain(row) || !text(row.__component)) throw new Error(`${zoneName}[${index}] must have __component`)
+            const component = row.__component
+            if (!zone.components?.includes(component) || !schemas[component]) throw new Error(`${zoneName}[${index}]: component "${component}" is not allowed`)
+            const skipped = []
+            const values = variantValues(row, schemas[component], schemas, `${zoneName}[${index}]`, skipped)
+            if (skipped.length) notes.push(`${name}: media and relation values are not inserted (${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ', ...' : ''})`)
+            const media = [], required = []
+            requiredProblems(schemas[component], values, schemas, `${zoneName}[${index}]`, media, required)
+            if (required.length) throw new Error(required.slice(0, 5).join('; '))
+            if (media.length) notes.push(`${name}: required media or relations must be completed before publishing (${media.slice(0, 5).join(', ')}${media.length > 5 ? ', ...' : ''})`)
+            clean.push({ __component: component, values })
+            const close = groups?.[component]
+            if (close) {
+              if (!zone.components?.includes(close) || !schemas[close]) throw new Error(`${zoneName}[${index}]: close component "${close}" is not allowed`)
+              clean.push({ __component: close, values: {} })
+            }
+          }
+          if (clean.length > (zone.max ?? Infinity)) throw new Error(`${zoneName} exceeds its maximum of ${zone.max}`)
+          zones[zoneName] = clean
+        }
+        for (const [zoneName, zone] of Object.entries(type.attributes || {})) {
+          if (zone?.type !== 'dynamiczone') continue
+          const minimum = Math.max(zone.min ?? 0, zone.required ? 1 : 0)
+          if ((zones[zoneName]?.length || 0) < minimum) throw new Error(`${zoneName} requires at least ${minimum} row${minimum === 1 ? '' : 's'}`)
+        }
+        ids.add(kit.id)
+        ;(out[uid] ||= []).push({ id: kit.id, label: structuredClone(kit.label), ...(kit.locales && { locales: [...new Set(kit.locales)] }), zones })
+      } catch (error) { notes.push(`${name} ignored: ${error.message}`) }
+    }
+  }
+  return out
+}
+
 // Per admin user gallery preferences: starred and recently used components (most recent first), existing uids only.
 const PREFS = { starred: 200, recent: 20 }
 function validatePrefs(input, componentUids) {
@@ -467,4 +553,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }

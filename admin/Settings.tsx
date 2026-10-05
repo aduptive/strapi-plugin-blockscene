@@ -93,7 +93,7 @@ const Checks = styled.fieldset`
 `
 
 // Page preview toolbar and widths, same rules as server/settings.js (previewToolbar, previewDevices).
-const TOOLBAR = ['modes', 'history', 'devices', 'status', 'actions']
+const TOOLBAR = ['modes', 'history', 'versions', 'devices', 'status', 'actions']
 const DEVICE_NAMES = ['fit', 'mobile', 'tablet', 'desktop']
 const DEVICE_LABEL = /^[^<>]{1,24}$/
 const badDevices = (list: any[] = []) => list.length < 1 || list.length > 8 ||
@@ -101,7 +101,7 @@ const badDevices = (list: any[] = []) => list.length < 1 || list.length > 8 ||
   new Set(list.map(item => typeof item === 'string' ? item : item.width)).size !== list.length
 const Row = styled.div` display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 13px; color: ${({ theme }) => theme.colors.neutral800}; `
 // Ordered checklists: checked entries first, in their order (up/down), the unchecked ones after them.
-function PaneEditor({ id, toolbar, devices, set, t, disabled, TextField }: any) {
+function PaneEditor({ id, toolbar, devices, set, t, disabled, TextField, versions }: any) {
   const move = (list: any[], index: number, by: number) => { const next = [...list]; [next[index], next[index + by]] = [next[index + by], next[index]]; return next }
   const arrows = (list: any[], index: number, key: string) => <>
     <Tool icon="up" label={t.moveUp} disabled={disabled || index < 0 || index === 0} onClick={() => set(key, move(list, index, -1))} />
@@ -112,7 +112,7 @@ function PaneEditor({ id, toolbar, devices, set, t, disabled, TextField }: any) 
   const width = (index: number, patch: any) => set('previewDevices', devices.map((item: any, i: number) => i === index ? { ...item, ...patch } : item))
   return <Flex direction="column" alignItems="stretch" gap={3} data-testid={`pane-editor-${id}`}>
     <Typography variant="pi" textColor="neutral600">{t.paneHelp}</Typography>
-    <Box>{[...toolbar, ...TOOLBAR.filter(item => !toolbar.includes(item))].map(item => <Row key={item} data-testid={`${id}-toolbar-${item}`}>
+    <Box>{[...toolbar, ...TOOLBAR.filter(item => !toolbar.includes(item))].filter(item => item !== 'versions' || versions).map(item => <Row key={item} data-testid={`${id}-toolbar-${item}`}>
       {arrows(toolbar, toolbar.indexOf(item), 'previewToolbar')}<label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{check(toolbar, item, 'previewToolbar')}{t.toolbar[item]}</label>
     </Row>)}</Box>
     <Typography variant="delta" tag="h3">{t.paneDevices}</Typography>
@@ -343,7 +343,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
             options={['form', 'split', 'preview'].map(value => ({ value, label: t.modes[value] }))} onChange={(v: string) => update(s => { s.editor.previewMode = v; return s })} />
           <Typography variant="pi" textColor="neutral600">{t.previewModeHelp}</Typography>
           <Typography variant="delta" tag="h3">{t.paneTitle}</Typography>
-          <PaneEditor id="editor" toolbar={editor.previewToolbar || TOOLBAR} devices={editor.previewDevices || DEVICE_NAMES} t={t} disabled={!canUpdate || saving} TextField={TextField}
+          <PaneEditor id="editor" versions={Boolean(data.historyTypes)} toolbar={editor.previewToolbar || TOOLBAR} devices={editor.previewDevices || DEVICE_NAMES} t={t} disabled={!canUpdate || saving} TextField={TextField}
             set={(key: string, value: unknown) => update(s => { s.editor[key] = value; return s })} />
           {lazyEditors && <>
           <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
@@ -393,7 +393,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           {entry.enabled !== false && <Flex direction="column" alignItems="stretch" gap={3} paddingLeft={4}>
             <ToggleField name={`type-pane-${type.uid}`} label={t.f('paneTypeOverride', { name: type.displayName })} value={Boolean(entry.previewToolbar || entry.previewDevices)} disabled={!canUpdate || saving}
               onChange={(v: boolean) => { set('previewToolbar', v ? [...(editor.previewToolbar || TOOLBAR)] : undefined, undefined); set('previewDevices', v ? structuredClone(editor.previewDevices || DEVICE_NAMES) : undefined, undefined) }} />
-            {(entry.previewToolbar || entry.previewDevices) && <PaneEditor id={`type-${type.uid}`} toolbar={entry.previewToolbar || editor.previewToolbar || TOOLBAR} devices={entry.previewDevices || editor.previewDevices || DEVICE_NAMES}
+            {(entry.previewToolbar || entry.previewDevices) && <PaneEditor id={`type-${type.uid}`} versions={Boolean(data.historyTypes)} toolbar={entry.previewToolbar || editor.previewToolbar || TOOLBAR} devices={entry.previewDevices || editor.previewDevices || DEVICE_NAMES}
               t={t} disabled={!canUpdate || saving} TextField={TextField} set={(key: string, value: unknown) => set(key, value, undefined)} />}
           </Flex>}
           </Flex>

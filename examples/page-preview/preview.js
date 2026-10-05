@@ -6,7 +6,8 @@
   // Only the admin origin may talk to this page. Configure it per environment.
   const ADMIN_ORIGIN = params.get('admin') || location.origin
   if (!channel || window.parent === window) return
-  const post = (message) => window.parent.postMessage({ protocol: PROTOCOL, channel, ...message }, ADMIN_ORIGIN)
+  let readOnly = false
+  const post = (message) => { if (!readOnly || message.type === 'ready') window.parent.postMessage({ protocol: PROTOCOL, channel, ...message }, ADMIN_ORIGIN) }
   const ok = (event, type) => event.origin === ADMIN_ORIGIN && event.source === window.parent && event.data?.protocol === PROTOCOL && event.data?.channel === channel && event.data?.type === type
   let editing = null, pending = null, selected = null, marked = null
   const mark = () => document.querySelectorAll('[data-block-key], [data-group-key]').forEach(el => { if (marked !== null && (el.dataset.blockKey || el.dataset.groupKey) === marked) el.dataset.hovered = ''; else delete el.dataset.hovered })
@@ -36,7 +37,7 @@
     const page = document.getElementById('page')
     page.innerHTML = blocks.length ? '' : '<p class="status">No blocks in the zone yet.</p>'
     // Insertion gaps: before the first block, between blocks and after the last one.
-    const gap = (after, label, inner = false) => { const g = document.createElement('div'); g.className = 'bp-gap'; g.dataset.testid = `bp-gap-${after ?? 'start'}`; const opener = groups && Object.keys(groups)[0]; g.innerHTML = `<button type="button" class="bp-insert" data-after="${esc(after ?? '')}" aria-label="${esc(label)}">+ Insert block</button>${opener && !inner ? `<button type="button" class="bp-insert bp-insert--group" data-insert-group="${esc(opener)}" data-after="${esc(after ?? '')}" aria-label="Add group: ${esc(label)}">+ Group</button>` : ''}${clipboard ? `<button type="button" class="bp-insert bp-insert--paste" data-paste data-after="${esc(after ?? '')}" aria-label="Paste ${clipboard} copied blocks: ${esc(label)}">Paste (${clipboard})</button>` : ''}`; return g }
+    const gap = (after, label, inner = false) => { if (readOnly) return document.createTextNode(''); const g = document.createElement('div'); g.className = 'bp-gap'; g.dataset.testid = `bp-gap-${after ?? 'start'}`; const opener = groups && Object.keys(groups)[0]; g.innerHTML = `<button type="button" class="bp-insert" data-after="${esc(after ?? '')}" aria-label="${esc(label)}">+ Insert block</button>${opener && !inner ? `<button type="button" class="bp-insert bp-insert--group" data-insert-group="${esc(opener)}" data-after="${esc(after ?? '')}" aria-label="Add group: ${esc(label)}">+ Group</button>` : ''}${clipboard ? `<button type="button" class="bp-insert bp-insert--paste" data-paste data-after="${esc(after ?? '')}" aria-label="Paste ${clipboard} copied blocks: ${esc(label)}">Paste (${clipboard})</button>` : ''}`; return g }
     page.appendChild(gap(null, blocks.length ? 'Insert block at the start' : 'Insert the first block'))
     const renderBlock = (block, parent) => {
       const section = document.createElement('section')
@@ -69,6 +70,11 @@
     }
     renderNodes(groupOf(blocks), page)
     mark()
+    if (readOnly) {
+      page.querySelectorAll('.bp-tools').forEach(el => el.remove())
+      page.querySelectorAll('[contenteditable], [data-field-kind]').forEach(el => { el.removeAttribute('contenteditable'); el.removeAttribute('tabindex'); el.removeAttribute('role'); el.removeAttribute('aria-label') })
+      return
+    }
     for (const title of page.querySelectorAll('[data-block-field="title"]')) {
       const key = title.closest('[data-block-key]').dataset.blockKey
       let timer
@@ -105,8 +111,8 @@
   document.addEventListener('change', (event) => { const select = event.target.closest('select[data-fields]'); if (select && select.value) { const key = select.closest('[data-block-key]').dataset.blockKey; selected = key; post({ type: 'focus', key, field: select.value }); select.value = '' } })
   document.addEventListener('keydown', (event) => { const rich = event.target.closest?.('[data-field-kind="rich"]'); if (rich && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); post({ type: 'focus', key: rich.closest('[data-block-key]').dataset.blockKey, field: rich.dataset.blockField }) } })
   window.addEventListener('message', (event) => {
-    if (ok(event, 'ping')) post({ type: 'ready' })
-    if (ok(event, 'update-page') && Array.isArray(event.data.blocks)) { clearInterval(retry); groups = event.data.groups || null; clipboard = Number(event.data.clipboard) || 0; if (editing) pending = event.data.blocks; else render(event.data.blocks) }
+    if (ok(event, 'ping')) post({ type: 'ready', capabilities: ['readOnly'] })
+    if (ok(event, 'update-page') && Array.isArray(event.data.blocks)) { clearInterval(retry); readOnly = event.data.readOnly === true; if (readOnly) { editing = pending = selected = marked = null }; groups = event.data.groups || null; clipboard = Number(event.data.clipboard) || 0; if (editing) pending = event.data.blocks; else render(event.data.blocks) }
     if (ok(event, 'hover') && (event.data.key === null || typeof event.data.key === 'string')) { marked = event.data.key; mark() }
     if (ok(event, 'highlight') && typeof event.data.key === 'string') { selected = event.data.key; document.querySelectorAll('[data-block-key]').forEach(s => { if (s.dataset.blockKey === selected) s.dataset.selected = ''; else delete s.dataset.selected }); document.querySelector(`[data-block-key="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'center' }) }
   })
@@ -116,7 +122,7 @@
   const hover = (key) => { if (key !== hovered) { hovered = key; post({ type: 'hover', key }) } }
   document.addEventListener('pointerover', (event) => { const el = event.target.closest?.('[data-block-key], [data-group-key]'); hover(el ? el.dataset.blockKey || el.dataset.groupKey : null) })
   document.addEventListener('pointerout', (event) => { if (!event.relatedTarget) hover(null) })
-  const notify = () => post({ type: 'ready' })
+  const notify = () => post({ type: 'ready', capabilities: ['readOnly'] })
   notify()
   const retry = setInterval(notify, 2000)
 })()

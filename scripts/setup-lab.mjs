@@ -23,7 +23,10 @@ write('config/database.js', `const path = require('node:path'); module.exports =
 write('config/middlewares.js', `module.exports = ['strapi::logger', 'strapi::errors', 'strapi::security', 'strapi::cors', 'strapi::poweredBy', 'strapi::query', 'strapi::body', 'strapi::session', 'strapi::favicon', 'strapi::public']\n`)
 write('config/plugins.js', `// Lab switch: BLOCK_PICKER_GROUPS unset/1 = generic group pair configured; 0 = no config (every block ordinary); bad = malformed config (ignored with a warning).
 const groups = process.env.BLOCK_PICKER_GROUPS === '0' ? null : process.env.BLOCK_PICKER_GROUPS === 'bad' ? { 'group.section': 'group.section' } : { 'group.section': 'group.end' }
-module.exports = { 'blockscene': { enabled: true, config: { groups, components: { 'blocks.hero': { label: 'Hero example', description: 'A heading with nested defaults.', category: 'Editorial', keywords: 'banner', image: '/block-previews/hero.svg' } } } }, 'image-pipeline': { enabled: true } }
+module.exports = { 'blockscene': { enabled: true, config: { groups,
+  kits: { 'api::page.page': [{ id: 'landing', label: 'Landing page', zones: { blocks: [{ __component: 'blocks.hero', title: 'Starter headline' }] } }] },
+  components: { 'blocks.hero': { label: 'Hero example', description: 'A heading with nested defaults.', category: 'Editorial', keywords: 'banner', image: '/block-previews/hero.svg' } }
+} }, 'image-pipeline': { enabled: true } }
 
 if (process.env.IMAGE_HOOK_SMOKE === '1') module.exports['image-pipeline'].config = { hooks: require(${JSON.stringify(resolve('../strapi-plugin-image-pipeline/tests/fixtures/image-hooks.cjs'))}), hookTimeoutMs: 250 };\n`)
 write('src/admin/app.js', `// Lab host only: offer the admin UI locales the plugin ships, so locale switching can be tested.

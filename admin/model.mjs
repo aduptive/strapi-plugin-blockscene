@@ -48,6 +48,33 @@ export function variantRow(schema, components, values, keys = fractional) {
   return row;
 }
 
+// Materialize a validated starter kit into form rows. null means the entry is no longer empty or its live schema no
+// longer fits the catalog built at boot.
+export function starterKitRows(kit, zones, components, form) {
+  const out = {};
+  for (const [name, items] of Object.entries(kit?.zones || {})) {
+    const zone = zones.find((entry) => entry.name === name);
+    const current = form.rows(name);
+    if (!zone || current.length || current.length + items.length > (zone.max ?? Infinity) ||
+      items.some((item) => !zone.components.includes(item.__component) || !components[item.__component])) return null;
+    const keys = form.keys(current, current.length, items.length);
+    out[name] = items.map((item, index) => ({ ...variantRow(components[item.__component], components, item.values), __component: item.__component, __temp_key__: keys[index] }));
+  }
+  return out;
+}
+
+// A kit without locales is universal. Locale-specific kits use exact Strapi locale codes, with a language-only entry
+// (for example "pt") also matching regional locales ("pt-BR").
+export function starterKitsForLocale(kits, locale) {
+  if (!Array.isArray(kits)) return [];
+  const current = String(locale || "").toLowerCase();
+  const language = current.split("-")[0];
+  return kits.filter((kit) => !Array.isArray(kit.locales) || kit.locales.some((entry) => {
+    const wanted = String(entry).toLowerCase();
+    return wanted === current || (!wanted.includes("-") && wanted === language);
+  }));
+}
+
 // Every editable top-level Dynamic Zone. `full` zones keep their accordion
 // controls but hide the gallery button.
 export function editableZones(schema, values, canEdit, disabled = false) {

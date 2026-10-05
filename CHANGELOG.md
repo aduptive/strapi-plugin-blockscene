@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.0-alpha.12 (Strapi 5) and 1.0.0-alpha.11 (Strapi 4) — 2026-10-05
+
+- New entries can start from project-defined, locale-aware block kits. Kits are
+  validated against each Dynamic Zone's allowlist and bounds, schema defaults
+  and required scalar fields; configured group openers receive their closers.
+  The chooser only changes the unsaved form and is shown once per new-entry
+  browser history item.
+- Strapi 5, version history Phase 1: a new `versions` toolbar control opens a
+  right drawer with local date/time, actor and action, day grouping and a scoped
+  actor filter. History lists now paginate on the server beyond 100 events.
+  New captures store block totals and added/removed/changed counts; older events
+  show unavailable counts. `history` keeps its Undo/Redo meaning.
+- Selecting a retained version shows a separate read-only preview; returning
+  preserves the current unsaved draft. Request/channel guards reject stale
+  responses and all preview mutation/focus messages. The reference bridge
+  supports read-only browsing; older bridges render with interaction disabled.
+  The existing side-panel load action is preserved. No new restore/diff or
+  named-version/purge behavior is included. Labels use all eight existing locales.
+
 ## 2.0.0-alpha.11 (Strapi 5) and 1.0.0-alpha.10 (Strapi 4) — 2026-10-02
 
 - Dynamic Zone allowlists are now enforced by the plugin on create, update and

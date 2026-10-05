@@ -10,6 +10,7 @@ import {
   blockKey,
   insertIndex,
   isPreviewMessage,
+  previewMessageAllowed,
   mediaAttribute,
   moveGroup,
   removeGroup,
@@ -480,6 +481,7 @@ export function PagePreview({
   form = null,
   Modal,
   Toggle,
+  versions,
 }: {
   editor: any;
   state: EditorState;
@@ -489,6 +491,7 @@ export function PagePreview({
   form?: any;
   Modal: React.ComponentType<any>;
   Toggle?: React.ComponentType<any>;
+  versions?: any; // Strapi 5 historical preview, kept entirely outside the live form.
 }) {
   const t = useMessages();
   const { values, zone, zoneLabel, canEdit, latest, insertRows } = usePreviewZone(host);
@@ -513,6 +516,7 @@ export function PagePreview({
   const vw = main.width; // editor content area, not the viewport
   const [dragging, setDragging] = React.useState(false);
   const [ready, setReady] = React.useState(false);
+  const [readOnlyBridge, setReadOnlyBridge] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
   const [attempt, retry] = React.useReducer((n: number) => n + 1, 0);
   const [picking, setPicking] = React.useState<any>(null);
@@ -562,7 +566,12 @@ export function PagePreview({
   const iframe = React.useRef<HTMLIFrameElement>(null);
   const loaded = React.useRef(false);
   const anchor = React.useRef<HTMLDivElement>(null);
-  const channel = React.useMemo(() => crypto.randomUUID(), []);
+  const version = versions?.view;
+  const readOnly = Boolean(version);
+  const viewRows = React.useRef<any[]>([]);
+  viewRows.current = version ? (version.values?.[zone!] || []) : latest.current;
+  // Changing document/locale/version invalidates queued messages from the previous frame session.
+  const channel = React.useMemo(() => crypto.randomUUID(), [host.model, host.documentId, host.locale, version?.scope, version?.event.id]);
   const { base, source } = state.preview;
   // The settings URL is the full page-preview route; only the channel is appended.
   const url = base ? new URL(base) : null;
@@ -585,6 +594,7 @@ export function PagePreview({
     onChange,
     clip,
     clipCount,
+    readOnly,
   });
   live.current = {
     mode,
@@ -595,6 +605,7 @@ export function PagePreview({
     onChange,
     clip,
     clipCount,
+    readOnly,
   };
 
   const send = React.useCallback(() => {
@@ -604,19 +615,23 @@ export function PagePreview({
         channel,
         type: "update-page",
         blocks: projectPage(
-          latest.current,
+          viewRows.current,
           live.current.components,
           window.location.origin,
           hiddenAttribute,
-        ),
+        ).map((block: any) => live.current.readOnly ? { ...block, fields: [], media: {} } : block),
         groups,
         locale: t.locale,
         mode: live.current.mode,
-        clipboard: live.current.clipCount,
+        clipboard: live.current.readOnly ? 0 : live.current.clipCount,
+        readOnly: live.current.readOnly,
       },
       origin,
     );
-  }, [channel, origin, hiddenAttribute]);
+  }, [channel, origin, hiddenAttribute, groups]);
+  React.useEffect(() => {
+    if (readOnly) { setInserting(null); setBlockModal(null); setPicking(null); setFieldsPanel(null); setHovered(null); }
+  }, [readOnly]);
   const indexOf = (key: string) =>
     latest.current.findIndex((row) => blockKey(row) === key);
   const path = (key: string, field: string) =>
@@ -798,9 +813,11 @@ export function PagePreview({
   React.useEffect(() => {
     if (!active) return;
     setReady(false);
+    setReadOnlyBridge(false);
     setFailed(false);
     const timeout = setTimeout(() => setFailed(true), 15000);
     const receive = (event: MessageEvent) => {
+      if (!previewMessageAllowed(event, origin, iframe.current?.contentWindow, channel, live.current.readOnly)) return;
       const is = (type: string) =>
         isPreviewMessage(
           event,
@@ -815,6 +832,7 @@ export function PagePreview({
         clearTimeout(timeout);
         setReady(true);
         setFailed(false);
+        setReadOnlyBridge(Array.isArray(event.data.capabilities) && event.data.capabilities.includes("readOnly"));
         send();
         return;
       }
@@ -960,10 +978,10 @@ export function PagePreview({
     if (!ready || !active) return;
     const timer = setTimeout(send, 120);
     return () => clearTimeout(timer);
-  }, [values, host.components, ready, active, send, mode, clipCount]); // mode and the clipboard travel with the update
+  }, [values, version, host.components, ready, active, send, mode, clipCount]); // mode and the clipboard travel with the update
   // Form -> page hover: the zone row under the pointer (open or closed), sent only when it changes.
   React.useEffect(() => {
-    if (!active || !ready) return;
+    if (!active || !ready || readOnly) return;
     let last: string | null = null;
     const post = (key: string | null) => {
       if (key === last) return;
@@ -988,7 +1006,7 @@ export function PagePreview({
       document.removeEventListener("pointerout", onOut);
       post(null);
     };
-  }, [active, ready, channel, origin]);
+  }, [active, ready, channel, origin, readOnly]);
   // Page -> form hover: the matching row gets the highlight attribute; out of view, an edge indicator points to it.
   React.useEffect(() => {
     const item = hovered && active
@@ -1054,7 +1072,7 @@ export function PagePreview({
   );
   // editor.previewToolbar: which controls show and in which order (status and actions stay together, on the right).
   const layout = toolbarLayout(editor?.previewToolbar);
-  const tools: Record<string, React.ReactNode> = { modes: switcher, history: historyTools, devices };
+  const tools: Record<string, React.ReactNode> = { modes: switcher, history: !readOnly && historyTools, versions: versions?.button, devices };
   const toolbarShown = !ready || layout.before.length + layout.right.length + layout.after.length > 0;
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const map: Record<string, number> = {
@@ -1168,12 +1186,15 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
                     {t.retry}
                   </Button>
                 )}
-                {layout.right.length > 0 && <Actions parts={layout.right} />}
+                {!readOnly && layout.right.length > 0 && <Actions parts={layout.right} />}
               </Flex>
               {layout.after.map((id) => <React.Fragment key={id}>{tools[id]}</React.Fragment>)}
             </Flex>}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: sidebarPosition === "bottom" ? "column-reverse" : sidebarPosition === "right" ? "row-reverse" : "row" }}>
-            {mode === "preview" && sidebar.length > 0 && (
+            {versions?.banner}
+            {readOnly && ready && !readOnlyBridge && <Box padding={2} background="neutral100"><Typography variant="pi" role="status">{t.versionsBridgeLegacy}</Typography></Box>}
+            <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: sidebarPosition === "bottom" ? "column-reverse" : sidebarPosition === "right" ? "row-reverse" : "row" }}>
+            {!readOnly && mode === "preview" && sidebar.length > 0 && (
               <div ref={setRailEl} style={{ display: "flex" }}>
               <Flex data-testid="page-preview-sidebar" data-position={sidebarPosition} role="toolbar" aria-label={t.sidebarLabel}
                 direction={sidebarPosition === "bottom" ? "row" : "column"} gap={1} padding={1} background="neutral100" justifyContent={sidebarPosition === "bottom" ? "center" : "flex-start"}
@@ -1197,12 +1218,15 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
                 src={url!.href}
                 sandbox="allow-scripts allow-same-origin"
                 referrerPolicy="no-referrer"
+                {...(readOnly && !readOnlyBridge ? { inert: "", tabIndex: -1 } : {})}
                 onLoad={() => {
                   loaded.current = true;
                 }}
-                style={{ ...frameStyle(device.width, stageSize), ...(dragging ? { pointerEvents: "none" } : {}) }}
+                style={{ ...frameStyle(device.width, stageSize), ...(dragging || (readOnly && !readOnlyBridge) ? { pointerEvents: "none" } : {}) }}
               />
             </div>
+            </div>
+            {versions?.drawer}
             </div>
           </Pane>,
           document.body,
@@ -1226,6 +1250,7 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
             if (!open) setInserting(null);
           }}
           onSelect={(uid: string, values?: any) => {
+            if (live.current.readOnly) return;
             // Resolved now, not when the gap was clicked: reorders in between are respected.
             const rows = inserting.zone === zone ? latest.current : Array.isArray(host.values?.[inserting.zone]) ? host.values[inserting.zone] : []; // `values` here is the variant
             const index = insertIndex(rows, inserting.after);
@@ -1313,6 +1338,7 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
           multiple={picking.attr.multiple === true}
           onClose={() => setPicking(null)}
           onSelectAssets={(assets: any[]) => {
+            if (live.current.readOnly) return;
             const index = indexOf(picking.key);
             setPicking(null);
             if (index < 0 || !assets?.length) return;

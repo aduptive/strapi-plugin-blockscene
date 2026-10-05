@@ -356,6 +356,10 @@ const Round = styled.button<{ $on?: boolean }>`
   border: 1px solid ${({ theme }) => theme.colors.neutral200};
   color: ${({ theme, $on }) => ($on ? theme.colors.warning500 : theme.colors.neutral600)};
   background: ${({ theme }) => theme.colors.neutral0};
+  transition: transform 120ms ease-out;
+  &:active {
+    transform: scale(0.97);
+  }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary600};
     outline-offset: 1px;
@@ -936,7 +940,7 @@ function ZoneGallery({
     setPicked(NO_FILTERS);
   };
   const labelOf = (menu: string, value: string) => (menu === "tags" ? value : t.facets[value] || value);
-  // values: the chosen insert variant's (a quick insert takes the first one), undefined without variants.
+  // values: the chosen insert variant's (a direct card insert takes the first one), undefined without variants.
   const select = (uid: string, values?: any) => {
     try {
       if (controlled ? (controlled.onSelect(uid, values), true) : add(zone, uid, values)) {
@@ -1121,7 +1125,7 @@ function ZoneGallery({
             >
               {(view === "recent" ? [{ typology: "recent", entries }] : groupEntries(entries)).map(
                 ({ typology, entries: items }: any) => (
-                  <Flex key={typology} direction="column" alignItems="stretch" gap={2}>
+                  <Flex key={typology} direction="column" alignItems="stretch" gap={2} flex="0 0 auto">
                     <Typography variant="sigma" textColor="neutral600" data-testid={`block-group-${typology}`}>
                       {`${typology === "recent" ? t.nav.recent : t.typologies[typology] || typology} (${items.length})`}
                     </Typography>
