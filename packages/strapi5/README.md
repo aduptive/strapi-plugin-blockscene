@@ -65,7 +65,7 @@ Right beside the native zone label ("blocks (3)") each zone gets a short bar:
 - **Undo and Redo** (Strapi 5, first zone only): icon and text, the shortcut in
   the tooltip. See [Undo and redo](#undo-and-redo).
 - **Editing mode** (first zone only, when a preview route exists): a
-  menu with Fields, Fields + page and Visual editor. Without a preview route the
+  menu with Fields only, Fields + preview and Visual editor. Without a preview route the
   menu is not shown; Settings, Blockscene says why.
 - **"…" (More actions)**: Select blocks, and "Paste N blocks" while the
   clipboard holds blocks this zone allows (see [Row actions](#row-actions)).
@@ -230,6 +230,8 @@ blockscene: { config: {
     'api::page.page': [{
       id: 'landing',
       label: { en: 'Landing page', 'pt-BR': 'Página de campanha' },
+      // Optional. A language code such as "pt" also matches "pt-BR".
+      locales: ['en', 'pt-BR'],
       zones: { blocks: [
         { __component: 'blocks.hero', title: 'Replace this headline' },
         { __component: 'blocks.rich-text', text: 'Replace this text.' },
@@ -243,7 +245,11 @@ Rows use the Content API shape and the same validated values as [insert
 variants](#insert-variants). Schema defaults are merged in, nested components
 work, and configured layout OPEN blocks receive their CLOSE automatically.
 Media and relations are omitted because their ids are installation-specific;
-the gallery thumbnails still provide visual image placeholders in the chooser.
+required ones are called out in the server log and must be completed before
+publishing. Invalid kits, missing required scalar values and kits below or
+above a Dynamic Zone's bounds are ignored with a server warning. The chooser
+is remembered for the current new-entry browser history item, so re-rendering
+or reloading it does not apply or prompt twice.
 
 ## Row thumbnails
 
@@ -463,7 +469,7 @@ the two supported versions only.
 ## Whole-page preview
 
 Both distributions add a page preview with three modes, chosen from the
-first zone's bar and from the pane toolbar: Fields (form), Fields + page (side
+first zone's bar and from the pane toolbar: Fields only (form), Fields + preview (side
 by side: resizable pane, native actions moved to a bar above the form) and
 Visual editor. It posts the live values of the first Dynamic Zone to a page
 your frontend serves; the page renders them with its own components and styles
@@ -581,7 +587,7 @@ blocks use the native insertion at a position. Differences:
 ### Pane toolbar
 
 Which controls the toolbar shows, and in which order, is `previewToolbar`:
-`modes` (Fields, Fields + page, Visual editor), `history` (Undo, Redo),
+`modes` (Fields only, Fields + preview, Visual editor), `history` (Undo, Redo),
 `versions` (the version history drawer, Strapi 5),
 `devices` (the width menu), `status` (Draft/Modified/Published and the unsaved
 hint) and `actions` (Save, Publish). A missing id is hidden; `status` and

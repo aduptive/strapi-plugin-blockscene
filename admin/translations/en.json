@@ -52,7 +52,7 @@
  "rememberHelp": "Only the explicit open all / close all buttons update the memory, per user and browser. Opening one block does not.",
  "previewUrl": "Preview route base URL",
  "previewUrlHelp": "Full URL of your frontend page-preview route, e.g. https://site.test/block-preview/page. Leave empty to reuse the origin of Strapi's native Preview (when configured for the content type) with /block-preview/page. The route must implement the bridge (see README).",
- "previewUrlEmpty": "No preview URL is set: editors get the Fields + page and Visual editor modes only on content types where Strapi's native Preview is configured. Elsewhere the mode menu is not shown.",
+ "previewUrlEmpty": "No preview URL is set: editors get the Fields + preview and Visual editor modes only on content types where Strapi's native Preview is configured. Elsewhere the mode menu is not shown.",
  "previewMode": "Initial preview mode",
  "modes.form": "Fields only",
  "modes.split": "Fields + preview",

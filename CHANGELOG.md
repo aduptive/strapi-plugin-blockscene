@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- New entries can start from project-defined, locale-aware block kits. Kits are
+  validated against each Dynamic Zone's allowlist and bounds, schema defaults
+  and required scalar fields; configured group openers receive their closers.
+  The chooser only changes the unsaved form and is shown once per new-entry
+  browser history item.
 - Strapi 5, version history Phase 1: a new `versions` toolbar control opens a
   right drawer with local date/time, actor and action, day grouping and a scoped
   actor filter. History lists now paginate on the server beyond 100 events.

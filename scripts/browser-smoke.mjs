@@ -105,6 +105,16 @@ try {
     if (!localStorage.getItem('jwtToken')) { localStorage.setItem('jwtToken', JSON.stringify(token)); localStorage.setItem('isLoggedIn', 'true'); localStorage.setItem('userInfo', JSON.stringify(user)) }
   }, { token, user: login.data.data.user })
   await page.goto('/admin/content-manager/collection-types/api::page.page/create')
+  await step('starter kit chooser appears once for a new empty entry and Start blank is remembered on reload', async () => {
+    const chooser = page.getByRole('dialog', { name: 'Start with a kit' })
+    await chooser.waitFor()
+    await chooser.getByTestId('starter-kit-landing').waitFor()
+    await chooser.getByRole('button', { name: 'Start blank' }).click()
+    await chooser.waitFor({ state: 'detached' })
+    await page.reload()
+    await page.locator('[data-blockscene-editor]').waitFor({ state: 'attached' })
+    assert.equal(await page.getByRole('dialog', { name: 'Start with a kit' }).count(), 0)
+  })
   await page.getByRole('textbox', { name: /^title/i }).first().fill(`Plugin smoke ${Date.now()}`)
   await step('the native "Add a component to blocks" button opens the gallery', async () => {
     await page.getByRole('button', { name: /Add a component to blocks/i }).click()
@@ -412,7 +422,7 @@ try {
     const previewUrl = `${baseURL}/block-preview/index.html`
     await putSettings({ editor: { previewUrl, previewMode: 'form' } })
     await page.goto(docUrl)
-    await setMode('Fields + page')
+    await setMode('Fields + preview')
     const pane = page.getByTestId('page-preview-pane')
     await pane.waitFor()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
@@ -452,7 +462,7 @@ try {
     // Without a field, Done takes focus (out of the iframe), so Escape reaches the admin.
     await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'block-modal-done')
     await page.keyboard.press('Escape'); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
-    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields + page', exact: true }).click()
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields + preview', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'split')
     // Media Library from the page for the hero image.
     const png = await page.screenshot({ clip: { x: 0, y: 0, width: 64, height: 48 } })
@@ -496,7 +506,7 @@ try {
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'preview')
     const geometry = await page.evaluate(() => { const r = el => { const b = el.getBoundingClientRect(); return { left: Math.round(b.left), right: Math.round(b.right), width: Math.round(b.width) } }; return { pane: r(document.querySelector('[data-testid="page-preview-pane"]')), main: r(document.getElementById('main-content')), navs: [...document.querySelectorAll('nav')].map(r).filter(n => n.width > 0) } })
     assert.ok(Math.abs(geometry.pane.left - geometry.main.left) <= 1 && Math.abs(geometry.pane.right - geometry.main.right) <= 1 && geometry.navs.every(n => n.right <= geometry.pane.left + 1), `preview pane equals the content area, menus visible ${JSON.stringify(geometry)}`)
-    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
     await putSettings({})
     void dialog
   })
@@ -506,7 +516,7 @@ try {
     const previewUrl = `${baseURL}/block-preview/index.html`
     await putSettings({ editor: { previewUrl, previewMode: 'form' }, contentTypes: { 'api::page.page': { sidebar: [{ label: 'Page title', icon: 'text', open: 'modal', fields: ['title'] }] } } })
     await page.goto(docUrl)
-    await setMode('Fields + page')
+    await setMode('Fields + preview')
     const pane = page.getByTestId('page-preview-pane')
     await pane.waitFor()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
@@ -558,7 +568,7 @@ try {
     await page.locator('[data-bp-fields="modal"] input#title').waitFor({ state: 'visible' })
     await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
     await page.screenshot({ path: 'artifacts/strapi4-page-preview-visual.png', animations: 'disabled' })
-    await pane.getByRole('button', { name: 'Fields + page', exact: true }).click()
+    await pane.getByRole('button', { name: 'Fields + preview', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'split')
     // Media from the page opens the native Media Library; cancelling writes nothing.
     await frame.locator('[data-block-uid="blocks.hero"]').hover()
@@ -580,7 +590,7 @@ try {
     await toolbarSave.click()
     assert.ok((await savedByToolbar).ok(), 'toolbar Save used the native update')
     await pane.getByTestId('page-preview-status').getByText('Draft').waitFor()
-    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
     await putSettings({})
   })
   await step(`hover sync${major === 4 ? ' (Strapi 4)' : ''}: form row -> page block, page block -> form row, edge indicator, divider reset`, async () => {
@@ -668,7 +678,7 @@ try {
     await page.keyboard.press('ControlOrMeta+Shift+z'); await expect(count + 1, original)
     await redoButton.click(); await expect(count + 1, 'Undo me')
     await tools.first().locator('xpath=..').screenshot({ path: 'artifacts/strapi5-undo-zone-bar.png', animations: 'disabled' })
-    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
     await putSettings({})
   })
   if (major === 5) await step('settings sidebar editor (Strapi 5): an item built in the UI is saved, shown in the visual editor and opens its field; reset', async () => {
@@ -700,7 +710,7 @@ try {
     await page.getByTestId('fields-panel-bar').getByText('Page title').waitFor()
     await page.locator('[data-bp-fields="modal"] input[name="title"]').waitFor({ state: 'visible' })
     await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
-    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+    await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
     // Reset from the page: no code defaults in the lab, so the built-in ones.
     await page.goto('/admin/settings/blockscene')
     await page.getByTestId('restore-blockscene-settings').getByText('Reset to defaults').click()
@@ -725,7 +735,7 @@ try {
     await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
     const saved = (await api('GET', '/blockscene/settings')).data.settings.editor
-    assert.deepEqual(saved.previewToolbar, ['modes', 'devices', 'actions', 'status'])
+    assert.deepEqual(saved.previewToolbar, ['modes', 'versions', 'devices', 'actions', 'status'])
     assert.deepEqual(saved.previewDevices, ['fit', 'mobile', 'tablet', 'desktop', { label: 'Laptop', width: 1280 }])
     // A visual-editor-only view: width menu and Save/Publish, nothing else.
     await putSettings({ editor: { previewUrl, previewMode: 'preview', previewToolbar: ['devices', 'actions'], previewDevices: ['fit', { label: 'Laptop', width: 1280 }] } })
@@ -838,11 +848,11 @@ try {
       assert.equal(await page.locator('[name$="bsHidden"]').count(), 0, 'no input for the hidden attribute')
       if (major === 5) {
         await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
-        await page.reload(); await setMode('Fields + page')
+        await page.reload(); await setMode('Fields + preview')
         const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
         await frame.locator('[data-block-key][data-hidden] .bp-hidden').waitFor()
         assert.equal(await frame.locator('[data-block-key][data-hidden]').count(), 1, 'the preview dims the hidden block')
-        await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+        await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
       }
       await putSettings({ editor: { hiddenBlocks: 'off' } })
       await page.reload(); await page.getByTestId('row-actions-blocks-1').waitFor()
@@ -904,12 +914,12 @@ try {
         assert.deepEqual(pasted[1].pages.map(p => p.documentId), [target.documentId], 'relations travel with the clipboard')
         // The page preview offers Paste in its seams while the clipboard holds blocks; the same all-or-nothing rules apply.
         await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
-        await page.reload(); await setMode('Fields + page')
+        await page.reload(); await setMode('Fields + preview')
         const start = page.getByTestId('page-preview-pane').frameLocator('iframe').locator('[data-testid="bp-gap-start"]')
         await start.hover(); await start.locator('[data-paste]').click()
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 5)
         assert.deepEqual((await zoneRows().evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))).slice(0, 3).map(n => n.replace(/ - .*$/, '')), ['Text', 'Text', 'Hero'], 'pasted at the start')
-        await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields', exact: true }).click()
+        await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
       }
     } finally {
       await api('DELETE', `/admin/api-tokens/${token.data.data.id}`)
@@ -972,7 +982,7 @@ try {
       const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
       const openSplit = async id => {
         await page.goto(`/admin/content-manager/collection-types/api::page.page/${id}`)
-        await setMode('Fields + page')
+        await setMode('Fields + preview')
         await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
       }
       const names = () => rows().evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
@@ -1152,14 +1162,14 @@ try {
     await page.getByTestId('block-modal-done').click(); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
     await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'the row is hidden again')
     await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3'], 'the cell reads the form')
-    await setMode('Fields + page')
+    await setMode('Fields + preview')
     const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
     await frame.locator('[data-block-field="title"]', { hasText: 'Hero edited' }).waitFor()
     await grid.locator('[data-cell-key]').nth(2).click(); await page.getByTestId('block-modal-bar').waitFor()
     await page.locator('[data-bp-block-modal] textarea').first().fill('c3 split')
     await page.getByTestId('block-modal-done').click()
     await frame.getByText('c3 split').waitFor()
-    await setMode('Fields')
+    await setMode('Fields only')
     await page.waitForTimeout(400) // Design System 1 hands the focus back to the closed menu's button a moment later
     // Reorder with the keyboard: one zone change (one undo step on Strapi 5); the moved cell keeps the focus.
     await grid.locator('[data-cell-key]').first().focus(); await page.keyboard.press('Alt+ArrowRight')
@@ -1215,10 +1225,10 @@ try {
     await putSettings({})
   })
   await step('admin locale drives the plugin chrome: pt-BR, fr, en and an unsupported locale (ja) falls back to English', async () => {
-    const cases = [['fr', { expand: 'Tout déplier', undo: 'Annuler', split: 'Champs + page', palette: 'Palette des wireframes' }],
-      ['pt-BR', { expand: 'Expandir tudo', undo: 'Desfazer', split: 'Campos + página', palette: 'Paleta dos wireframes' }],
-      ['ja', { expand: 'Expand all', undo: 'Undo', split: 'Fields + page', palette: 'Wireframe palette' }],
-      ['en', { expand: 'Expand all', undo: 'Undo', split: 'Fields + page', palette: 'Wireframe palette' }]]
+    const cases = [['fr', { expand: 'Tout déplier', undo: 'Annuler', split: 'Champs + aperçu', palette: 'Palette des wireframes' }],
+      ['pt-BR', { expand: 'Expandir tudo', undo: 'Desfazer', split: 'Campos + preview', palette: 'Paleta dos wireframes' }],
+      ['ja', { expand: 'Expand all', undo: 'Undo', split: 'Fields + preview', palette: 'Wireframe palette' }],
+      ['en', { expand: 'Expand all', undo: 'Undo', split: 'Fields + preview', palette: 'Wireframe palette' }]]
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     for (const [locale, expect] of cases) {
       await page.evaluate(value => localStorage.setItem('strapi-admin-language', value), locale)

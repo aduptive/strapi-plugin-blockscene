@@ -52,7 +52,7 @@
  "rememberHelp": "Somente os botões de abrir/fechar todos atualizam a memória, por usuário e navegador. Abrir um bloco isolado não muda.",
  "previewUrl": "URL base da rota de preview",
  "previewUrlHelp": "URL completa da rota de preview de página do seu frontend, por exemplo https://site.test/block-preview/page. Vazio reutiliza a origem da Preview nativa do Strapi (quando configurada para o tipo de conteúdo) com /block-preview/page. A rota precisa implementar a bridge (ver README).",
- "previewUrlEmpty": "Nenhuma URL de preview definida: os editores só têm os modos Campos + página e Editor visual nos tipos de conteúdo com o Preview nativo do Strapi configurado. Nos demais, o menu de modos não aparece.",
+ "previewUrlEmpty": "Nenhuma URL de preview definida: os editores só têm os modos Campos + preview e Editor visual nos tipos de conteúdo com o Preview nativo do Strapi configurado. Nos demais, o menu de modos não aparece.",
  "previewMode": "Modo inicial da preview",
  "modes.form": "Somente campos",
  "modes.split": "Campos + preview",

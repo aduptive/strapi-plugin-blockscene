@@ -63,6 +63,18 @@ export function starterKitRows(kit, zones, components, form) {
   return out;
 }
 
+// A kit without locales is universal. Locale-specific kits use exact Strapi locale codes, with a language-only entry
+// (for example "pt") also matching regional locales ("pt-BR").
+export function starterKitsForLocale(kits, locale) {
+  if (!Array.isArray(kits)) return [];
+  const current = String(locale || "").toLowerCase();
+  const language = current.split("-")[0];
+  return kits.filter((kit) => !Array.isArray(kit.locales) || kit.locales.some((entry) => {
+    const wanted = String(entry).toLowerCase();
+    return wanted === current || (!wanted.includes("-") && wanted === language);
+  }));
+}
+
 // Every editable top-level Dynamic Zone. `full` zones keep their accordion
 // controls but hide the gallery button.
 export function editableZones(schema, values, canEdit, disabled = false) {

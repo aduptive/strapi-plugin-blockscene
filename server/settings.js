@@ -452,6 +452,32 @@ function validateVariants(config, schemas = {}, notes = []) {
   return out
 }
 
+function requiredProblems(schema, values, schemas, path, media, problems) {
+  for (const [field, attr] of Object.entries(schema?.attributes || {})) {
+    const at = `${path}.${field}`
+    const supplied = Object.hasOwn(values, field)
+    const value = supplied ? values[field] : attr.default
+    if (attr.type === 'media' || attr.type === 'relation') {
+      if (attr.required && !supplied) media.push(at)
+      continue
+    }
+    if (attr.type === 'component') {
+      const nested = schemas[attr.component]
+      if (!nested) { problems.push(`${at}: unknown component "${attr.component}"`); continue }
+      if (attr.repeatable) {
+        const minimum = Math.max(attr.min ?? 0, attr.required ? 1 : 0)
+        const items = supplied ? value : Array.from({ length: minimum }, () => ({}))
+        if (!Array.isArray(items) || items.length < minimum) problems.push(`${at} requires at least ${minimum} item${minimum === 1 ? '' : 's'}`)
+        else items.forEach((item, index) => requiredProblems(nested, item, schemas, `${at}[${index}]`, media, problems))
+      } else if (supplied && value === null) {
+        if (attr.required) problems.push(`${at} is required`)
+      } else if (supplied || attr.required) requiredProblems(nested, supplied ? value : {}, schemas, at, media, problems)
+      continue
+    }
+    if (attr.required && (value === undefined || value === null || value === '')) problems.push(`${at} is required`)
+  }
+}
+
 // Code-only starter kits: named initial rows per Dynamic Zone. Rows use the Content API shape so fixtures can be pasted
 // directly; values share the variant validator and never carry install-specific media/relation ids.
 function validateKits(input, contentTypes = {}, schemas = {}, groups = null, notes = []) {
@@ -466,9 +492,10 @@ function validateKits(input, contentTypes = {}, schemas = {}, groups = null, not
     for (const kit of kits) {
       const name = `${uid} kit "${kit?.id ?? '?'}"`
       try {
-        if (!plain(kit) || Object.keys(kit).some(key => !['id', 'label', 'zones'].includes(key))) throw new Error('expected { id, label, zones }')
+        if (!plain(kit) || Object.keys(kit).some(key => !['id', 'label', 'locales', 'zones'].includes(key))) throw new Error('expected { id, label, locales?, zones }')
         if (!text(kit.id) || !VARIANT.id.test(kit.id) || ids.has(kit.id)) throw new Error('id must be 1 to 40 lowercase letters, digits, "-" or "_", unique per content type')
         if (!fieldText(kit.label, 60)) throw new Error('label must be a string of 1 to 60 characters, or { "<locale>": string }')
+        if (kit.locales !== undefined && (!Array.isArray(kit.locales) || !kit.locales.length || kit.locales.length > 20 || kit.locales.some(locale => !text(locale) || !LOCALE.test(locale)))) throw new Error('locales must be 1 to 20 locale codes')
         if (!plain(kit.zones) || !Object.keys(kit.zones).length) throw new Error('zones must be a non-empty object')
         const zones = {}
         for (const [zoneName, rows] of Object.entries(kit.zones)) {
@@ -484,6 +511,10 @@ function validateKits(input, contentTypes = {}, schemas = {}, groups = null, not
             const skipped = []
             const values = variantValues(row, schemas[component], schemas, `${zoneName}[${index}]`, skipped)
             if (skipped.length) notes.push(`${name}: media and relation values are not inserted (${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ', ...' : ''})`)
+            const media = [], required = []
+            requiredProblems(schemas[component], values, schemas, `${zoneName}[${index}]`, media, required)
+            if (required.length) throw new Error(required.slice(0, 5).join('; '))
+            if (media.length) notes.push(`${name}: required media or relations must be completed before publishing (${media.slice(0, 5).join(', ')}${media.length > 5 ? ', ...' : ''})`)
             clean.push({ __component: component, values })
             const close = groups?.[component]
             if (close) {
@@ -494,8 +525,13 @@ function validateKits(input, contentTypes = {}, schemas = {}, groups = null, not
           if (clean.length > (zone.max ?? Infinity)) throw new Error(`${zoneName} exceeds its maximum of ${zone.max}`)
           zones[zoneName] = clean
         }
+        for (const [zoneName, zone] of Object.entries(type.attributes || {})) {
+          if (zone?.type !== 'dynamiczone') continue
+          const minimum = Math.max(zone.min ?? 0, zone.required ? 1 : 0)
+          if ((zones[zoneName]?.length || 0) < minimum) throw new Error(`${zoneName} requires at least ${minimum} row${minimum === 1 ? '' : 's'}`)
+        }
         ids.add(kit.id)
-        ;(out[uid] ||= []).push({ id: kit.id, label: structuredClone(kit.label), zones })
+        ;(out[uid] ||= []).push({ id: kit.id, label: structuredClone(kit.label), ...(kit.locales && { locales: [...new Set(kit.locales)] }), zones })
       } catch (error) { notes.push(`${name} ignored: ${error.message}`) }
     }
   }

@@ -158,7 +158,7 @@ function Workspace({ c, schema, zones, components, add, catalog, docKey, form, g
   const state = useEditorState(editor, host);
   return (
     <>
-      <StarterKits creating={c.isCreatingEntry} kits={catalog.kits?.[c.slug]} zones={zones} components={components} form={form} Modal={Modal} />
+      <StarterKits creating={c.isCreatingEntry} kits={catalog.kits?.[c.slug]} zones={zones} components={components} form={form} Modal={Modal} docKey={docKey} />
       <Gallery
         zones={zones}
         components={components}

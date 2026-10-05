@@ -177,6 +177,7 @@ function Workspace({ scope }: any) {
   const host = usePreviewHost5();
   const state = useEditorState(editor, host);
   const versions = useVersions(host, catalog?.history);
+  const docKey = `${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`;
   const add = (zone: any, uid: string, preset?: any) => {
     const values = formValues ?? c.form.values;
     const close = catalog?.groups?.[uid];
@@ -204,7 +205,7 @@ function Workspace({ scope }: any) {
   };
   return (
     <>
-      <StarterKits creating={creating} kits={catalog.kits?.[c.model]} zones={zones} components={c.components} form={form} Modal={Modal} />
+      <StarterKits creating={creating} kits={catalog.kits?.[c.model]} zones={zones} components={c.components} form={form} Modal={Modal} docKey={docKey} />
       <Gallery
         zones={zones}
         components={c.components}
@@ -216,7 +217,7 @@ function Workspace({ scope }: any) {
         put={put}
         editor={catalog.editor}
         catalog={catalog}
-        docKey={`${c.model}:${creating ? "new" : c.id}:${c.form?.initialValues?.locale || ""}`}
+        docKey={docKey}
         contentType={c.model}
         userId={user?.id}
         form={form}
