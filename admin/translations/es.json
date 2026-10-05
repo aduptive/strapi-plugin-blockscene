@@ -202,7 +202,7 @@
  "blockPreview": "Vista previa en vivo del bloque",
  "livePreviewFailed": "Vista previa en vivo no disponible, se muestra la imagen.",
  "blockPreviewUrl": "URL de vista previa del bloque",
- "blockPreviewUrlHelp": "Opcional. Una página de su frontend que renderiza un solo bloque, mostrada en grande al pulsar la lupa de una tarjeta de la galería, p. ej. http://localhost:3026/es/block-preview/'{name}'/'{variant}'. Marcadores: '{uid}', '{name}' (tras el punto), '{category}' (antes del punto), '{variant}' (default), '{locale}'. Vacía usa la ruta de vista previa de página si existe; si no, la imagen.",
+ "blockPreviewUrlHelp": "Opcional. Una página de su frontend que renderiza un solo bloque, mostrada en grande desde la lupa de una tarjeta de la galería, p. ej. http://localhost:3026/es/block-preview/'{name}'/'{variant}'. Marcadores: '{uid}', '{name}' (tras el punto), '{category}' (antes del punto), '{variant}' (default), '{locale}'. Vacía usa la ruta de vista previa de página si existe; si no, la imagen.",
  "rowActions": "Acciones de {label}",
  "selectBlock": "Seleccionar {label}",
  "hiddenBadge": "Oculto",

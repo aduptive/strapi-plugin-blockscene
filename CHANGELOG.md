@@ -14,6 +14,21 @@
   The existing side-panel load action is preserved. No new restore/diff or
   named-version/purge behavior is included. Labels use all eight existing locales.
 
+## 2.0.0-alpha.11 (Strapi 5) and 1.0.0-alpha.10 (Strapi 4) — 2026-10-02
+
+- Dynamic Zone allowlists are now enforced by the plugin on create, update and
+  publish. The gallery continues to show only the components declared by each
+  field, and crafted requests can no longer save a component from another zone.
+- Gallery cards now insert on click. An always-visible magnifying-glass action
+  opens the block preview without inserting it.
+
+## 2.0.0-alpha.10 (Strapi 5) — 2026-10-01
+
+- Fix: the lazy editor no longer wraps custom fields that are not configured in
+  `lazyFields`. This prevents unrelated custom fields, such as a project's slug
+  field, from failing with an invalid React hook error before the page preview
+  can open.
+
 ## 2.0.0-alpha.9 (Strapi 5) and 1.0.0-alpha.9 (Strapi 4) — 2026-09-28
 
 - Fix: saving a Dynamic Zone component in the Content-Type Builder (`strapi

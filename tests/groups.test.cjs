@@ -7,6 +7,13 @@ const uid = name => name.startsWith('Om') ? 'w.mutate' : name.startsWith('O') ? 
 const list = (...names) => names.map(id => ({ id, __component: uid(id) }))
 const ids = rows => rows && rows.map(r => r.id)
 
+test('dynamic zones reject component UIDs outside their schema allowlist', () => {
+  const { invalidComponents } = require('../server/groups')
+  const rows = [{ __component: 'blocks.hero' }, { __component: 'blocks.text' }, {}, null]
+  assert.deepEqual(invalidComponents(rows, ['blocks.text']), [{ index: 0, uid: 'blocks.hero' }])
+  assert.deepEqual(invalidComponents([], ['blocks.text']), [])
+})
+
 test('group outline: depth, kinds, parents, end and count; nested, shared CLOSE, stray and unclosed markers', async () => {
   const { groupOutline } = await import('../admin/rows.mjs')
   const out = groupOutline(list('A', 'O1', 'b', 'O2', 'c', 'C2', 'C1', 'D'), g)

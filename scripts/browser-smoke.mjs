@@ -90,6 +90,14 @@ try {
   assert.equal((await api('PUT', '/blockscene/me/prefs', { starred: [], recent: [] })).status, 200, 'reset gallery prefs')
   assert.equal((await api('GET', '/blockscene/me/prefs', null, false)).status, 401)
   assert.equal((await api('PUT', '/blockscene/me/prefs', { starred: ['blocks.nope'] })).status, 400)
+  await step('server rejects components outside a Dynamic Zone schema allowlist', async () => {
+    const result = await api('POST', '/content-manager/collection-types/api::page.page', {
+      title: `Forbidden block ${Date.now()}`,
+      sidebar: [{ __component: 'blocks.hero', title: 'Forbidden', items: [{ label: 'One' }, { label: 'Two' }] }],
+    })
+    assert.equal(result.status, 400, JSON.stringify(result.data))
+    assert.equal(result.data?.error?.details?.errors?.[0]?.code, 'componentNotAllowed')
+  })
   rmSync(previewFile, { force: true })
 
   // Reuse the API session in the browser (avoids the login rate limiter on reruns; nothing is persisted to disk).
@@ -187,7 +195,7 @@ try {
   await page.locator('input[name="block-search-blocks"]').fill('not-a-real-block')
   await page.getByText('No blocks found.', { exact: true }).waitFor()
   await page.locator('input[name="block-search-blocks"]').fill('banner')
-  await step('card click inserts at once; the detail pane Insert too, and it is recorded as recently used', async () => {
+  await step('card click inserts at once; the magnified pane Insert too, and it is recorded as recently used', async () => {
     await page.getByTestId('blockscene-blocks.hero').locator('button').first().click()
     await page.getByTestId('blockscene-blocks.hero').waitFor({ state: 'detached' })
     await openGallery('sidebar')

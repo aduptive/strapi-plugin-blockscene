@@ -96,9 +96,10 @@ The modal is a block browser (80vw wide):
   remembered per browser). Active values show as removable chips with "Clear
   all"; the empty state offers a reset.
 - **Cards**, grouped by typology: facet badges (IMAGE, VIDEO, GALLERY, RICH
-  TEXT, LIST, DYNAMIC, FORM), a star and an always-visible preview button.
-  Clicking or focusing the card and pressing Enter inserts it at once.
-- The preview button **magnifies** the block: the card grows into a large panel over the
+  TEXT, LIST, DYNAMIC, FORM), a star and an always-visible magnifying glass.
+  Clicking the card, or focusing it and pressing Enter, inserts it immediately;
+  the magnifying glass opens its preview.
+- The preview **magnifies** the block: the card grows into a large panel over the
   grid (sidebar and top bar stay usable, the grid dims underneath) and shrinks
   back into its card on close (close button, Esc or a click on the dimmed
   grid). The animation is transform/opacity only, about 250 ms, and is skipped

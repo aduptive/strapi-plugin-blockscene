@@ -446,7 +446,7 @@ function Badges({ entry, t, tags }: any) {
   );
 }
 
-// The whole card is the primary insert action. Preview is an explicit, always-visible secondary action.
+// The card inserts. Its always-visible magnifying-glass button opens the preview without inserting.
 function Card({ entry, palette, showFields, starred, active, onOpen, onInsert, onStar }: any) {
   const t = useMessages();
   return (
