@@ -1,6 +1,6 @@
 'use strict'
 
-const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, directComponentUids, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
+const { PLUGIN, TEMPLATES, TYPOLOGIES, DEFAULTS, catalog, settingsComponentUids, safeComponentCategories, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, validatePrefs, mergePrefs, safeUrl, fail } = require('./settings')
 const { safeGroups, validateGroups, invalidComponents, layoutFields } = require('./groups')
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
@@ -156,6 +156,9 @@ module.exports = {
       // Optional layout groups: OPEN component uid -> its CLOSE uid, e.g. { 'wrappers.join': 'wrappers.close' }.
       // Empty/absent: every Dynamic Zone component is an ordinary block. See README "Layout groups".
       groups: null,
+      // Optional Strapi component categories shown as configurable cards in Settings > Block gallery.
+      // This does not change the components allowed by each Dynamic Zone.
+      settingsComponentCategories: null,
       // Project defaults from code: same shape as the stored settings, e.g. require('./blockscene.json'). See README "Settings page".
       settings: null,
       // Edit view field texts from code (never stored): { uid: { attribute: { label, description, placeholder } } }. See README "Field labels".
@@ -175,6 +178,7 @@ module.exports = {
     const name = hiddenName(plugin.config('hiddenAttribute'))
     withHidden = []
     if (name === null) strapi.log.warn(`[${PLUGIN}] "hiddenAttribute" config ignored: expected a name like "bsHidden" or false. Hiding blocks is off.`)
+    if (plugin.config('settingsComponentCategories') != null && !safeComponentCategories(plugin.config('settingsComponentCategories'))) strapi.log.warn(`[${PLUGIN}] "settingsComponentCategories" config ignored: expected 1 to 50 Strapi component category names.`)
     if (!name) return
     const { added, skipped } = injectHidden(strapi.components, strapi.contentTypes, name)
     withHidden = added
@@ -304,8 +308,8 @@ module.exports = {
         const settings = await strapi.plugin(PLUGIN).service('settings').get()
         // typology: the value without a Settings override (code config, else the guess), shown as "Automatic".
         const auto = catalog({ components: strapi.plugin(PLUGIN).config('components'), schemas: strapi.components, blocks: strapi.plugin(PLUGIN).service('settings').schema().blocks }).components
-        const direct = new Set(directComponentUids(strapi.contentTypes, settings.contentTypes))
-        const components = Object.entries(strapi.components || {}).filter(([uid]) => direct.has(uid)).map(([uid, schema]) => ({ uid,
+        const visible = new Set(settingsComponentUids(strapi.contentTypes, strapi.components, settings.contentTypes, strapi.plugin(PLUGIN).config('settingsComponentCategories')))
+        const components = Object.entries(strapi.components || {}).filter(([uid]) => visible.has(uid)).map(([uid, schema]) => ({ uid,
           displayName: schema.info?.displayName || uid, category: schema.category || uid.split('.')[0], typology: auto[uid]?.typology,
           layoutFields: layoutFields(schema) }))
         const contentTypes = Object.keys(contentTypeUids(strapi)).map(uid => ({ uid, displayName: strapi.contentTypes[uid].info?.displayName || uid, kind: strapi.contentTypes[uid].kind,

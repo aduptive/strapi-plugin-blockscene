@@ -460,6 +460,15 @@ try {
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'preview')
     await frame.locator('[data-block-uid="blocks.text"] [data-block-field="body"]').click()
     await page.getByTestId('block-modal-bar').waitFor()
+    assert.equal(await page.evaluate(() => {
+      const portal = document.body.appendChild(document.createElement('div'))
+      const listbox = document.createElement('div')
+      listbox.setAttribute('role', 'listbox')
+      portal.appendChild(listbox)
+      const z = getComputedStyle(portal).zIndex
+      portal.remove()
+      return z
+    }), '1002', 'a Select portal stays above the lifted block')
     await page.waitForFunction(() => document.activeElement?.getAttribute('name') === 'blocks.1.body' && Boolean(document.activeElement.closest('[data-bp-block-modal]')))
     await page.keyboard.press('Meta+A'); await page.keyboard.type('Body from the block dialog')
     await frame.getByText('Body from the block dialog', { exact: true }).waitFor()

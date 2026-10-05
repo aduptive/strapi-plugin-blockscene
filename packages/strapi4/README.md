@@ -29,6 +29,9 @@ module.exports = {
     config: {
       previewBaseUrl: '/block-previews',
       previewVersion: '2026-09-22', // optional cache buster appended as ?v=
+      // Optional: only these Strapi component folders get cards in Settings > Block gallery.
+      // Dynamic Zone insertion still follows each content type's own schema.
+      settingsComponentCategories: ['blocks'],
       components: {
         'blocks.hero': {
           label: 'Hero banner',

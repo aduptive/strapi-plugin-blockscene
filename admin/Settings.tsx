@@ -74,14 +74,14 @@ function ColorField({ name, label, value, onChange, disabled }: any) {
 // Comma separated tags; the text is kept while typing so a trailing comma or space does not vanish.
 function TagsField({ name, label, hint, value, onChange, disabled }: any) {
   const external = value.join(', ')
-  const [text, setText] = React.useState(external)
+  const input = React.useRef<HTMLInputElement | null>(null)
   const focused = React.useRef(false)
   const parse = (next: string) => [...new Set(next.split(',').map(tag => tag.replace(/[<>]/g, '').trim().slice(0, 24)).filter(Boolean))].slice(0, 10)
-  React.useEffect(() => { if (!focused.current) setText(external) }, [external])
+  React.useEffect(() => { if (!focused.current && input.current && input.current.value !== external) input.current.value = external }, [external])
   return <Label>
     <Typography variant="pi" fontWeight="bold" textColor="neutral800">{label}</Typography>
-    <input name={name} value={text} disabled={disabled} onFocus={() => { focused.current = true }} onBlur={() => { focused.current = false; onChange(parse(text)) }}
-      onChange={e => setText(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #dcdce4', borderRadius: 4, fontSize: 13 }} />
+    <input ref={input} name={name} defaultValue={external} disabled={disabled} spellCheck={false} onFocus={() => { focused.current = true }}
+      onBlur={e => { focused.current = false; onChange(parse(e.currentTarget.value)) }} style={{ padding: '6px 8px', border: '1px solid #dcdce4', borderRadius: 4, fontSize: 13 }} />
     <Typography variant="pi" textColor="neutral600">{hint}</Typography>
   </Label>
 }

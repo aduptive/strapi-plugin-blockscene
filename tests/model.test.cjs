@@ -301,7 +301,7 @@ test('per content type settings: only types with a zone, only known keys; stale 
 })
 
 test('settings gallery lists only components directly allowed by a Dynamic Zone', () => {
-  const { directComponentUids } = require('../server/settings')
+  const { directComponentUids, settingsComponentUids } = require('../server/settings')
   const types = {
     'api::page.page': { attributes: {
       blocks: { type: 'dynamiczone', components: ['blocks.hero', 'wrappers.open', 'wrappers.close'] },
@@ -314,6 +314,14 @@ test('settings gallery lists only components directly allowed by a Dynamic Zone'
   assert.deepEqual(directComponentUids(types), ['blocks.hero', 'wrappers.open', 'wrappers.close'])
   assert.deepEqual(directComponentUids(types, { 'api::page.page': { enabled: false } }), [], 'disabled content types do not contribute gallery cards')
   assert.deepEqual(directComponentUids({}), [])
+  const schemas = {
+    'blocks.hero': { category: 'blocks' },
+    'wrappers.open': { category: 'wrappers' },
+    'wrappers.close': { category: 'wrappers' },
+  }
+  assert.deepEqual(settingsComponentUids(types, schemas, {}, ['blocks']), ['blocks.hero'])
+  assert.deepEqual(settingsComponentUids(types, schemas, {}, ['blocks', 'wrappers']), ['blocks.hero', 'wrappers.open', 'wrappers.close'])
+  assert.deepEqual(settingsComponentUids(types, schemas), ['blocks.hero', 'wrappers.open', 'wrappers.close'], 'no category config keeps every direct block')
 })
 
 test('visual editor sidebar: items name their own type fields, known icons, modal or drawer; stale items dropped on read', () => {

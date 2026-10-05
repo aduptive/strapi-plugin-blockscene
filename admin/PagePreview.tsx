@@ -245,6 +245,7 @@ body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${B
   background: ${background}; border-radius: 0 0 8px 8px; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
 body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }
+body.bp-block-modal > div:has(> [role="listbox"]) { z-index: 1002 !important; }
 body.bp-block-modal [data-bp-modal-hide] { display: none !important; }`;
 // Sidebar item: the native form column itself, lifted as a modal or a drawer with every other field hidden.
 const DRAWER_WIDTH = 640;
@@ -255,6 +256,7 @@ body.bp-fields [data-bp-show] { grid-column: 1 / -1 !important; }
 body.bp-fields [data-bp-flat] { border: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; }
 body.bp-fields [data-bp-fields] { position: fixed !important; z-index: 1001; overflow: auto; margin: 0 !important;
   padding: 1.6rem 2.4rem; background: ${background}; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
+body.bp-fields > div:has(> [role="listbox"]) { z-index: 1002 !important; }
 body.bp-fields [data-bp-fields="modal"] { top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%); width: min(96rem, 92vw);
   max-height: calc(88vh - 5.6rem); border-radius: 0 0 8px 8px; }
 ${drawer ? `body.bp-fields [data-bp-fields="drawer"] { top: ${drawer.top + 56}px; left: ${drawer.left}px; width: ${drawer.width}px; height: ${drawer.height - 56}px; }` : ""}`;

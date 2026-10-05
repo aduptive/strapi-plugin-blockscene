@@ -96,6 +96,15 @@ const validTags = (value) => Array.isArray(value) && value.length <= 10 && value
 const directComponentUids = (contentTypes, perType = {}) => [...new Set(Object.entries(contentTypes || {})
   .filter(([uid]) => perType?.[uid]?.enabled !== false)
   .flatMap(([, schema]) => Object.values(schema?.attributes || {}).filter(attr => attr?.type === 'dynamiczone').flatMap(attr => attr.components || [])))]
+const COMPONENT_CATEGORY = /^[a-z0-9][a-z0-9_-]{0,49}$/
+const safeComponentCategories = value => value == null ? null : Array.isArray(value) && value.length > 0 && value.length <= 50 &&
+  value.every(category => typeof category === 'string' && COMPONENT_CATEGORY.test(category)) ? [...new Set(value)] : null
+// Project-only allowlist for the Settings > Block gallery cards. It does not alter a Dynamic Zone's insertion choices:
+// those remain controlled by the content type schema, so a Forms zone can still insert its own field components.
+const settingsComponentUids = (contentTypes, components, perType = {}, categories = null) => {
+  const allowed = safeComponentCategories(categories)
+  return directComponentUids(contentTypes, perType).filter(uid => !allowed || allowed.includes(components?.[uid]?.category || uid.split('.')[0]))
+}
 const GUESSES = [['hero', /hero|banner|cover/], ['text', /text|rich|quote|title/], ['media', /image|media|video|gallery|carousel/],
   ['listing', /list|query|archive|related|posts|projects/], ['cards', /card/], ['cta', /cta|button|link/], ['form', /form|contact/],
   ['layout', /wrapper|column|grid|divider|divisor|spacer|section/]]
@@ -561,4 +570,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, directComponentUids, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, directComponentUids, settingsComponentUids, safeComponentCategories, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }
