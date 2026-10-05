@@ -201,7 +201,9 @@ function SidebarEditor({ type, entry, set, t, disabled, SelectField, TextField }
 export const permissions = { read: [{ action: 'plugin::blockscene.settings.read', subject: null }], update: [{ action: 'plugin::blockscene.settings.update', subject: null }] }
 
 // `lazyEditors`: the distribution has lazy rich-text editors (Strapi 5); their options show only there.
-export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, lazyEditors = false }: any) {
+export type SettingsSection = 'general' | 'preview' | 'content-types' | 'gallery' | 'history'
+
+export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, SelectField, TextField, lazyEditors = false, section = 'general' }: any) {
   const t = useMessages()
   const { get, put, del } = useClient()
   const { canRead, canUpdate, isLoading } = usePermissions()
@@ -219,20 +221,25 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   React.useEffect(() => {
     if (!canRead || isLoading) return
     let active = true
-    Promise.all([get('/blockscene/settings'), get('/blockscene/catalog')]).then(([s, c]: any) => {
+    Promise.all([get('/blockscene/settings'), section === 'gallery' ? get('/blockscene/catalog') : Promise.resolve({ data: {} })]).then(([s, c]: any) => {
       if (!active) return
       setData(s.data); setSettings(s.data.settings); setMedia(s.data.media || {}); setCatalog(c.data)
     }).catch(() => { if (active) setFailed(true) })
     return () => { active = false }
-  }, [get, canRead, isLoading])
+  }, [get, canRead, isLoading, section])
   const update = (patch: (current: any) => any) => { setSettings((current: any) => patch(structuredClone(current))); setDirty(true); setStatus('') }
-  const badColor = settings && (Object.values(settings.palette).some((value: any) => !COLOR.test(value)) ||
-    [settings.editor.previewUrl, settings.editor.blockPreviewUrl].some((url: string) => url && !/^https?:\/\/\S+$/.test(url)))
+  const badPalette = settings && Object.values(settings.palette).some((value: any) => !COLOR.test(value))
+  const badPreviewUrl = settings && [settings.editor.previewUrl, settings.editor.blockPreviewUrl].some((url: string) => url && !/^https?:\/\/\S+$/.test(url))
   const badSidebar = settings && Object.values(settings.contentTypes || {}).some((entry: any) => (entry.sidebar || []).some(badItem))
   const badLazy = settings && badUids(settings.editor.lazyFields)
   const badHistory = settings && data?.historyTypes && badRetention(settings.history)
-  const badPane = settings && [settings.editor, ...Object.values(settings.contentTypes || {})].some((entry: any) => entry.previewDevices && badDevices(entry.previewDevices))
-  const invalid = badColor || badSidebar || badLazy || badHistory || badPane
+  const badEditorPane = settings && settings.editor.previewDevices && badDevices(settings.editor.previewDevices)
+  const badTypePane = settings && Object.values(settings.contentTypes || {}).some((entry: any) => entry.previewDevices && badDevices(entry.previewDevices))
+  const invalid = section === 'general' ? badLazy
+    : section === 'preview' ? badPreviewUrl || badEditorPane
+      : section === 'content-types' ? badSidebar || badTypePane
+        : section === 'gallery' ? badPalette
+          : badHistory
   const save = async () => {
     if (!settings || invalid || !canUpdate) return
     setSaving(true); setStatus('')
@@ -270,6 +277,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
     return index === 0 && manual ? t.manual : t.automatic
   }
   const ready = !isLoading && canRead && !failed && settings && catalog
+  const sectionTitle = t[`settings${section === 'content-types' ? 'ContentTypes' : section[0].toUpperCase() + section.slice(1)}` as keyof typeof t] as string
+  const sectionIntro = t[`settings${section === 'content-types' ? 'ContentTypes' : section[0].toUpperCase() + section.slice(1)}Intro` as keyof typeof t] as string
   const header = React.useRef<HTMLDivElement>(null)
   const [floating, setFloating] = React.useState(false)
   const main = useMainRect(header)
@@ -281,34 +290,34 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
   const controls = (suffix: string) => ready && <Flex gap={3} alignItems="center" wrap="wrap">
     <Typography role="status" aria-live="polite" textColor={dirty ? 'warning700' : 'neutral600'} data-testid={`${dirty ? 'unsaved-indicator' : 'save-status'}${suffix}`}>
       {dirty ? t.unsaved : status || t.noChanges}</Typography>
-    {!suffix && <Button variant="tertiary" onClick={restore} disabled={!canUpdate || saving} data-testid="restore-blockscene-settings">
+    {!suffix && section === 'general' && <Button variant="tertiary" onClick={restore} disabled={!canUpdate || saving} data-testid="restore-blockscene-settings">
       {data.projectDefaults ? t.restoreProject : t.resetAll}</Button>}
     <Button onClick={save} disabled={!canUpdate || invalid || !dirty} loading={saving} data-testid={`save-blockscene-settings${suffix}`}>{t.save}</Button>
   </Flex>
   return <Box padding={8} background="neutral100"><Flex direction="column" alignItems="stretch" gap={5}>
     <div ref={header}>
       <Flex gap={4} alignItems="center" justifyContent="space-between" wrap="wrap">
-        <Typography variant="alpha" tag="h1">{t.settingsTitle}</Typography>
+        <Typography variant="alpha" tag="h1">{sectionTitle}</Typography>
         {controls('')}
       </Flex>
     </div>
     {floating && main.width > 0 && <Bar style={{ left: main.left, width: main.width }} data-testid="settings-floating-bar">
       <Flex gap={4} alignItems="center" justifyContent="space-between" wrap="wrap">
-        <Typography variant="beta" tag="p">{t.settingsTitle}</Typography>
+        <Typography variant="beta" tag="p">{sectionTitle}</Typography>
         {controls('-floating')}
       </Flex>
     </Bar>}
-    <Typography textColor="neutral600">{t.settingsIntro}</Typography>
+    <Typography textColor="neutral600">{sectionIntro}</Typography>
     {isLoading ? <Typography>…</Typography> : !canRead ? <Typography role="alert">{t.denied}</Typography> : failed ?
       <Typography role="alert">{t.loadFailed}</Typography> : !settings || !catalog ? <Typography>{t.loading}</Typography> : <>
       {data.disabled && <Box padding={4} background="warning100" hasRadius><Typography role="alert" textColor="warning700">{t.disabledByServer}</Typography></Box>}
-      <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
+      {section === 'gallery' && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <Typography variant="beta" tag="h2">{t.palette}</Typography>
         <Swatches>
           {Object.keys(DEFAULT_PALETTE).map(key => <ColorField key={key} name={`palette-${key}`} label={(t as any)[key]} value={settings.palette[key]} disabled={!canUpdate || saving}
             onChange={(value: string) => update(s => { s.palette[key] = value; return s })} />)}
         </Swatches>
-        {badColor && <Typography role="alert" textColor="danger600">{t.invalidColor}</Typography>}
+        {badPalette && <Typography role="alert" textColor="danger600">{t.invalidColor}</Typography>}
         <Typography variant="pi" textColor="neutral600">{t.previewLabel}</Typography>
         <Swatches data-testid="palette-preview">
           {TEMPLATES.map(template => <Flex key={template} direction="column" gap={1}>
@@ -317,8 +326,8 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           </Flex>)}
         </Swatches>
         <Flex><Button variant="tertiary" size="S" disabled={!canUpdate} onClick={() => update(s => { s.palette = { ...DEFAULT_PALETTE }; return s })}>{t.resetPalette}</Button></Flex>
-      </Flex></Box>
-      <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
+      </Flex></Box>}
+      {section === 'general' && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <Typography variant="beta" tag="h2">{t.editor}</Typography>
         <ToggleField name="editor-enabled" label={t.enabled} value={editor.enabled} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.enabled = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{t.enabledHelp}</Typography>
@@ -331,6 +340,14 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <SelectField name="editor-initialState" label={t.initialState} value={editor.initialState} disabled={!canUpdate || saving}
           options={['closed', 'open', 'remember'].map(value => ({ value, label: t.states[value] }))} onChange={(v: string) => update(s => { s.editor.initialState = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{t.rememberHelp}</Typography>
+        {lazyEditors && <>
+          <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
+          <UidListField TextField={TextField} name="editor-lazyFields" label={t.lazyFields} value={editor.lazyFields || []} disabled={!canUpdate || saving || editor.lazyEditors === false}
+            placeholder="plugin::ckeditor5.CKEditor" onChange={(uids: string[]) => update(s => { s.editor.lazyFields = uids; return s })} />
+          <Typography variant="pi" textColor={badLazy ? 'danger600' : 'neutral600'} role={badLazy ? 'alert' : undefined}>{badLazy ? t.f('lazyFieldsInvalid', { max: LAZY_MAX }) : t.lazyEditorsHelp}</Typography>
+        </>}
+      </Flex></Box>}
+      {section === 'preview' && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <TextField name="editor-blockPreviewUrl" label={t.blockPreviewUrl} value={editor.blockPreviewUrl || ''} disabled={!canUpdate || saving}
           placeholder="http://localhost:3000/block-preview/{name}/{variant}" onChange={(v: string) => update(s => { s.editor.blockPreviewUrl = v.trim(); return s })} />
         <Typography variant="pi" textColor="neutral600">{t.blockPreviewUrlHelp}</Typography>
@@ -345,18 +362,13 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
           <Typography variant="delta" tag="h3">{t.paneTitle}</Typography>
           <PaneEditor id="editor" versions={Boolean(data.historyTypes)} toolbar={editor.previewToolbar || TOOLBAR} devices={editor.previewDevices || DEVICE_NAMES} t={t} disabled={!canUpdate || saving} TextField={TextField}
             set={(key: string, value: unknown) => update(s => { s.editor[key] = value; return s })} />
-          {lazyEditors && <>
-          <ToggleField name="editor-lazyEditors" label={t.lazyEditors} value={editor.lazyEditors !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.lazyEditors = v; return s })} />
-          <UidListField TextField={TextField} name="editor-lazyFields" label={t.lazyFields} value={editor.lazyFields || []} disabled={!canUpdate || saving || editor.lazyEditors === false}
-            placeholder="plugin::ckeditor5.CKEditor" onChange={(uids: string[]) => update(s => { s.editor.lazyFields = uids; return s })} />
-          <Typography variant="pi" textColor={badLazy ? 'danger600' : 'neutral600'} role={badLazy ? 'alert' : undefined}>{badLazy ? t.f('lazyFieldsInvalid', { max: LAZY_MAX }) : t.lazyEditorsHelp}</Typography>
-          {data.blockPreviewAvailable && <>
+          {badPreviewUrl && <Typography role="alert" textColor="danger600">{t.invalidUrl}</Typography>}
+          {lazyEditors && data.blockPreviewAvailable && <>
             <ToggleField name="editor-blockPreviewInForm" label={t.blockPreviewInForm} value={editor.blockPreviewInForm} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.blockPreviewInForm = v; return s })} />
             <Typography variant="pi" textColor="neutral600">{t.blockPreviewInFormHelp}</Typography>
           </>}
-          </>}
-      </Flex></Box>
-      <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="row-actions-settings">
+      </Flex></Box>}
+      {section === 'general' && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="row-actions-settings">
         <Typography variant="beta" tag="h2">{t.rowActionsTitle}</Typography>
         <ToggleField name="editor-confirmDelete" label={t.confirmDeleteOption} value={editor.confirmDelete !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.confirmDelete = v; return s })} />
         <ToggleField name="editor-duplicate" label={t.duplicateOption} value={editor.duplicate !== false} disabled={!canUpdate || saving} onChange={(v: boolean) => update(s => { s.editor.duplicate = v; return s })} />
@@ -364,11 +376,11 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         <SelectField name="editor-hiddenBlocks" label={t.hiddenBlocks} value={editor.hiddenBlocks || 'strip'} disabled={!canUpdate || saving || !data.hiddenAttribute}
           options={['strip', 'flag', 'off'].map(value => ({ value, label: t.hiddenModes[value] }))} onChange={(v: string) => update(s => { s.editor.hiddenBlocks = v; return s })} />
         <Typography variant="pi" textColor="neutral600">{data.hiddenAttribute ? t.hiddenBlocksHelp : t.hiddenAttributeOff}</Typography>
-      </Flex></Box>
-      {data.historyTypes && settings.history && <HistorySettings types={data.historyTypes} history={settings.history} t={t} disabled={!canUpdate || saving} ToggleField={ToggleField} TextField={TextField}
+      </Flex></Box>}
+      {section === 'history' && data.historyTypes && settings.history && <HistorySettings types={data.historyTypes} history={settings.history} t={t} disabled={!canUpdate || saving} ToggleField={ToggleField} TextField={TextField}
         set={(key: string, value: unknown) => update(s => { s.history = { ...s.history, [key]: value }; return s })} />}
-      {(data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
-        <Typography variant="beta" tag="h2">{t.contentTypes}</Typography>
+      {section === 'history' && !data.historyTypes && <Box padding={6} background="neutral0" hasRadius><Typography textColor="neutral600">{t.historyUnavailable}</Typography></Box>}
+      {section === 'content-types' && (data.contentTypes || []).length > 0 && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4} data-testid="content-types">
         <Typography variant="pi" textColor="neutral600">{t.contentTypesHelp}</Typography>
         {data.contentTypes.map((type: any) => {
           const entry = settings.contentTypes?.[type.uid] || {}
@@ -400,7 +412,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
         })}
         {badSidebar && <Typography role="alert" textColor="danger600">{t.sidebarInvalidSave}</Typography>}
       </Flex></Box>}
-      <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
+      {section === 'gallery' && <Box padding={6} background="neutral0" hasRadius><Flex direction="column" alignItems="stretch" gap={4}>
         <Typography variant="beta" tag="h2">{t.components}</Typography>
         <Searchbar name="component-filter" value={filter} placeholder={t.filter} clearLabel={t.clear} onClear={() => setFilter('')} onChange={(e: any) => setFilter(e.target.value)}>{t.filter}</Searchbar>
         <Typography variant="pi" textColor="neutral600" data-testid="components-count">{t.f('countAll', { count: components.length })}</Typography>
@@ -442,7 +454,7 @@ export function Settings({ useClient, usePermissions, MediaPicker, ToggleField, 
             </Flex>
           </Card>
         })}</Grid>
-      </Flex></Box>
+      </Flex></Box>}
       {picking && <MediaPicker onClose={() => setPicking(null)} onSelect={(asset: any) => {
         const uid = picking; setPicking(null)
         if (!asset?.id) return
@@ -474,10 +486,21 @@ function LayoutFields({ component, layout, set, t, disabled, SelectField }: any)
 }
 
 // `to`: Strapi 4 wants the absolute path, Strapi 5 one relative to /settings (it warns otherwise).
+const SETTINGS_SECTIONS: Array<{ id: SettingsSection, label: string }> = [
+  { id: 'general', label: 'General' },
+  { id: 'preview', label: 'Page preview' },
+  { id: 'content-types', label: 'Content types' },
+  { id: 'gallery', label: 'Block gallery' },
+  { id: 'history', label: 'History & trash' },
+]
+
 export function register(app: any, Component: any, to: string) {
   app.createSettingSection({ id: 'blockscene', intlLabel: { id: 'blockscene.title', defaultMessage: 'Blockscene' } },
-    [{ id: 'blockscene-settings', to, intlLabel: { id: 'blockscene.settings', defaultMessage: 'Gallery' },
+    SETTINGS_SECTIONS.map(({ id, label }) => {
+      const Page = () => React.createElement(Component, { section: id })
+      return { id: `blockscene-${id}`, to: id === 'general' ? to : `${to}/${id}`, intlLabel: { id: `blockscene.settings${id === 'content-types' ? 'ContentTypes' : id[0].toUpperCase() + id.slice(1)}`, defaultMessage: label },
       // Module shape: older Strapi 4 (e.g. 4.11) only reads `.default` from the loader result.
       // Not an `async` function: Strapi 5 warns on AsyncFunction loaders.
-      Component: () => Promise.resolve({ default: Component }), permissions: permissions.read }])
+      Component: () => Promise.resolve({ default: Page }), permissions: permissions.read }
+    }))
 }

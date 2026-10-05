@@ -359,7 +359,7 @@ function usePermissions() {
     isLoading,
   };
 }
-const SettingsPage = () => (
+const SettingsPage = ({ section }: any) => (
   <Guard>
   <Settings
     useClient={useFetchClient}
@@ -368,6 +368,7 @@ const SettingsPage = () => (
     ToggleField={ToggleField}
     SelectField={SelectField}
     TextField={TextField}
+    section={section}
   />
   </Guard>
 );

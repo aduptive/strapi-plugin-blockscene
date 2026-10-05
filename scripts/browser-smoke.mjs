@@ -332,7 +332,7 @@ try {
   })
   await putSettings({})
   await step('settings page: palette preview, unsaved indicator, save and persistence', async () => {
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/gallery')
     await page.getByTestId('save-blockscene-settings').waitFor()
     assert.equal(await page.getByTestId('unsaved-indicator').count(), 0)
     await page.locator('input[name="palette-accent"]').fill('#FF0000')
@@ -349,9 +349,11 @@ try {
     assert.equal(await page.locator('input[name="palette-accent"]').inputValue(), '#FF0000')
     await page.getByTestId('source-blocks.text').getByText(/Wireframe/).waitFor()
     await page.getByTestId('source-blocks.hero').getByText(/Automatic image/).waitFor()
-    // No preview route: the Settings page says so (editors get no hint in the edit view).
+    // No preview route: its settings page says so (editors get no hint in the edit view).
+    await page.goto('/admin/settings/blockscene/preview')
     await page.locator('input[name="editor-previewUrl"]').waitFor(); await page.getByTestId('preview-url-empty').waitFor()
-    // Lazy rich-text editors exist on Strapi 5 only; the page preview options on both.
+    // Lazy rich-text editors exist on Strapi 5 only.
+    await page.goto('/admin/settings/blockscene')
     assert.equal(await page.locator('input[name="editor-lazyFields"]').count(), major === 5 ? 1 : 0)
     await shot('settings')
   })
@@ -371,7 +373,7 @@ try {
     const upload = await api('POST', '/upload', form)
     assert.ok([200, 201].includes(upload.status), JSON.stringify(upload.data))
     uploadId = upload.data[0].id
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/gallery')
     await page.getByTestId('settings-blocks.text').getByRole('button', { name: 'Choose image' }).click()
     const dialog = page.getByRole('dialog')
     await dialog.waitFor()
@@ -390,7 +392,7 @@ try {
     await img.waitFor(); assert.match(await img.getAttribute('src'), /\/uploads\//)
     await shot('manual-thumb')
     await page.keyboard.press('Escape')
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/gallery')
     await page.getByTestId('settings-blocks.text').getByRole('button', { name: 'Use automatic image' }).click()
     await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
@@ -402,7 +404,7 @@ try {
   await step('deleted media is reported and the card advances to the next source', async () => {
     await putSettings({ components: { 'blocks.text': { mediaId: uploadId, template: 'faq' } } })
     assert.equal((await api('DELETE', `/upload/files/${uploadId}`)).status, 200); uploadId = null
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/gallery')
     await page.getByTestId('settings-blocks.text').getByText('The selected media no longer exists; the next source is used.').waitFor()
     await page.goto(docUrl); await openGallery()
     await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="faq"]').waitFor()
@@ -683,7 +685,7 @@ try {
   })
   if (major === 5) await step('settings sidebar editor (Strapi 5): an item built in the UI is saved, shown in the visual editor and opens its field; reset', async () => {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/content-types')
     const uid = 'api::page.page'
     const editor = page.getByTestId(`sidebar-editor-${uid}`)
     await editor.waitFor()
@@ -721,7 +723,7 @@ try {
   await step('pane toolbar: Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
     const previewUrl = `${baseURL}/block-preview/index.html`
     await putSettings({ editor: { previewUrl } })
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/preview')
     const checklist = page.getByTestId('pane-editor-editor')
     await checklist.waitFor()
     await checklist.locator('input[name="editor-previewToolbar-history"]').uncheck()
@@ -1120,7 +1122,7 @@ try {
     assert.equal((await api('PUT', '/blockscene/settings', { components: { 'group.section': { layout: { columnsField: 'nope' } } } })).status, 400, 'unknown columns field')
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     // Settings: only group OPENs get the layout fields, and only attributes that can hold a count are offered.
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/gallery')
     const layoutCard = page.getByTestId('layout-group.section'); await layoutCard.waitFor()
     assert.equal(await page.getByTestId('layout-blocks.hero').count(), 0, 'not an OPEN: no layout fields')
     await layoutCard.getByRole('combobox', { name: 'Layout grid: columns field' }).click(); await page.getByRole('option', { name: 'note', exact: true }).click()
@@ -1238,7 +1240,7 @@ try {
       if (major === 5) await page.getByTestId('blockscene-history').first().getByRole('button', { name: expect.undo, exact: true }).waitFor()
       await page.getByTestId('zone-mode-menu').getByRole('button').click()
       await menuItems().filter({ hasText: expect.split }).first().waitFor(); await page.keyboard.press('Escape')
-      await page.goto('/admin/settings/blockscene'); await page.getByTestId('save-blockscene-settings').waitFor()
+      await page.goto('/admin/settings/blockscene/gallery'); await page.getByTestId('save-blockscene-settings').waitFor()
       await page.getByText(expect.palette, { exact: true }).first().waitFor()
       const text = await page.locator('body').innerText()
       assert.ok(!/blockscene\.[a-zA-Z]/.test(text), `${locale}: no raw message ids on the settings page`)
@@ -1303,7 +1305,7 @@ try {
     assert.deepEqual(seamBlocks.map(block => block.title), ['Variant title', 'Variant title', 'Hello from Strapi'], 'the seam inserted the chosen variant after the first block')
     assert.deepEqual(seamBlocks[1].items.map(item => item.label), ['One', 'Two', 'Three']); assert.equal(seamBlocks[1].visible, true)
     await putSettings({})
-    await page.goto('/admin/settings/blockscene')
+    await page.goto('/admin/settings/blockscene/gallery')
     assert.match(await page.getByTestId('variants-blocks.hero').innerText(), /Default, Dark$/, 'Settings lists the code variants read-only')
   })
   // Schema metadata runs only when the lab's blocks.text carries it (a temporary lab edit, see docs/LOCAL-TESTING.md
