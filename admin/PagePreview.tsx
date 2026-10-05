@@ -18,6 +18,7 @@ import {
   groupRange,
   getIn,
   hoverKey,
+  projectEntry,
   projectPage,
   validateEdit,
   validateFocus,
@@ -572,6 +573,8 @@ export function PagePreview({
   const readOnly = Boolean(version);
   const viewRows = React.useRef<any[]>([]);
   viewRows.current = version ? (version.values?.[zone!] || []) : latest.current;
+  const viewValues = React.useRef<any>({});
+  viewValues.current = version ? version.values : values;
   // Changing document/locale/version invalidates queued messages from the previous frame session.
   const channel = React.useMemo(() => crypto.randomUUID(), [host.model, host.documentId, host.locale, version?.scope, version?.event.id]);
   const { base, source } = state.preview;
@@ -616,6 +619,21 @@ export function PagePreview({
         protocol: PROTOCOL,
         channel,
         type: "update-page",
+        entry: projectEntry(
+          viewValues.current,
+          host.contentType,
+          live.current.components,
+          window.location.origin,
+          host.readable,
+        ),
+        contentType: {
+          uid: host.model,
+          kind: host.contentType?.kind,
+          singularName: host.contentType?.info?.singularName,
+          pluralName: host.contentType?.info?.pluralName,
+          displayName: host.contentType?.info?.displayName,
+        },
+        zone,
         blocks: projectPage(
           viewRows.current,
           live.current.components,
@@ -630,7 +648,7 @@ export function PagePreview({
       },
       origin,
     );
-  }, [channel, origin, hiddenAttribute, groups]);
+  }, [channel, origin, hiddenAttribute, groups, host.contentType, host.model, host.readable, zone]);
   React.useEffect(() => {
     if (readOnly) { setInserting(null); setBlockModal(null); setPicking(null); setFieldsPanel(null); setHovered(null); }
   }, [readOnly]);

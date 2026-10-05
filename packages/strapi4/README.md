@@ -535,6 +535,11 @@ Minimal configuration:
    blocks, 0 when none or not editable); while it is positive the page may show
    a Paste button in its seams that sends `{ type: 'paste', after }` (a block
    key, or `null` for the start). Both are optional.
+   `update-page` also carries the complete live `entry`, including unsaved
+   values, plus `contentType` metadata and the projected zone name. New schema
+   fields therefore reach the frontend automatically; the frontend decides how
+   each field affects its page. The normalized `blocks` array remains alongside
+   it for visual editing and block-level actions.
    Keep the origin check (`admin` query parameter or your own constant).
 2. Allow the admin origin to embed it (`Content-Security-Policy: frame-ancestors`)
    and allow the page origin in the Strapi admin CSP (`frame-src`).
@@ -546,12 +551,16 @@ Minimal configuration:
    other one and the page then never hydrates, so `ready` never arrives and
    the pane reports the preview as unavailable with no error in either console.
 
-The bridge only exposes what the schema allows: attributes marked `private`
-are never projected, focused or edited; media URLs are passed through for any
-http(s) host (S3/CDN providers included) and same-origin paths; the zone shown
-is the first Dynamic Zone the user may read, and editing additionally needs the
-update permission on it. Pending dialogs are dropped when the document or
-locale changes.
+The bridge only exposes what the schema and the current user's read permissions
+allow. Attributes marked with Strapi's `private: true`, passwords, and
+attributes with `pluginOptions.blockscene.private: true` are never projected,
+focused or edited; the Blockscene option is useful for keeping a field out of
+the preview without changing its public API behavior. This privacy rule also
+applies inside components. Media URLs are passed through for any http(s) host
+(S3/CDN providers included) and same-origin paths; the zone shown is the first
+Dynamic Zone the user may read, and editing additionally needs the update
+permission on it. Pending dialogs are dropped when the document or locale
+changes.
 
 Editing from the page: plain-text areas the page explicitly maps
 (`data-block-field` + `contenteditable="plaintext-only"`) send `edit`. In the

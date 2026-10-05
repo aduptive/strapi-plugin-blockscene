@@ -219,6 +219,46 @@ test('bridge projection: external media URLs kept, unsafe schemes dropped, priva
   assert.equal(getIn({ items: [{ image: { id: 7 } }] }, 'items.0.image').id, 7); assert.equal(getIn({}, 'items.0.image'), undefined)
 })
 
+test('page preview projects the complete readable entry and only omits private fields', async () => {
+  const { fieldReadable, projectEntry } = await import('../admin/preview.mjs')
+  const components = {
+    'shared.colors': { attributes: { value: { type: 'enumeration' }, secret: { type: 'string', pluginOptions: { blockscene: { private: true } } } } },
+    'blocks.text': { attributes: { body: { type: 'text' }, related: { type: 'relation' } } },
+  }
+  const schema = { attributes: {
+    title: { type: 'string' },
+    color: { type: 'component', component: 'shared.colors', repeatable: false },
+    cover: { type: 'media', multiple: false },
+    tags: { type: 'relation' },
+    blocks: { type: 'dynamiczone' },
+    hidden: { type: 'string', private: true },
+    previewPrivate: { type: 'string', pluginOptions: { blockscene: { private: true } } },
+    password: { type: 'password' },
+    unreadable: { type: 'string' },
+  } }
+  const values = {
+    id: 7, documentId: 'doc-7', locale: 'en', title: 'Draft title',
+    color: { id: 2, value: 'black', secret: 'nested' },
+    cover: { url: '/uploads/cover.webp', alternativeText: 'Cover' },
+    tags: [{ id: 4, name: 'Branding' }],
+    blocks: [{ id: 9, __component: 'blocks.text', body: 'Live draft', related: { id: 5, title: 'Another entry' } }],
+    hidden: 'schema private', previewPrivate: 'preview private', password: 'never', unreadable: 'denied',
+  }
+  const entry = projectEntry(values, schema, components, 'http://cms.test', name => name !== 'unreadable')
+  assert.deepEqual(entry, {
+    id: 7, documentId: 'doc-7', locale: 'en', title: 'Draft title',
+    color: { id: 2, value: 'black' },
+    cover: { url: 'http://cms.test/uploads/cover.webp', alternativeText: 'Cover', caption: '', width: 0, height: 0, mime: '' },
+    tags: [{ id: 4, name: 'Branding' }],
+    blocks: [{ id: 9, __component: 'blocks.text', body: 'Live draft', related: { id: 5, title: 'Another entry' } }],
+  })
+  assert.deepEqual(values.color, { id: 2, value: 'black', secret: 'nested' }, 'projection never mutates the form')
+  assert.equal(fieldReadable('color', ['title', 'color.value']), true, 'a readable child makes its component projectable')
+  assert.equal(fieldReadable('color.value', ['title', 'color.value']), true)
+  assert.equal(fieldReadable('color.secret', ['title', 'color.value']), false)
+  assert.equal(fieldReadable('color.secret', ['color']), true, 'a readable parent grants its component fields')
+})
+
 test('native "Add a component" button is matched by its zone name only, never another zone, a header or a block row', async () => {
   const { isNativeAddButton } = await import('../admin/accordions.mjs')
   const button = (text, extra = {}) => ({ textContent: text, getAttribute: (k) => extra[k] || null, closest: (sel) => (extra.inside && sel.includes(extra.inside) ? {} : null) })
