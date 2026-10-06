@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-alpha.14 (Strapi 5) and 1.0.0-alpha.12 (Strapi 4) — 2026-10-05
+
+- History cards use the active Strapi theme foreground color, keeping actor
+  names and dates legible in dark mode.
+- Consecutive save, publish and restore events with identical content now share
+  one version card. The card lists every grouped action, while the activity log
+  retains the individual events and non-consecutive versions remain separate.
+
 ## 2.0.0-alpha.13 (Strapi 5) and 1.0.0-alpha.11 (Strapi 4) — 2026-10-05
 
 - Layout groups are now edited as one safe unit. A configured opener inserts
