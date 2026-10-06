@@ -1,6 +1,7 @@
 import { generateNKeysBetween } from "fractional-indexing";
-import { blockKey, groupRange, isOpener, isClose, validateGroups } from "../server/groups.js";
+import { blockKey, groupRange, isOpener, isClose, removeGroup, unwrapGroup, validateGroups } from "../server/groups.js";
 export { layoutColumns } from "../server/groups.js";
+export { removeGroup, unwrapGroup };
 
 // Row actions (duplicate, copy/paste, hide): pure helpers shared by the Strapi 4 and 5 adapters and the unit tests.
 // Every change is a new zone array written through the form, so undo/redo and Save see it like any native edit.
@@ -207,7 +208,18 @@ export function movedRow(prev, next, actor) {
 // where it lands, and inserts, deletes and whole-range moves stay as they are.
 export function keepGroupsTogether(prev, next, groups, actor) {
   if (!groups) return null;
-  const move = movedRow(prev, next, actor);
+  let move = movedRow(prev, next, actor);
+  // Some drag backends expose adjacent hover swaps without the original pointer
+  // target. In that ambiguous two-row case, prefer the only OPEN candidate: this
+  // keeps the structural group intact instead of silently absorbing the row it crossed.
+  if (!move && actor == null) {
+    const candidates = prev.flatMap((row) => {
+      if (!isOpener(row, groups)) return [];
+      const candidate = movedRow(prev, next, blockKey(row));
+      return candidate && isOpener(prev[candidate.from], groups) ? [candidate] : [];
+    });
+    if (candidates.length === 1) move = candidates[0];
+  }
   if (!move || !isOpener(prev[move.from], groups)) return null;
   const start = move.from, end = groupOutline(prev, groups)[start].end;
   if (end == null) return null; // unclosed: no members to keep

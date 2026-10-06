@@ -57,6 +57,16 @@ test('gallery never offers a configured CLOSE on its own; the OPEN stays', async
   assert.deepEqual(uids({ components: {}, groups: null }).sort(), [...zone.components].sort(), 'no groups config: every allowed component')
 })
 
+test('row thumbnails default off for group markers and remain configurable per component', async () => {
+  const { showRowThumbnail } = await import('../admin/model.mjs')
+  const groups = { 'wrappers.open': 'wrappers.close' }
+  assert.equal(showRowThumbnail('blocks.hero', { groups, components: {} }), true)
+  assert.equal(showRowThumbnail('wrappers.open', { groups, components: {} }), false)
+  assert.equal(showRowThumbnail('wrappers.close', { groups, components: {} }), false)
+  assert.equal(showRowThumbnail('blocks.hero', { groups, components: { 'blocks.hero': { showRowThumbnail: false } } }), false)
+  assert.equal(showRowThumbnail('wrappers.open', { groups, components: { 'wrappers.open': { showRowThumbnail: true } } }), true)
+})
+
 test('accordion memory is scoped per user and zone, tolerates blocked or invalid storage', async () => {
   const { memoryKey, readMemory, writeMemory, initialState } = await import('../admin/model.mjs')
   const key = memoryKey({ base: 'http://cms/admin', userId: 7, contentType: 'api::page.page', zone: 'blocks' })
@@ -95,6 +105,9 @@ test('settings validation rejects invalid colors, templates, UIDs, media and unk
   assert.equal(validateSettings({}, uids).editor.blockPreviewInForm, false, 'compact block preview is off by default')
   assert.throws(() => validateSettings({ editor: { blockPreviewInForm: 'yes' } }, uids), { name: 'ValidationError' })
   assert.equal(TEMPLATES.length, 6)
+  assert.equal(validateSettings({ components: { 'blocks.hero': { showRowThumbnail: false } } }, uids).components['blocks.hero'].showRowThumbnail, false)
+  assert.throws(() => validateSettings({ components: { 'blocks.hero': { showRowThumbnail: 'no' } } }, uids), { name: 'ValidationError' })
+  assert.deepEqual(mergeSaved({ components: { 'blocks.hero': { showRowThumbnail: 'no' } } }, uids).components, {})
   const merged = mergeSaved({ palette: { accent: 'bad' }, components: { 'blocks.gone': { mediaId: 1 }, 'blocks.hero': { mediaId: 2 } }, editor: { initialState: 'open', enabled: 'no', previewMode: 'weird', previewUrl: 'ftp://x' } }, uids)
   assert.equal(merged.palette.accent, DEFAULTS.palette.accent)
   assert.deepEqual(Object.keys(merged.components), ['blocks.hero'])
@@ -122,8 +135,8 @@ test('blockPreviewUrl: placeholders validated on save, expanded and encoded in t
 
 test('admin catalog only exposes declared safe metadata plus resolved overrides', async () => {
   const plugin = require('../server')
-  const values = { components: { 'blocks.hero': { label: 'Hero', image: 'javascript:alert(1)', secret: 'must-not-leak' } }, previewBaseUrl: '/cms/previews', previewVersion: 'bad version!', disabled: false }
-  const saved = { components: { 'blocks.hero': { mediaId: 9, template: 'faq' } }, editor: { enabled: true, initialState: 'open' } }
+  const values = { components: { 'blocks.hero': { label: 'Hero', image: 'javascript:alert(1)', showRowThumbnail: true, secret: 'must-not-leak' } }, previewBaseUrl: '/cms/previews', previewVersion: 'bad version!', disabled: false }
+  const saved = { components: { 'blocks.hero': { mediaId: 9, template: 'faq', showRowThumbnail: false } }, editor: { enabled: true, initialState: 'open' } }
   const strapi = { components: { 'blocks.hero': {} },
     plugin: () => ({ config: key => values[key], service: () => plugin.services.settings({ strapi }) }),
     store: () => ({ get: async () => saved }),
@@ -136,6 +149,7 @@ test('admin catalog only exposes declared safe metadata plus resolved overrides'
   assert.equal(ctx.body.components['blocks.hero'].secret, undefined)
   assert.equal(ctx.body.components['blocks.hero'].manualImage, '/uploads/hero.png')
   assert.equal(ctx.body.components['blocks.hero'].template, 'faq')
+  assert.equal(ctx.body.components['blocks.hero'].showRowThumbnail, false)
   assert.equal(ctx.body.editor.enabled, true); assert.equal(ctx.body.editor.initialState, 'open')
   values.disabled = true
   await plugin.controllers.catalog({ strapi }).find(ctx)
@@ -149,7 +163,7 @@ test('admin catalog only exposes declared safe metadata plus resolved overrides'
 })
 
 test('layout groups: OPEN/CLOSE map, tree, whole-group moves/removal, gap resolution, validation policy', async () => {
-  const { groupRows, moveGroup, removeGroup, topLevelRanges, insertIndex, blockKey, validateGroups, safeGroups } = await import('../admin/preview.mjs')
+  const { groupRows, moveGroup, removeGroup, unwrapGroup, topLevelRanges, insertIndex, blockKey, validateGroups, safeGroups } = await import('../admin/preview.mjs')
   const g = { 'wrappers.columns': 'wrappers.close', 'wrappers.join': 'wrappers.close' }
   const flat = [{ id: 1, __component: 'blocks.a' }, { id: 2, __component: 'wrappers.columns' }, { id: 3, __component: 'blocks.b' }, { id: 4, __component: 'blocks.c' }, { id: 5, __component: 'wrappers.close' }, { id: 6, __component: 'blocks.d' }]
   const tree = groupRows(flat, g)
@@ -160,7 +174,12 @@ test('layout groups: OPEN/CLOSE map, tree, whole-group moves/removal, gap resolu
   assert.deepEqual(moveGroup(flat, 'wrappers.columns#2', 'down', g).map(r => r.id), [1, 6, 2, 3, 4, 5])
   assert.equal(moveGroup(flat, 'blocks.a#1', 'up', g), null); assert.equal(moveGroup(flat, 'wrappers.columns#2', 'up', null), null, 'no groups config, no moves')
   assert.deepEqual(removeGroup(flat, 'wrappers.columns#2', g).map(r => r.id), [1, 6], 'removing a group drops OPEN, children and CLOSE together')
+  assert.deepEqual(unwrapGroup(flat, 'wrappers.columns#2', g).map(r => r.id), [1, 3, 4, 6], 'unwrapping drops only OPEN and CLOSE')
   assert.equal(removeGroup(flat, 'blocks.a#1', g), null)
+  assert.equal(unwrapGroup(flat, 'blocks.a#1', g), null)
+  const unclosed = [{ id: 7, __component: 'wrappers.columns' }, { id: 8, __component: 'blocks.a' }]
+  assert.equal(removeGroup(unclosed, 'wrappers.columns#7', g), null, 'an unbalanced group is never removed as a range')
+  assert.equal(unwrapGroup(unclosed, 'wrappers.columns#7', g), null, 'an unbalanced group is never unwrapped')
   assert.deepEqual(groupRows(flat, null).map(n => n.type), ['block', 'block', 'block', 'block', 'block', 'block'], 'without config every row is an ordinary block')
   assert.equal(insertIndex(flat, 'wrappers.columns#2'), 2, 'gap after the opener inserts inside the group')
   assert.equal(insertIndex(flat, 'wrappers.close#5'), 5, 'gap after the close inserts after the group')
@@ -198,6 +217,46 @@ test('bridge projection: external media URLs kept, unsafe schemes dropped, priva
   assert.deepEqual(editableFields('blocks.a', {}, components).map(f => f.name), ['title'])
   assert.deepEqual(Object.keys(mediaFields('blocks.a', {}, components)), ['image'])
   assert.equal(getIn({ items: [{ image: { id: 7 } }] }, 'items.0.image').id, 7); assert.equal(getIn({}, 'items.0.image'), undefined)
+})
+
+test('page preview projects the complete readable entry and only omits private fields', async () => {
+  const { fieldReadable, projectEntry } = await import('../admin/preview.mjs')
+  const components = {
+    'shared.colors': { attributes: { value: { type: 'enumeration' }, secret: { type: 'string', pluginOptions: { blockscene: { private: true } } } } },
+    'blocks.text': { attributes: { body: { type: 'text' }, related: { type: 'relation' } } },
+  }
+  const schema = { attributes: {
+    title: { type: 'string' },
+    color: { type: 'component', component: 'shared.colors', repeatable: false },
+    cover: { type: 'media', multiple: false },
+    tags: { type: 'relation' },
+    blocks: { type: 'dynamiczone' },
+    hidden: { type: 'string', private: true },
+    previewPrivate: { type: 'string', pluginOptions: { blockscene: { private: true } } },
+    password: { type: 'password' },
+    unreadable: { type: 'string' },
+  } }
+  const values = {
+    id: 7, documentId: 'doc-7', locale: 'en', title: 'Draft title',
+    color: { id: 2, value: 'black', secret: 'nested' },
+    cover: { url: '/uploads/cover.webp', alternativeText: 'Cover' },
+    tags: [{ id: 4, name: 'Branding' }],
+    blocks: [{ id: 9, __component: 'blocks.text', body: 'Live draft', related: { id: 5, title: 'Another entry' } }],
+    hidden: 'schema private', previewPrivate: 'preview private', password: 'never', unreadable: 'denied',
+  }
+  const entry = projectEntry(values, schema, components, 'http://cms.test', name => name !== 'unreadable')
+  assert.deepEqual(entry, {
+    id: 7, documentId: 'doc-7', locale: 'en', title: 'Draft title',
+    color: { id: 2, value: 'black' },
+    cover: { url: 'http://cms.test/uploads/cover.webp', alternativeText: 'Cover', caption: '', width: 0, height: 0, mime: '' },
+    tags: [{ id: 4, name: 'Branding' }],
+    blocks: [{ id: 9, __component: 'blocks.text', body: 'Live draft', related: { id: 5, title: 'Another entry' } }],
+  })
+  assert.deepEqual(values.color, { id: 2, value: 'black', secret: 'nested' }, 'projection never mutates the form')
+  assert.equal(fieldReadable('color', ['title', 'color.value']), true, 'a readable child makes its component projectable')
+  assert.equal(fieldReadable('color.value', ['title', 'color.value']), true)
+  assert.equal(fieldReadable('color.secret', ['title', 'color.value']), false)
+  assert.equal(fieldReadable('color.secret', ['color']), true, 'a readable parent grants its component fields')
 })
 
 test('native "Add a component" button is matched by its zone name only, never another zone, a header or a block row', async () => {
@@ -239,6 +298,30 @@ test('per content type settings: only types with a zone, only known keys; stale 
     assert.throws(() => validateSettings(bad, [], types), { name: 'ValidationError' }, `rejects ${JSON.stringify(bad)}`)
   const merged = mergeSaved({ contentTypes: { 'api::gone.gone': { enabled: false }, 'api::page.page': { enabled: false, previewMode: 'weird' } } }, [], types)
   assert.deepEqual(merged.contentTypes, { 'api::page.page': { enabled: false } })
+})
+
+test('settings gallery lists only components directly allowed by a Dynamic Zone', () => {
+  const { directComponentUids, settingsComponentUids } = require('../server/settings')
+  const types = {
+    'api::page.page': { attributes: {
+      blocks: { type: 'dynamiczone', components: ['blocks.hero', 'wrappers.open', 'wrappers.close'] },
+      seo: { type: 'component', component: 'global.seo' },
+    } },
+    'api::global-option.global-option': { attributes: {
+      glossary: { type: 'component', component: 'global.glossary', repeatable: true },
+    } },
+  }
+  assert.deepEqual(directComponentUids(types), ['blocks.hero', 'wrappers.open', 'wrappers.close'])
+  assert.deepEqual(directComponentUids(types, { 'api::page.page': { enabled: false } }), [], 'disabled content types do not contribute gallery cards')
+  assert.deepEqual(directComponentUids({}), [])
+  const schemas = {
+    'blocks.hero': { category: 'blocks' },
+    'wrappers.open': { category: 'wrappers' },
+    'wrappers.close': { category: 'wrappers' },
+  }
+  assert.deepEqual(settingsComponentUids(types, schemas, {}, ['blocks']), ['blocks.hero'])
+  assert.deepEqual(settingsComponentUids(types, schemas, {}, ['blocks', 'wrappers']), ['blocks.hero', 'wrappers.open', 'wrappers.close'])
+  assert.deepEqual(settingsComponentUids(types, schemas), ['blocks.hero', 'wrappers.open', 'wrappers.close'], 'no category config keeps every direct block')
 })
 
 test('visual editor sidebar: items name their own type fields, known icons, modal or drawer; stale items dropped on read', () => {

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { candidatesFor } from "./model.mjs";
+import { candidatesFor, showRowThumbnail } from "./model.mjs";
 import { findZoneList, toggles } from "./accordions.mjs";
 import { Thumb } from "./Gallery";
 import { useMessages } from "./messages";
@@ -109,9 +109,16 @@ export function RowPreviews({ zones, components, catalog, Modal }: any) {
     components?.[uid]?.info?.displayName ||
     uid;
   const srcOf = (uid: string) => candidates(uid)[resolved[uid] ?? -1] || "";
+  const visible = anchors.filter(({ uid }) => showRowThumbnail(uid, catalog));
   // Only a row with a working image is a control: an empty anchor must not take focus.
   React.useEffect(() => {
     for (const { el, uid } of anchors) {
+      if (!showRowThumbnail(uid, catalog)) {
+        el.style.removeProperty("cursor");
+        for (const name of ["role", "tabindex", "aria-label"])
+          el.removeAttribute(name);
+        continue;
+      }
       if (srcOf(uid)) {
         el.setAttribute("role", "button");
         el.setAttribute("tabindex", "0");
@@ -124,7 +131,7 @@ export function RowPreviews({ zones, components, catalog, Modal }: any) {
   });
   return (
     <>
-      {anchors.map((a) =>
+      {visible.map((a) =>
         createPortal(
           <span
             style={{

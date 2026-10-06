@@ -14,15 +14,17 @@ import {
   mediaAttribute,
   moveGroup,
   removeGroup,
+  unwrapGroup,
   groupRange,
   getIn,
   hoverKey,
+  projectEntry,
   projectPage,
   validateEdit,
   validateFocus,
 } from "./preview.mjs";
 import { DEVICES, frameStyle, useStageSize, stageBackground } from "./devices";
-import { deviceEntries, panelsFor, toolbarLayout } from "./pane.mjs";
+import { deviceEntries, panelsFor, toolbarLayout, topNavigationInset } from "./pane.mjs";
 import { Guard } from "./Guard";
 import { useMessages } from "./messages";
 import { Icon, Tool } from "./icons";
@@ -130,6 +132,25 @@ function useMainRect() {
   }, []);
   return rect;
 }
+function useAdminTopInset() {
+  const [inset, setInset] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const navs = () => [...document.querySelectorAll<HTMLElement>("nav")];
+    const measure = () => setInset(topNavigationInset(navs().map((nav) => ({
+      position: getComputedStyle(nav).position,
+      rect: nav.getBoundingClientRect(),
+    })), window.innerWidth));
+    measure();
+    const observer = "ResizeObserver" in window ? new ResizeObserver(measure) : null;
+    navs().forEach((nav) => observer?.observe(nav));
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  return inset;
+}
 // Split divider: always visible (4 px, neutral) with a grip pill; primary on hover, drag or focus. 12 px hit area.
 const Handle = styled.div`
   position: absolute;
@@ -224,6 +245,7 @@ body.bp-block-modal [data-bp-block-modal] { position: fixed !important; top: ${B
   background: ${background}; border-radius: 0 0 8px 8px; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
 body.bp-block-modal [data-bp-block-modal]::before, body.bp-block-modal [data-bp-block-modal]::after { display: none !important; }
 body.bp-block-modal [data-bp-block-modal] > div { margin: 0 !important; padding-top: 0 !important; }
+body.bp-block-modal > div:has(> [role="listbox"]) { z-index: 1002 !important; }
 body.bp-block-modal [data-bp-modal-hide] { display: none !important; }`;
 // Sidebar item: the native form column itself, lifted as a modal or a drawer with every other field hidden.
 const DRAWER_WIDTH = 640;
@@ -234,6 +256,7 @@ body.bp-fields [data-bp-show] { grid-column: 1 / -1 !important; }
 body.bp-fields [data-bp-flat] { border: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; }
 body.bp-fields [data-bp-fields] { position: fixed !important; z-index: 1001; overflow: auto; margin: 0 !important;
   padding: 1.6rem 2.4rem; background: ${background}; box-shadow: 0 8px 32px rgba(33, 33, 52, 0.3); }
+body.bp-fields > div:has(> [role="listbox"]) { z-index: 1002 !important; }
 body.bp-fields [data-bp-fields="modal"] { top: ${BLOCK_TOP}; left: 50%; transform: translateX(-50%); width: min(96rem, 92vw);
   max-height: calc(88vh - 5.6rem); border-radius: 0 0 8px 8px; }
 ${drawer ? `body.bp-fields [data-bp-fields="drawer"] { top: ${drawer.top + 56}px; left: ${drawer.left}px; width: ${drawer.width}px; height: ${drawer.height - 56}px; }` : ""}`;
@@ -513,6 +536,7 @@ export function PagePreview({
     return v > 0 && v < 1 ? v : 0.5;
   });
   const main = useMainRect();
+  const topInset = useAdminTopInset();
   const vw = main.width; // editor content area, not the viewport
   const [dragging, setDragging] = React.useState(false);
   const [ready, setReady] = React.useState(false);
@@ -520,6 +544,7 @@ export function PagePreview({
   const [failed, setFailed] = React.useState(false);
   const [attempt, retry] = React.useReducer((n: number) => n + 1, 0);
   const [picking, setPicking] = React.useState<any>(null);
+  const [deletingGroup, setDeletingGroup] = React.useState<{ key: string; label: string; count: number } | null>(null);
   // Block hovered in the page (key), its form row when out of view, and the grace before a clear lands.
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [edge, setEdge] = React.useState<"up" | "down" | null>(null);
@@ -570,6 +595,8 @@ export function PagePreview({
   const readOnly = Boolean(version);
   const viewRows = React.useRef<any[]>([]);
   viewRows.current = version ? (version.values?.[zone!] || []) : latest.current;
+  const viewValues = React.useRef<any>({});
+  viewValues.current = version ? version.values : values;
   // Changing document/locale/version invalidates queued messages from the previous frame session.
   const channel = React.useMemo(() => crypto.randomUUID(), [host.model, host.documentId, host.locale, version?.scope, version?.event.id]);
   const { base, source } = state.preview;
@@ -614,6 +641,21 @@ export function PagePreview({
         protocol: PROTOCOL,
         channel,
         type: "update-page",
+        entry: projectEntry(
+          viewValues.current,
+          host.contentType,
+          live.current.components,
+          window.location.origin,
+          host.readable,
+        ),
+        contentType: {
+          uid: host.model,
+          kind: host.contentType?.kind,
+          singularName: host.contentType?.info?.singularName,
+          pluralName: host.contentType?.info?.pluralName,
+          displayName: host.contentType?.info?.displayName,
+        },
+        zone,
         blocks: projectPage(
           viewRows.current,
           live.current.components,
@@ -628,7 +670,7 @@ export function PagePreview({
       },
       origin,
     );
-  }, [channel, origin, hiddenAttribute, groups]);
+  }, [channel, origin, hiddenAttribute, groups, host.contentType, host.model, host.readable, zone]);
   React.useEffect(() => {
     if (readOnly) { setInserting(null); setBlockModal(null); setPicking(null); setFieldsPanel(null); setHovered(null); }
   }, [readOnly]);
@@ -869,12 +911,17 @@ export function PagePreview({
         return;
       }
       if (is("delete-group") && canEdit && groups) {
-        const next = removeGroup(
-          latest.current,
-          String(event.data.key),
-          groups,
-        );
-        if (next) onChange(zone!, next);
+        const key = String(event.data.key);
+        const start = latest.current.findIndex((row: any) => blockKey(row) === key);
+        if (start < 0) return;
+        const [, end] = groupRange(latest.current, start, groups);
+        if (end <= start || latest.current[end]?.__component !== groups[latest.current[start]?.__component]) return;
+        const closes = new Set(Object.values(groups));
+        setDeletingGroup({
+          key,
+          label: components?.[latest.current[start]?.__component]?.info?.displayName || latest.current[start]?.__component || "",
+          count: latest.current.slice(start + 1, end).filter((row: any) => !closes.has(row?.__component)).length,
+        });
         return;
       }
       if (is("insert-group") && canEdit && groups) {
@@ -1086,6 +1133,12 @@ export function PagePreview({
       applyWidth(map[event.key], true);
     }
   };
+  const confirmGroupDelete = (keepBlocks: boolean) => {
+    if (!deletingGroup || !zone) return;
+    const next = keepBlocks ? unwrapGroup(latest.current, deletingGroup.key, groups) : removeGroup(latest.current, deletingGroup.key, groups);
+    setDeletingGroup(null);
+    if (next) onChange(zone, next);
+  };
   return (
     // Hidden anchor in the side panels column: split mode and the sidebar items find the edit view's grid from here.
     <div ref={anchor}>
@@ -1095,6 +1148,7 @@ export function PagePreview({
             data-testid="page-preview-pane"
             aria-label={t.previewPane}
             style={{
+              top: topInset,
               left:
                 mode === "preview" || narrow
                   ? main.left
@@ -1231,6 +1285,21 @@ ${/* Strapi 4's scrolled header is fixed to the viewport's right edge: beside th
           </Pane>,
           document.body,
         )}
+      {deletingGroup && (
+        <Modal open width="48rem" onOpenChange={(open: boolean) => !open && setDeletingGroup(null)} trigger={null} title={t.confirmDeleteGroupTitle}>
+          <Flex direction="column" alignItems="stretch" gap={4} data-testid="preview-confirm-delete-group">
+            <Typography>{t.f("confirmDeleteGroup", { name: deletingGroup.label, count: deletingGroup.count })}</Typography>
+            {deletingGroup.count > 0 && (
+              <Typography variant="pi" textColor="neutral600">{t.f("confirmDeleteGroupHint", { count: deletingGroup.count })}</Typography>
+            )}
+            <Flex gap={2} justifyContent="flex-end">
+              <Button variant="tertiary" onClick={() => setDeletingGroup(null)}>{t.cancel}</Button>
+              {deletingGroup.count > 0 && <Button variant="secondary" onClick={() => confirmGroupDelete(true)}>{t.keepGroupBlocks}</Button>}
+              <Button variant="danger" onClick={() => confirmGroupDelete(false)}>{t.f("deleteGroupAndBlocks", { count: deletingGroup.count })}</Button>
+            </Flex>
+          </Flex>
+        </Modal>
+      )}
       {inserting && insertAttr && (
         <PickerModal
           zone={{

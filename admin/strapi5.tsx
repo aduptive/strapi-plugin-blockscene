@@ -359,7 +359,7 @@ function usePermissions() {
     isLoading,
   };
 }
-const SettingsPage = () => (
+const SettingsPage = ({ section }: any) => (
   <Guard>
   <Settings
     useClient={useFetchClient}
@@ -369,6 +369,7 @@ const SettingsPage = () => (
     SelectField={SelectField}
     TextField={TextField}
     lazyEditors
+    section={section}
   />
   </Guard>
 );

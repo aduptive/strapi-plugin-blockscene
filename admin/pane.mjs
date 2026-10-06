@@ -3,6 +3,20 @@
 export const TOOLBAR = ['modes', 'history', 'versions', 'devices', 'status', 'actions']
 const RIGHT = ['status', 'actions']
 
+// Strapi 5.27+ turns its primary navigation into a full-width sticky header below the desktop breakpoint.
+// Older Strapi versions and desktop layouts keep a vertical navigation, so they naturally resolve to zero.
+export function topNavigationInset(navs, viewportWidth) {
+  return Math.round(Math.max(0, ...(Array.isArray(navs) ? navs : []).flatMap(nav => {
+    const rect = nav?.rect || {}
+    return ['fixed', 'sticky'].includes(nav?.position) &&
+      Math.abs(Number(rect.top) || 0) <= 1 &&
+      (Number(rect.left) || 0) <= 1 &&
+      Number(rect.right) >= viewportWidth - 1 &&
+      Number(rect.height) > 0 && Number(rect.height) <= 128
+      ? [Number(rect.bottom) || Number(rect.height)] : []
+  })))
+}
+
 // Known ids in the configured order (unknown or repeated ones ignored). Status and actions stay one right-aligned group,
 // placed where the first of them is listed; the preview loading notice lives in that group whatever the list says.
 export function toolbarLayout(list) {

@@ -8,6 +8,7 @@ const major = Number(process.argv[2])
 assert.ok([4, 5].includes(major), 'Pass 4 or 5')
 // SMOKE_PORT: a lab copy served on another port (for example next to a lab another checkout is already running).
 const baseURL = `http://127.0.0.1:${process.env.SMOKE_PORT || (major === 4 ? 1444 : 1445)}`
+const settingsPath = section => `/admin/settings/blockscene${section === 'general' ? '' : major === 4 ? `-${section}` : `/${section}`}`
 const access = JSON.parse(readFileSync(`.local/strapi${major}/lab-access.json`))
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1000 } })
@@ -332,9 +333,14 @@ try {
   })
   await putSettings({})
   await step('settings page: palette preview, unsaved indicator, save and persistence', async () => {
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('gallery'))
     await page.getByTestId('save-blockscene-settings').waitFor()
     assert.equal(await page.getByTestId('unsaved-indicator').count(), 0)
+    const tags = page.locator('input[name="tags-blocks.text"]')
+    await tags.fill('editorial, text')
+    assert.equal(await tags.inputValue(), 'editorial, text', 'tags stay responsive while they are being typed')
+    await tags.blur()
+    await page.getByTestId('unsaved-indicator').waitFor()
     await page.locator('input[name="palette-accent"]').fill('#FF0000')
     await page.getByTestId('unsaved-indicator').waitFor()
     await page.getByTestId('palette-preview').locator('rect[fill="#FF0000"]').first().waitFor()
@@ -347,11 +353,16 @@ try {
     await page.reload()
     await page.getByTestId('save-blockscene-settings').waitFor()
     assert.equal(await page.locator('input[name="palette-accent"]').inputValue(), '#FF0000')
+    assert.equal(await page.locator('input[name="tags-blocks.text"]').inputValue(), 'editorial, text', 'tags commit on blur and persist')
     await page.getByTestId('source-blocks.text').getByText(/Wireframe/).waitFor()
     await page.getByTestId('source-blocks.hero').getByText(/Automatic image/).waitFor()
-    // No preview route: the Settings page says so (editors get no hint in the edit view).
+    // No preview route: its settings page says so (editors get no hint in the edit view).
+    await page.goto(settingsPath('preview'))
     await page.locator('input[name="editor-previewUrl"]').waitFor(); await page.getByTestId('preview-url-empty').waitFor()
-    // Lazy rich-text editors exist on Strapi 5 only; the page preview options on both.
+    // Lazy rich-text editors exist on Strapi 5 only.
+    await page.goto(settingsPath('general'))
+    await page.getByTestId('save-blockscene-settings').waitFor()
+    if (major === 5) await page.locator('input[name="editor-lazyFields"]').waitFor()
     assert.equal(await page.locator('input[name="editor-lazyFields"]').count(), major === 5 ? 1 : 0)
     await shot('settings')
   })
@@ -371,7 +382,7 @@ try {
     const upload = await api('POST', '/upload', form)
     assert.ok([200, 201].includes(upload.status), JSON.stringify(upload.data))
     uploadId = upload.data[0].id
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('gallery'))
     await page.getByTestId('settings-blocks.text').getByRole('button', { name: 'Choose image' }).click()
     const dialog = page.getByRole('dialog')
     await dialog.waitFor()
@@ -390,11 +401,13 @@ try {
     await img.waitFor(); assert.match(await img.getAttribute('src'), /\/uploads\//)
     await shot('manual-thumb')
     await page.keyboard.press('Escape')
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('gallery'))
     await page.getByTestId('settings-blocks.text').getByRole('button', { name: 'Use automatic image' }).click()
     await page.getByTestId('save-blockscene-settings').click()
     await page.getByText('Settings saved.', { exact: true }).waitFor()
-    assert.equal((await api('GET', '/blockscene/settings')).data.settings.components['blocks.text'], undefined)
+    const automatic = (await api('GET', '/blockscene/settings')).data.settings.components['blocks.text']
+    assert.equal(automatic.mediaId, undefined)
+    assert.deepEqual(automatic.tags, ['editorial', 'text'], 'using the automatic image keeps unrelated block settings')
     await page.goto(docUrl); await openGallery()
     await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"]').waitFor()
     await page.keyboard.press('Escape')
@@ -402,7 +415,7 @@ try {
   await step('deleted media is reported and the card advances to the next source', async () => {
     await putSettings({ components: { 'blocks.text': { mediaId: uploadId, template: 'faq' } } })
     assert.equal((await api('DELETE', `/upload/files/${uploadId}`)).status, 200); uploadId = null
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('gallery'))
     await page.getByTestId('settings-blocks.text').getByText('The selected media no longer exists; the next source is used.').waitFor()
     await page.goto(docUrl); await openGallery()
     await page.getByTestId('blockscene-blocks.text').locator('[data-thumb="wireframe"] svg[data-wireframe="faq"]').waitFor()
@@ -452,6 +465,15 @@ try {
     await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-mode') === 'preview')
     await frame.locator('[data-block-uid="blocks.text"] [data-block-field="body"]').click()
     await page.getByTestId('block-modal-bar').waitFor()
+    assert.equal(await page.evaluate(() => {
+      const portal = document.body.appendChild(document.createElement('div'))
+      const listbox = document.createElement('div')
+      listbox.setAttribute('role', 'listbox')
+      portal.appendChild(listbox)
+      const z = getComputedStyle(portal).zIndex
+      portal.remove()
+      return z
+    }), '1002', 'a Select portal stays above the lifted block')
     await page.waitForFunction(() => document.activeElement?.getAttribute('name') === 'blocks.1.body' && Boolean(document.activeElement.closest('[data-bp-block-modal]')))
     await page.keyboard.press('Meta+A'); await page.keyboard.type('Body from the block dialog')
     await frame.getByText('Body from the block dialog', { exact: true }).waitFor()
@@ -683,8 +705,10 @@ try {
   })
   if (major === 5) await step('settings sidebar editor (Strapi 5): an item built in the UI is saved, shown in the visual editor and opens its field; reset', async () => {
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('content-types'))
     const uid = 'api::page.page'
+    const card = page.getByTestId(`content-type-${uid}`)
+    await card.getByText('Visual editor options', { exact: true }).click()
     const editor = page.getByTestId(`sidebar-editor-${uid}`)
     await editor.waitFor()
     await page.getByTestId(`sidebar-add-${uid}`).click()
@@ -712,7 +736,10 @@ try {
     await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
     await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
     // Reset from the page: no code defaults in the lab, so the built-in ones.
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('general'))
+    // Strapi 5 can briefly reuse a denied RBAC result while changing between sibling Settings routes.
+    // A reload must resolve it; a real denied role still stays denied and the reset locator below fails.
+    if (await page.getByText('Access denied.', { exact: true }).isVisible().catch(() => false)) await page.reload()
     await page.getByTestId('restore-blockscene-settings').getByText('Reset to defaults').click()
     await page.getByText('Defaults restored.', { exact: true }).waitFor()
     const after = (await api('GET', '/blockscene/settings')).data
@@ -721,7 +748,7 @@ try {
   await step('pane toolbar: Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
     const previewUrl = `${baseURL}/block-preview/index.html`
     await putSettings({ editor: { previewUrl } })
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('preview'))
     const checklist = page.getByTestId('pane-editor-editor')
     await checklist.waitFor()
     await checklist.locator('input[name="editor-previewToolbar-history"]').uncheck()
@@ -940,11 +967,14 @@ try {
     await page.getByTestId('blockscene-group.section').locator('button').first().click()
     await page.waitForFunction(n => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === n, before + (GROUPS_MODE === '1' ? 2 : 1))
     // Only the `blocks` zone (the first list): the sidebar zone renders its own list on the same page.
-    const rowNames = () => page.locator('ol[aria-describedby]').first().locator(':scope > li').evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
-    const expectedTail = GROUPS_MODE === '1' ? [/Section \(group open\)/, /Section end/] : [/Section \(group open\)/]
-    await page.waitForFunction(n => [...document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li')].slice(-n).every(li => /Section/.test(li.innerText)), expectedTail.length).catch(() => {})
-    const names = await rowNames(); const tail = names.slice(-expectedTail.length)
-    expectedTail.forEach((re, i) => assert.match(tail[i] || '', re, `OPEN${GROUPS_MODE === '1' ? ' then CLOSE' : ''} appended in order; rows: ${names.join(' | ')}`))
+    const zoneRows = page.locator('ol[aria-describedby]').first().locator(':scope > li')
+    const rowNames = () => zoneRows.evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
+    const rowKinds = () => zoneRows.evaluateAll(l => l.map(li => li.getAttribute('data-blockscene-group') || 'block'))
+    if (GROUPS_MODE === '1')
+      await page.waitForFunction(() => [...document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li')].slice(-2).every(li => li.hasAttribute('data-blockscene-group')))
+    const names = await rowNames()
+    if (GROUPS_MODE === '1') assert.deepEqual((await rowKinds()).slice(-2), ['open', 'close'], `OPEN then hidden CLOSE appended in order; rows: ${names.join(' | ')}`)
+    else assert.match(names.at(-1) || '', /Section \(group open\)/, `ordinary group component appended; rows: ${names.join(' | ')}`)
     // Trusted path: the server refuses publishing an unbalanced draft (single and bulk); balanced (incl. empty pair) publishes.
     const create = blocks => api('POST', '/content-manager/collection-types/api::page.page', { title: `Groups ${Date.now()}`, blocks })
     const idOf = res => major === 4 ? (res.data?.data?.id ?? res.data?.id) : (res.data?.data?.documentId ?? res.data?.documentId)
@@ -986,6 +1016,7 @@ try {
         await page.waitForFunction(() => document.querySelector('[data-testid="page-preview-state"]')?.getAttribute('data-ready') === 'true')
       }
       const names = () => rows().evaluateAll(l => l.map(li => li.innerText.split('\n')[0]))
+      const kinds = () => rows().evaluateAll(l => l.map(li => li.getAttribute('data-blockscene-group') || 'block'))
       await openSplit(goodId)
       if (GROUPS_MODE === '1') {
         // Two groups from the saved document; the first is an empty pair. "+ Group" at the start adds a third (OPEN + CLOSE, unsaved).
@@ -993,7 +1024,7 @@ try {
         assert.equal(await frame.locator('[data-group-key]').count(), 2)
         const start = frame.locator('[data-testid="bp-gap-start"]'); await start.hover(); await start.locator('[data-insert-group]').click()
         await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li').length === 7)
-        assert.match((await names())[0], /Section \(group open\)/); assert.match((await names())[1], /Section end/)
+        assert.deepEqual((await kinds()).slice(0, 2), ['open', 'close'])
         await frame.locator('[data-group-key]').nth(2).waitFor() // the frame re-renders ~120 ms after the form change
         const created = frame.locator('[data-group-key]').first(); const createdKey = await created.getAttribute('data-group-key')
         assert.ok(!createdKey.includes('#'), `the new (unsaved) group is first: ${createdKey}`)
@@ -1003,22 +1034,27 @@ try {
         await picker.getByTestId('blockscene-blocks.text').locator('button').first().click(); await picker.waitFor({ state: 'hidden' })
         await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li').length === 8)
         const afterChild = await names(); const gapAfter = await inner.locator('.bp-insert').first().getAttribute('data-after')
-        assert.match(afterChild[1], /Text/, `child between OPEN and CLOSE (created ${createdKey}, gap after ${gapAfter}); rows: ${afterChild.join(' | ')}`); assert.match(afterChild[2], /Section end/)
+        assert.match(afterChild[1], /Text/, `child between OPEN and CLOSE (created ${createdKey}, gap after ${gapAfter}); rows: ${afterChild.join(' | ')}`); assert.equal((await kinds())[2], 'close')
         // The seam picker path: choosing the configured OPEN from a gap picker also lands with its CLOSE right after it.
         const childBlock = created.locator('[data-block-uid="blocks.text"]').first()
         const childKey = await childBlock.getAttribute('data-block-key')
         const childGap = created.locator(`[data-testid="bp-gap-${childKey}"]`); await childGap.hover(); await childGap.locator('.bp-insert').first().click()
         await picker.getByTestId('blockscene-group.section').locator('button').first().click(); await picker.waitFor({ state: 'hidden' })
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 10)
-        assert.deepEqual((await names()).slice(0, 5).map(n => n.replace(/ - .*$/, '')), ['Section (group open)', 'Text', 'Section (group open)', 'Section end (group close)', 'Section end (group close)'], 'nested pair from the seam picker: OPEN, CLOSE adjacent')
+        assert.deepEqual((await kinds()).slice(0, 5), ['open', 'block', 'open', 'close', 'close'], 'nested pair from the seam picker: OPEN, hidden CLOSE adjacent')
         assert.equal(await page.getByTestId('page-preview-diagnostics').count(), 0, 'still balanced')
         await frame.locator(`[data-group-key="${createdKey}"] [data-group-key] [data-remove-group]`).click()
+        const emptyGroupConfirm = page.getByTestId('preview-confirm-delete-group'); await emptyGroupConfirm.waitFor()
+        assert.equal(await emptyGroupConfirm.getByRole('button', { name: /Keep blocks/ }).count(), 0, 'an empty group has nothing to unwrap')
+        await emptyGroupConfirm.getByRole('button', { name: 'Delete group', exact: true }).click()
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 8)
         await frame.locator(`[data-group-key="${createdKey}"] [data-group-key]`).waitFor({ state: 'detached' })
         await created.locator('[data-move="down"]').first().click()
         await page.waitForFunction(() => /Section \(group open\)/.test(document.querySelectorAll('ol[aria-describedby] > li')[2]?.innerText || '') && /Text/.test(document.querySelectorAll('ol[aria-describedby] > li')[3]?.innerText || ''))
         assert.equal(await page.getByTestId('page-preview-diagnostics').count(), 0, 'balanced: no diagnostics')
         await frame.locator(`[data-group-key="${createdKey}"] [data-remove-group]`).click()
+        const filledGroupConfirm = page.getByTestId('preview-confirm-delete-group'); await filledGroupConfirm.waitFor()
+        await filledGroupConfirm.getByRole('button', { name: /Delete group and 1 block/ }).click()
         await page.waitForFunction(() => document.querySelectorAll('ol[aria-describedby] > li').length === 5)
         await frame.locator('[data-group-key]').nth(2).waitFor({ state: 'detached' })
         assert.equal(await frame.locator('[data-group-key]').count(), 2, 'created group removed with its child; saved groups untouched')
@@ -1032,7 +1068,7 @@ try {
         // Explicit repair (never automatic): the button inserts the missing close right after the group; the stray close stays for the editor.
         await diag.getByTestId('diag-insert-close-2').click()
         await page.waitForFunction(() => document.querySelector('ol[aria-describedby]').querySelectorAll(':scope > li').length === 4)
-        assert.match((await names())[3], /Section end/, 'close inserted after the unclosed group')
+        assert.equal((await kinds())[3], 'close', 'hidden close inserted after the unclosed group')
         assert.match(await page.getByTestId('page-preview-diagnostics').first().innerText(), /1 block group problem;/, 'only the stray close remains')
         assert.equal(await frame.locator('[data-block-uid="group.end"]').count(), 1, 'stray close stays visible')
         await page.getByTestId('page-preview-actions').getByRole('button', { name: 'Publish', exact: true }).click()
@@ -1090,11 +1126,21 @@ try {
     }
     // The same with the mouse: Strapi moves the dragged row on every hover; the group is settled on drop.
     const handle = row(1).locator('[data-handler-id]').first(); await handle.scrollIntoViewIfNeeded()
-    const from = await handle.boundingBox(), to = await row(7).boundingBox(), x = from.x + from.width / 2, y = from.y + from.height / 2
-    await page.mouse.move(x, y); await page.mouse.down()
-    for (let i = 1; i <= 20; i++) await page.mouse.move(x, y + (to.y + to.height * 0.8 - y) * i / 20, { steps: 2 })
-    // Headless Chromium may deliver no drop: react-dnd then ends the drag on the first pointer move after 1 s (as for a user).
-    await page.mouse.up(); await page.waitForTimeout(1200); await page.mouse.move(x + 4, y + 4)
+    const target = row(7)
+    if (major === 5) {
+      await target.scrollIntoViewIfNeeded()
+      const targetBox = await target.boundingBox()
+      await handle.dragTo(target, { targetPosition: { x: targetBox.width / 2, y: targetBox.height * 0.8 } })
+    } else {
+      // React DnD's older Strapi 4 backend needs the real pointer path rather than Playwright's synthetic drag events.
+      const from = await handle.boundingBox(), to = await target.boundingBox()
+      const x = from.x + from.width / 2, y = from.y + from.height / 2
+      await page.mouse.move(x, y); await page.mouse.down()
+      for (let i = 1; i <= 20; i++) await page.mouse.move(x, y + (to.y + to.height * 0.8 - y) * i / 20, { steps: 2 })
+      await page.mouse.up(); await page.waitForTimeout(1200)
+    }
+    // react-dnd settles the complete range when the native drag ends.
+    await page.mouse.move(4, 4)
     await expect('0b 0b 0o 1b 1o 2b 2c 1c', 'dragged with the mouse: the group moved below B')
     if (major === 5) {
       await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
@@ -1120,7 +1166,7 @@ try {
     assert.equal((await api('PUT', '/blockscene/settings', { components: { 'group.section': { layout: { columnsField: 'nope' } } } })).status, 400, 'unknown columns field')
     await putSettings({ editor: { previewUrl: `${baseURL}/block-preview/index.html` } })
     // Settings: only group OPENs get the layout fields, and only attributes that can hold a count are offered.
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('gallery'))
     const layoutCard = page.getByTestId('layout-group.section'); await layoutCard.waitFor()
     assert.equal(await page.getByTestId('layout-blocks.hero').count(), 0, 'not an OPEN: no layout fields')
     await layoutCard.getByRole('combobox', { name: 'Layout grid: columns field' }).click(); await page.getByRole('option', { name: 'note', exact: true }).click()
@@ -1141,7 +1187,7 @@ try {
     const grid = page.getByTestId('layout-grid-blocks-1')
     const cells = () => grid.locator('[data-cell-key]').evaluateAll(buttons => buttons.map(b => b.getAttribute('aria-label')))
     await grid.waitFor()
-    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'the children are hidden (still mounted), the CLOSE stays')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c- 0b', 'the children and implementation-only CLOSE are hidden but stay mounted')
     await until(cells, ['Text: c1', 'Hero example: Hero c2', 'Text: c3'], 'one cell per child: name and first text')
     assert.equal(await grid.getAttribute('data-columns'), '2')
     assert.equal(await grid.locator(':scope > div').last().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2, 'two columns')
@@ -1160,7 +1206,7 @@ try {
     await page.locator('[name="blocks.3.title"]').fill('Hero edited')
     await shot('layout-grid-dialog')
     await page.getByTestId('block-modal-done').click(); await page.getByTestId('block-modal-bar').waitFor({ state: 'detached' })
-    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'the row is hidden again')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c- 0b', 'the row is hidden again')
     await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3'], 'the cell reads the form')
     await setMode('Fields + preview')
     const frame = page.getByTestId('page-preview-pane').frameLocator('iframe')
@@ -1175,25 +1221,25 @@ try {
     await grid.locator('[data-cell-key]').first().focus(); await page.keyboard.press('Alt+ArrowRight')
     await until(cells, ['Hero example: Hero edited', 'Text: c1', 'Text: c3 split'], 'c1 moved one cell right')
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Text: c1', 'focus follows the moved cell')
-    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'still inside the group')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c- 0b', 'still inside the group')
     if (major === 5) await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
     else await page.keyboard.press('Alt+ArrowLeft')
     await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3 split'], major === 5 ? 'one undo reverts the move' : 'moved back')
     // The same with the mouse (HTML5 drag and drop on the cells; Strapi's own row drag is not involved).
     await grid.locator('[data-cell-key]').nth(2).dragTo(grid.locator('[data-cell-key]').nth(0))
     await until(cells, ['Text: c3 split', 'Text: c1', 'Hero example: Hero edited'], 'c3 dragged onto the first cell')
-    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b', 'still inside the group')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c- 0b', 'still inside the group')
     await grid.locator('[data-cell-key]').nth(0).dragTo(grid.locator('[data-cell-key]').nth(2))
     await until(cells, ['Text: c1', 'Hero example: Hero edited', 'Text: c3 split'], 'dragged back')
     // Remove from group: the cell's block goes right after the CLOSE.
     await page.getByTestId('grid-cell-menu-blocks-1-2').click(); await page.getByTestId('grid-cell-remove-blocks-1-2').click()
-    await until(outline, '0b 0o 1b- 1b- 1c 0b 0b', 'c3 left the group')
+    await until(outline, '0b 0o 1b- 1b- 1c- 0b 0b', 'c3 left the group')
     await until(cells, ['Text: c1', 'Hero example: Hero edited'])
     // "+": the gallery inserts at the end of the group.
     await page.getByTestId('grid-add-blocks-1').click()
     await page.getByTestId('blockscene-blocks.text').locator('button').first().click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
-    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b 0b', 'the new block is the group\'s last child')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c- 0b 0b', 'the new block is the group\'s last child')
     await until(async () => (await cells()).length, 3)
     // An error inside a grid child marks its cell; opening it shows the field.
     await grid.locator('[data-cell-key]').nth(1).click(); await page.getByTestId('block-modal-bar').waitFor()
@@ -1203,7 +1249,7 @@ try {
     await page.getByRole('button', { name: 'Publish', exact: true }).first().click()
     await page.getByTestId('grid-cell-blocks-1-1').and(page.locator('[data-error]')).waitFor()
     assert.equal(await page.locator('[data-testid^="grid-cell-blocks-1-"][data-error]').count(), 1, 'only the hero cell')
-    await until(outline, '0b 0o 1b- 1b- 1b- 1c 0b 0b', 'the grid stays')
+    await until(outline, '0b 0o 1b- 1b- 1b- 1c- 0b 0b', 'the grid stays')
     await grid.locator('[data-cell-key]').nth(1).click(); await page.getByTestId('block-modal-bar').waitFor()
     assert.equal(await page.locator('[name="blocks.3.title"]').getAttribute('aria-invalid'), 'true', 'the dialog shows the invalid field')
     await page.getByTestId('block-modal-done').click()
@@ -1218,7 +1264,7 @@ try {
       await page.getByTestId('gallery-detail').getByTestId('gallery-variant-dark').click()
       await page.getByTestId('gallery-detail').getByTestId('gallery-insert').click()
       await page.getByRole('dialog').waitFor({ state: 'hidden' })
-      await until(outline, '0b 0o 1b- 1b- 1b- 1b- 1c 0b 0b', 'the variant block is the group\'s last child')
+      await until(outline, '0b 0o 1b- 1b- 1b- 1b- 1c- 0b 0b', 'the variant block is the group\'s last child')
       await until(async () => (await cells()).at(-1), 'Hero example: Variant title')
     }
     await api('DELETE', `/content-manager/collection-types/api::page.page/${id}`)
@@ -1238,7 +1284,7 @@ try {
       if (major === 5) await page.getByTestId('blockscene-history').first().getByRole('button', { name: expect.undo, exact: true }).waitFor()
       await page.getByTestId('zone-mode-menu').getByRole('button').click()
       await menuItems().filter({ hasText: expect.split }).first().waitFor(); await page.keyboard.press('Escape')
-      await page.goto('/admin/settings/blockscene'); await page.getByTestId('save-blockscene-settings').waitFor()
+      await page.goto(settingsPath('gallery')); await page.getByTestId('save-blockscene-settings').waitFor()
       await page.getByText(expect.palette, { exact: true }).first().waitFor()
       const text = await page.locator('body').innerText()
       assert.ok(!/blockscene\.[a-zA-Z]/.test(text), `${locale}: no raw message ids on the settings page`)
@@ -1303,7 +1349,7 @@ try {
     assert.deepEqual(seamBlocks.map(block => block.title), ['Variant title', 'Variant title', 'Hello from Strapi'], 'the seam inserted the chosen variant after the first block')
     assert.deepEqual(seamBlocks[1].items.map(item => item.label), ['One', 'Two', 'Three']); assert.equal(seamBlocks[1].visible, true)
     await putSettings({})
-    await page.goto('/admin/settings/blockscene')
+    await page.goto(settingsPath('gallery'))
     assert.match(await page.getByTestId('variants-blocks.hero').innerText(), /Default, Dark$/, 'Settings lists the code variants read-only')
   })
   // Schema metadata runs only when the lab's blocks.text carries it (a temporary lab edit, see docs/LOCAL-TESTING.md

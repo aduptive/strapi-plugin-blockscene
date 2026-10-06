@@ -91,6 +91,20 @@ const TYPOLOGIES = ['hero', 'text', 'media', 'listing', 'cards', 'cta', 'form', 
 const TAG = /^[^<>\n]{1,24}$/
 const cleanTags = (value) => Array.isArray(value) ? [...new Set(value.filter(tag => typeof tag === 'string' && TAG.test(tag.trim())).map(tag => tag.trim()))].slice(0, 10) : []
 const validTags = (value) => Array.isArray(value) && value.length <= 10 && value.every(tag => typeof tag === 'string' && TAG.test(tag.trim()))
+// Only components that can be inserted directly into a Dynamic Zone are blocks. Nested option/field components still
+// remain in the catalog schemas for previews and metadata, but do not need gallery settings of their own.
+const directComponentUids = (contentTypes, perType = {}) => [...new Set(Object.entries(contentTypes || {})
+  .filter(([uid]) => perType?.[uid]?.enabled !== false)
+  .flatMap(([, schema]) => Object.values(schema?.attributes || {}).filter(attr => attr?.type === 'dynamiczone').flatMap(attr => attr.components || [])))]
+const COMPONENT_CATEGORY = /^[a-z0-9][a-z0-9_-]{0,49}$/
+const safeComponentCategories = value => value == null ? null : Array.isArray(value) && value.length > 0 && value.length <= 50 &&
+  value.every(category => typeof category === 'string' && COMPONENT_CATEGORY.test(category)) ? [...new Set(value)] : null
+// Project-only allowlist for the Settings > Block gallery cards. It does not alter a Dynamic Zone's insertion choices:
+// those remain controlled by the content type schema, so a Forms zone can still insert its own field components.
+const settingsComponentUids = (contentTypes, components, perType = {}, categories = null) => {
+  const allowed = safeComponentCategories(categories)
+  return directComponentUids(contentTypes, perType).filter(uid => !allowed || allowed.includes(components?.[uid]?.category || uid.split('.')[0]))
+}
 const GUESSES = [['hero', /hero|banner|cover/], ['text', /text|rich|quote|title/], ['media', /image|media|video|gallery|carousel/],
   ['listing', /list|query|archive|related|posts|projects/], ['cards', /card/], ['cta', /cta|button|link/], ['form', /form|contact/],
   ['layout', /wrapper|column|grid|divider|divisor|spacer|section/]]
@@ -145,6 +159,7 @@ function catalog(config = {}) {
         .map(key => [key, entry[key]])
     )
     entries[uid].image = safeUrl(entry.image)
+    if (typeof entry.showRowThumbnail === 'boolean') entries[uid].showRowThumbnail = entry.showRowThumbnail
     if (TYPOLOGIES.includes(entry.typology)) entries[uid].typology = entry.typology
     const tags = cleanTags(entry.tags)
     if (tags.length || entries[uid].category) entries[uid].tags = tags.length ? tags : cleanTags([entries[uid].category])
@@ -199,6 +214,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
       else if (key === 'typology') { if (!TYPOLOGIES.includes(entry.typology)) fail(`Unknown typology for "${uid}"`); clean.typology = entry.typology }
       else if (key === 'tags') { if (!validTags(entry.tags)) fail(`Invalid tags for "${uid}": up to 10, each 1 to 24 characters`); clean.tags = cleanTags(entry.tags) }
       else if (key === 'mediaId') { if (!Number.isInteger(entry.mediaId) || entry.mediaId <= 0) fail(`Invalid media for "${uid}"`); clean.mediaId = entry.mediaId }
+      else if (key === 'showRowThumbnail') { if (typeof entry.showRowThumbnail !== 'boolean') fail(`Invalid row thumbnail setting for "${uid}"`); clean.showRowThumbnail = entry.showRowThumbnail }
       else if (key === 'layout') { if (!validLayout(entry.layout, schemas && (schemas[uid]?.attributes || {}))) fail(`Invalid layout for "${uid}": columnsField (and mobileColumnsField) must name a number, string or numeric enumeration attribute of the component; maxColumns 1 to 12`); clean.layout = structuredClone(entry.layout) }
       else fail(`Unknown component setting "${key}"`)
     }
@@ -252,6 +268,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
     const clean = { ...entry }
     if ('typology' in clean && !TYPOLOGIES.includes(clean.typology)) delete clean.typology
     if ('tags' in clean) { clean.tags = cleanTags(clean.tags); if (!clean.tags.length) delete clean.tags }
+    if ('showRowThumbnail' in clean && typeof clean.showRowThumbnail !== 'boolean') delete clean.showRowThumbnail
     if ('layout' in clean && !validLayout(clean.layout, schemas && (schemas[uid]?.attributes || {}))) delete clean.layout
     if (Object.keys(clean).length) out.components[uid] = clean
   }
@@ -553,4 +570,4 @@ function validatePrefs(input, componentUids) {
 const mergePrefs = (saved, componentUids) => Object.fromEntries(Object.entries(PREFS).map(([key, max]) =>
   [key, Array.isArray(saved?.[key]) ? [...new Set(saved[key].filter(uid => componentUids.includes(uid)))].slice(0, max) : []]))
 
-module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }
+module.exports = { PLUGIN, HIDDEN_MODES, TEMPLATES, TYPOLOGIES, guessTypology, facetsOf, directComponentUids, settingsComponentUids, safeComponentCategories, validatePrefs, mergePrefs, ICONS, DEFAULTS, catalog, validateSettings, validateFields, validateVariants, validateKits, schemaMetadata, mergeSaved, layer, overrides, safeUrl, fail }

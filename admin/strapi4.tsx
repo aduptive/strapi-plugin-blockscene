@@ -36,6 +36,7 @@ import { registerTrads } from "./messages";
 import { Guard } from "./Guard";
 import { Icon, ICON_NAMES } from "./icons";
 import { StarterKits } from "./StarterKits";
+import { fieldReadable } from "./preview.mjs";
 
 function Modal({ open, onOpenChange, trigger, title, children, width = "80vw" }: any) {
   const id = React.useId();
@@ -199,9 +200,15 @@ function usePreviewHost4(c: any, schema: any, components: any, get: any, put: an
   const toggleNotification = useNotification();
   const { components: library }: any = useLibrary();
   const creating = Boolean(c.isCreatingEntry);
+  const layoutFields = React.useMemo(
+    () => new Set((schema?.layouts?.edit?.flat(3) || []).map((field: any) => field?.name).filter(Boolean)),
+    [schema?.layouts?.edit],
+  );
   const readable = React.useCallback(
-    (name: string) => creating || (c.readActionAllowedFields || []).includes(name),
-    [creating, c.readActionAllowedFields],
+    (name: string) =>
+      fieldReadable(name, c.readActionAllowedFields, creating) ||
+      layoutFields.has(name.split(".")[0]),
+    [creating, c.readActionAllowedFields, layoutFields],
   );
   return {
     ds: 1,
@@ -352,7 +359,7 @@ function usePermissions() {
     isLoading,
   };
 }
-const SettingsPage = () => (
+const SettingsPage = ({ section }: any) => (
   <Guard>
   <Settings
     useClient={useFetchClient}
@@ -361,6 +368,7 @@ const SettingsPage = () => (
     ToggleField={ToggleField}
     SelectField={SelectField}
     TextField={TextField}
+    section={section}
   />
   </Guard>
 );

@@ -15,6 +15,7 @@ import {
   useDocumentRBAC,
 } from "@strapi/content-manager/strapi-admin";
 import type { PreviewHost } from "./PagePreview";
+import { fieldReadable } from "./preview.mjs";
 import { useMessages } from "./messages";
 
 // The page preview's view of a Strapi 5 edit view (public admin APIs only): the form store (useForm), the document
@@ -32,11 +33,17 @@ export function usePreviewHost5(): PreviewHost {
   const { toggleNotification } = useNotification();
   const components: any = useStrapiApp("BlockscenePagePreview", (state: any) => state.components);
   const fields = c.layout?.edit?.layout?.flat(3) || [];
+  const layoutFields = React.useMemo(
+    () => new Set(fields.map((field: any) => field?.name).filter(Boolean)),
+    [c.layout?.edit?.layout],
+  );
   const latest = React.useRef(values);
   latest.current = values;
   const readable = React.useCallback(
-    (name: string) => c.isCreatingEntry || (rbac.canReadFields || []).includes(name),
-    [c.isCreatingEntry, rbac.canReadFields],
+    (name: string) =>
+      fieldReadable(name, rbac.canReadFields, c.isCreatingEntry) ||
+      layoutFields.has(name.split(".")[0]),
+    [c.isCreatingEntry, layoutFields, rbac.canReadFields],
   );
   return {
     ds: 2,
@@ -226,4 +233,3 @@ function ToolbarActions({ model, collectionType, documentId, locale, parts }: an
     </DescriptionComponentRenderer>
   );
 }
-
