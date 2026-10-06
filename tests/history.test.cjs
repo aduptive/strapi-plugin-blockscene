@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { snapshotPopulate, canonical, stable, diffRows, summarize } = require('../server/diff')
-const { covers, retention, actorOf, refsOf, historyService, eventContentType, CAPTURED } = require('../server/history')
+const { covers, retention, actorOf, refsOf, collapseVersions, historyService, eventContentType, CAPTURED } = require('../server/history')
 
 // A page with a Dynamic Zone, a nested repeatable component, relations and media (the shapes Strapi 5 schemas use).
 const schemas = {
@@ -113,11 +113,30 @@ test('history: identical snapshots are stored once (hash dedupe), the event is s
   assert.deepEqual(rows[4].summary, { missing: true }); assert.equal(rows[4].snapshot, null); assert.equal(rows[4].hash, null)
 })
 
+test('history: consecutive events with identical content become one version card', () => {
+  const events = [
+    { id: 5, action: 'publish', hash: 'a' },
+    { id: 4, action: 'update', hash: 'a' },
+    { id: 3, action: 'update', hash: 'b' },
+    { id: 2, action: 'restore', hash: 'a' },
+    { id: 1, action: 'update', hash: null },
+  ]
+
+  const collapsed = collapseVersions(events)
+  assert.deepEqual(collapsed.map(event => event.id), [5, 3, 2, 1])
+  assert.deepEqual(collapsed.map(event => event.actions), [
+    ['publish', 'update'],
+    ['update'],
+    ['restore'],
+    ['update'],
+  ])
+})
+
 test('history: server pagination reaches past 100; actor choices and snapshots stay in document/locale scope', async () => {
   const { rows, strapi } = fakeStrapi()
   const service = historyService({ strapi })
   for (let id = 1; id <= 127; id++) rows.push({ id, contentType: 'api::page.page', relatedDocumentId: 'doc1', locale: 'en',
-    actor: `admin:${id % 2 + 1}`, actorName: id % 2 ? 'Ana' : 'Bob', hash: 'same', size: id === 1 ? 20 : 0 })
+    actor: `admin:${id % 2 + 1}`, actorName: id % 2 ? 'Ana' : 'Bob', hash: `version-${id}`, size: 20 })
   rows.push({ id: 128, contentType: 'api::page.page', relatedDocumentId: 'other', locale: 'en', actor: 'admin:9', actorName: 'Other doc', hash: 'other', size: 20 },
     { id: 129, contentType: 'api::page.page', relatedDocumentId: 'doc1', locale: 'fr', actor: 'admin:8', actorName: 'French', hash: 'fr', size: 20 })
   const scope = { uid: 'api::page.page', documentId: 'doc1', locale: 'en' }

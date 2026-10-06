@@ -16,7 +16,7 @@ const Drawer = styled.aside`
 const Entry = styled.button`
   display: block; width: 100%; text-align: left; padding: 12px; margin: 4px 0;
   border: 1px solid ${({ theme }) => theme.colors.neutral200}; border-radius: 4px;
-  background: ${({ theme }) => theme.colors.neutral0}; cursor: pointer;
+  background: ${({ theme }) => theme.colors.neutral0}; color: ${({ theme }) => theme.colors.neutral800}; cursor: pointer;
   &[aria-pressed="true"] { background: ${({ theme }) => theme.colors.primary100}; border-color: ${({ theme }) => theme.colors.primary600}; }
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.primary600}; outline-offset: 2px; }
   &:disabled { cursor: default; opacity: .65; }
@@ -113,13 +113,15 @@ export function useVersions(host: PreviewHost, config: any) {
             const day = when(event.at, true), heading = day !== previousDay;
             previousDay = day;
             const blocks = event.summary?.blocks;
+            const actions = (Array.isArray(event.actions) && event.actions.length ? event.actions : [event.action])
+              .map((action: string) => t.historyActions[action] || action).join(" · ");
             const counted = ["total", "added", "removed", "changed"].every(key => Number.isInteger(blocks?.[key]));
             return <React.Fragment key={event.id}>
               {heading && <Typography tag="h3" variant="omega" fontWeight="bold" style={{ marginTop: 12 }}>{day}</Typography>}
               <Entry aria-pressed={view?.event.id === event.id} disabled={!event.stored} title={!event.stored ? t.historyExpired : undefined}
                 data-testid={`version-${event.id}`} onClick={() => select(event)}>
                 <Typography tag="span" fontWeight="bold">{event.actorName || event.actor}</Typography>
-                <Typography tag="p" variant="pi">{when(event.at)} · {t.historyActions[event.action] || event.action}</Typography>
+                <Typography tag="p" variant="pi">{when(event.at)} · {actions}</Typography>
                 {counted ? <>
                   <Typography tag="p" variant="pi" textColor="neutral600">{t.f("versionsCounts", blocks)}</Typography>
                   <Flex gap={2} wrap="wrap">
