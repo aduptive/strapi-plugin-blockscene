@@ -57,6 +57,21 @@ const covers = (history, uid) => Boolean(history?.enabled) && uid.startsWith('ap
 // Retention cut-off dates for a purge run at `now`.
 const retention = ({ retentionDays, eventDays }, now = Date.now()) => ({ snapshotsBefore: new Date(now - retentionDays * DAY), eventsBefore: new Date(now - eventDays * DAY) })
 
+const hasChanges = (summary) => Boolean(summary?.initial || summary?.fields?.length || ['added', 'removed', 'changed'].some(key => summary?.blocks?.[key] > 0))
+// The activity log keeps every action. The version picker groups only adjacent actions whose content hash is identical,
+// so Save + Publish is one restorable version while A -> B -> A remains three meaningful points in the timeline.
+function collapseVersions(events) {
+  const versions = []
+  for (const event of events) {
+    const previous = versions[versions.length - 1]
+    if (event.hash && previous?.hash === event.hash) {
+      if (!previous.actions.includes(event.action)) previous.actions.push(event.action)
+      if (!hasChanges(previous.summary) && hasChanges(event.summary)) previous.summary = event.summary
+    } else versions.push({ ...event, actions: [event.action] })
+  }
+  return versions
+}
+
 // Who made the change: the admin user, the API token or the Users & Permissions user of the current request, else system.
 function actorOf(strapi) {
   let ctx
@@ -151,12 +166,14 @@ function historyService({ strapi }) {
     async list({ uid, documentId, locale, actor = '', page = 1, pageSize = 25 }) {
       const scope = { contentType: uid, relatedDocumentId: documentId, locale: locale || null }
       const where = { ...scope, ...(actor && { actor }) }
-      const [list, kept, total, people] = await Promise.all([
-        events().findMany({ select: ['id', 'action', 'actor', 'actorName', 'at', 'summary', 'hash', 'size'], where, orderBy: [{ at: 'desc' }, { id: 'desc' }], offset: (page - 1) * pageSize, limit: pageSize }),
+      const [timeline, kept, people] = await Promise.all([
+        events().findMany({ select: ['id', 'action', 'actor', 'actorName', 'at', 'summary', 'hash', 'size'], where, orderBy: [{ at: 'desc' }, { id: 'desc' }] }),
         events().findMany({ select: ['hash'], where: { ...scope, size: { $gt: 0 } } }),
-        events().count({ where }),
         events().findMany({ select: ['actor', 'actorName'], where: scope, orderBy: [{ at: 'desc' }, { id: 'desc' }] }),
       ])
+      const versions = collapseVersions(timeline)
+      const total = versions.length
+      const list = versions.slice((page - 1) * pageSize, page * pageSize)
       const hashes = new Set(kept.map(row => row.hash))
       const actors = [...new Map(people.slice().reverse().map(({ actor, actorName }) => [actor, { actor, actorName }])).values()]
       return { results: list.map(({ hash, size, ...event }) => ({ ...event, stored: Boolean(hash && hashes.has(hash)) })),
@@ -378,4 +395,4 @@ const historyController = ({ strapi }) => ({
   },
 })
 
-module.exports = { EVENT_UID, ACTIONS, CAPTURED, CRON, BATCH, eventContentType, covers, retention, actorOf, refsOf, can, readableTypes, historyService, registerHistory, registerPurge, historyController }
+module.exports = { EVENT_UID, ACTIONS, CAPTURED, CRON, BATCH, eventContentType, covers, retention, actorOf, refsOf, collapseVersions, can, readableTypes, historyService, registerHistory, registerPurge, historyController }
