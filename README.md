@@ -1293,6 +1293,7 @@ uploads share an origin.
 - `tests/`: runnable regression checks.
 - [Local integration tests](docs/LOCAL-TESTING.md).
 - [Release checklist](docs/RELEASE.md).
+- [Prioritized roadmap](docs/ROADMAP.md).
 
 This plugin does not require Image Optimization; both can be installed together.
 

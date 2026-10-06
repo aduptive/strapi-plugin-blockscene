@@ -1,6 +1,27 @@
 # Changelog
 
-## 2.0.0-alpha.12 (Strapi 5) and 1.0.0-alpha.11 (Strapi 4) — 2026-10-05
+## 2.0.0-alpha.13 (Strapi 5) and 1.0.0-alpha.11 (Strapi 4) — 2026-10-05
+
+- Layout groups are now edited as one safe unit. A configured opener inserts
+  its closer automatically, the implementation-only close row is hidden, and
+  every group exposes an insertion point for inner blocks. Removing a group
+  asks whether to keep its children or delete the complete range. Keyboard,
+  pointer and preview moves keep nested blocks with their group.
+- Group marker thumbnails are hidden by default. Row thumbnails can now be
+  enabled or disabled per component from project configuration or Settings.
+- Page previews receive the complete readable live entry and content-type
+  metadata, including unsaved fields added later to the schema. Passwords,
+  Strapi-private fields and fields marked `pluginOptions.blockscene.private`
+  stay out of the bridge.
+- Settings are split into General, Page preview, Content types, Block gallery,
+  and History & trash pages. Content-type controls use responsive cards; the
+  gallery can be scoped to configured component folders; typing tags no longer
+  rebuilds the catalogue on every keystroke.
+- The preview pane accounts for Strapi's responsive top navigation, and modal
+  selects, gallery controls and group actions keep their correct stacking and
+  focus behavior on narrow screens.
+
+## 2.0.0-alpha.12 (Strapi 5) — 2026-10-05
 
 - New entries can start from project-defined, locale-aware block kits. Kits are
   validated against each Dynamic Zone's allowlist and bounds, schema defaults

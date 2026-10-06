@@ -524,7 +524,10 @@ export function register(app: any, Component: any, to: string) {
   app.createSettingSection({ id: 'blockscene', intlLabel: { id: 'blockscene.title', defaultMessage: 'Blockscene' } },
     SETTINGS_SECTIONS.map(({ id, label }) => {
       const Page = () => React.createElement(Component, { section: id })
-      return { id: `blockscene-${id}`, to: id === 'general' ? to : `${to}/${id}`, intlLabel: { id: `blockscene.settings${id === 'content-types' ? 'ContentTypes' : id[0].toUpperCase() + id.slice(1)}`, defaultMessage: label },
+      // Strapi 4's settings router matches paths by prefix, so nested paths would all render General. Its absolute
+      // routes are siblings; Strapi 5 keeps the cleaner nested paths relative to /settings.
+      const sectionPath = id === 'general' ? to : to.startsWith('/') ? `${to}-${id}` : `${to}/${id}`
+      return { id: `blockscene-${id}`, to: sectionPath, intlLabel: { id: `blockscene.settings${id === 'content-types' ? 'ContentTypes' : id[0].toUpperCase() + id.slice(1)}`, defaultMessage: label },
       // Module shape: older Strapi 4 (e.g. 4.11) only reads `.default` from the loader result.
       // Not an `async` function: Strapi 5 warns on AsyncFunction loaders.
       Component: () => Promise.resolve({ default: Page }), permissions: permissions.read }
