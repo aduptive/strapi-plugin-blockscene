@@ -10,4 +10,5 @@ for (const major of [4, 5]) {
   define: { 'process.env.BLOCKSCENE_STRAPI_MAJOR': JSON.stringify(String(major)) } });
  await copyFile('README.md', `${out}/README.md`);
  await copyFile('LICENSE', `${out}/LICENSE`);
+ await copyFile('server/text-template.js', `${out}/text-template.js`);
 }

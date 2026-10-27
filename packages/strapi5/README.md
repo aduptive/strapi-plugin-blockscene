@@ -830,6 +830,70 @@ grid") or in the code `settings`:
 
 Strapi 5 and 4 (the block dialog is shared by both since the page preview core).
 
+## Text template custom field (pilot)
+
+After Blockscene is installed and the admin is rebuilt, a component or content
+type can declare a structured text field backed by JSON. Give component fields
+an explicit binding: the Content Manager only supplies a path such as
+`blocks.0.copy` to a nested custom input, not the component uid.
+
+```jsonc
+"copy": {
+  "type": "customField",
+  "customField": "plugin::blockscene.text-template",
+  "options": { "blockscene": { "textTemplate": "blocks.text.copy" } }
+}
+```
+
+Configure that binding separately from the content. Project defaults can stay
+in `config/plugins.js`; a user with both Blockscene settings read and update
+permissions also gets the pencil button beside the compact editor and can save
+an override from there.
+
+```js
+blockscene: { enabled: true, config: { settings: { textTemplates: {
+  'blocks.text.copy': [
+    { id: 'eyebrow', label: 'Eyebrow', role: 'eyebrow', tag: 'p', token: 'label',
+      modifiers: ['uppercase'], required: false, allowBreaks: false,
+      maxChars: 24, demo: 'Example' },
+    { id: 'title', label: 'Title', role: 'title', tag: 'h2', token: 'title',
+      modifiers: [], required: true, allowBreaks: true, softLines: 2,
+      maxChars: 80, demo: 'A configurable title' },
+  ],
+} } } }
+```
+
+Entries are ordered and dynamic. Allowed tags are `h1`–`h6` and `p`; roles are
+`eyebrow`, `title`, `description` and `body`; modifiers are `uppercase`,
+`lowercase` and `underline`. `softLines` is guidance only. `maxChars` is a hard
+Unicode character limit. Enter can be allowed per entry. Demo/reset asks before
+replacing non-empty content. Removing an entry from the template hides it but
+does not discard its saved text.
+
+The stored value is deliberately small and frontend-neutral:
+
+```json
+{ "version": 1, "values": { "eyebrow": "Example", "title": "A title" } }
+```
+
+Direct document-service and Content Manager writes use the same validation on
+draft create, draft update and publish. Only roots that can contain a configured
+text-template field are populated for validation. Frontends can share the
+allowlisted, SSR-safe projection without importing admin code:
+
+```js
+const { renderTextTemplate } = require('@aduptive/strapi-blockscene/text-template')
+const parts = renderTextTemplate(template, entry.copy)
+// [{ id, tag, text, className }]; choose the matching component/tag in your renderer.
+```
+
+Current pilot evidence: unit/build/pack on both distributions, plus the full
+field interaction and server write guards in the Strapi 5.57 local lab. Strapi
+4 compiles and shares the validation/input core, but this custom field has not
+yet received a Strapi 4 browser smoke. The lab has not yet exercised a separate
+restricted admin role; the pencil is permission-gated and the settings endpoint
+remains the authoritative permission boundary.
+
 ## Field labels
 
 The Content Manager shows each field under its "Configure the view" label, which

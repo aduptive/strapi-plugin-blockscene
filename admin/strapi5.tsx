@@ -378,6 +378,13 @@ let strapiApp: any = null;
 export default {
   register(app: any) {
     strapiApp = app;
+    app.customFields.register({
+      name: 'text-template', pluginId: 'blockscene', type: 'json',
+      intlLabel: { id: 'blockscene.textTemplate', defaultMessage: 'Template text' },
+      intlDescription: { id: 'blockscene.textTemplateDescription', defaultMessage: 'Structured text whose template is managed by Blockscene.' },
+      icon: () => <Icon name="text" />,
+      components: { Input: () => import('./TextTemplateInput5').then(module => ({ default: module.default })) },
+    });
     register(app, SettingsPage, "blockscene");
     // Public admin API (README "Custom sidebar panels"): reached from a host's or another plugin's bootstrap, which
     // Strapi runs after every register.

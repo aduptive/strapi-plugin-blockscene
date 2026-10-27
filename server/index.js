@@ -5,6 +5,7 @@ const { safeGroups, validateGroups, invalidComponents, layoutFields } = require(
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
 const { trashContentType, trashService, trashController } = require('./trash')
+const { validateDocument, textTemplatePopulate } = require('./text-template')
 // Set at build time for the Strapi 4 package; from source (tests) it is Strapi 5. Version history is Strapi 5 only.
 const STRAPI5 = process.env.BLOCKSCENE_STRAPI_MAJOR !== '4'
 
@@ -21,6 +22,7 @@ async function readSettings(strapi) {
   return legacy
 }
 const componentUids = (strapi) => Object.keys(strapi.components || {})
+const schemas = (strapi) => ({ ...(strapi.contentTypes || {}), ...(strapi.components || {}) })
 const findMedia = (strapi, id) => strapi.db.query('plugin::upload.file').findOne({ where: { id }, select: ['id', 'url', 'mime', 'name'] })
 
 async function resolveMedia(strapi, settings) {
@@ -146,6 +148,34 @@ function registerZoneGuards(strapi) {
   })
 }
 
+// The JSON custom field is validated at the same server boundary as native document writes. The admin is only a
+// convenience: direct REST/document-service writes cannot bypass required entries, break policy or character limits.
+function registerTextTemplateGuard(strapi) {
+  const check = (uid, data, templates) => {
+    const errors = validateDocument(schemas(strapi), uid, data, templates)
+    if (errors.length) fail('Text template content is invalid.', { plugin: PLUGIN, errors: errors.map(error => ({ ...error, name: 'ValidationError' })) })
+  }
+  if (strapi.documents?.use) {
+    strapi.documents.use(async (ctx, next) => {
+      const { action, params = {} } = ctx
+      if (!ctx.uid || !['create', 'update', 'publish'].includes(action)) return next()
+      const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates
+      const populate = textTemplatePopulate(schemas(strapi), ctx.uid, templates)
+      if (!populate) return next()
+      if (action === 'create') { check(ctx.uid, params.data || {}, templates); return next() }
+      const stored = await strapi.documents(ctx.uid).findOne({ documentId: params.documentId, locale: params.locale, status: 'draft', ...(Object.keys(populate).length && { populate }) })
+      check(ctx.uid, action === 'update' ? { ...(stored || {}), ...(params.data || {}) } : stored || {}, templates)
+      return next()
+    })
+    return
+  }
+  // Strapi 4 component writes validate their own custom fields; publish reuses those already validated rows.
+  strapi.db.lifecycles.subscribe({
+    beforeCreate: async event => { const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates; check(event.model.uid, event.params?.data || {}, templates) },
+    beforeUpdate: async event => { const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates; check(event.model.uid, event.params?.data || {}, templates) },
+  })
+}
+
 module.exports = {
   config: {
     default: { components: {}, previewBaseUrl: '/block-previews', previewVersion: undefined,
@@ -174,6 +204,7 @@ module.exports = {
   },
   // Before the database schema sync, so the column exists. A name the host already uses with another type is skipped.
   register({ strapi }) {
+    strapi.customFields.register({ name: 'text-template', plugin: PLUGIN, type: 'json', inputSize: { default: 12, isResizable: true } })
     const plugin = strapi.plugin(PLUGIN)
     const name = hiddenName(plugin.config('hiddenAttribute'))
     withHidden = []
@@ -196,6 +227,7 @@ module.exports = {
     strapi.plugin(PLUGIN).service('settings').variants()
     strapi.plugin(PLUGIN).service('settings').kits()
     registerZoneGuards(strapi)
+    registerTextTemplateGuard(strapi)
     registerHiddenStrip(strapi, hiddenName(strapi.plugin(PLUGIN).config('hiddenAttribute')), strapi.plugin(PLUGIN))
     // The Content-Type Builder never sees the attribute, so saving a component there never writes it to its file
     // (the services registry: `strapi.get` on Strapi 5, `strapi.container.get` on Strapi 4).
@@ -212,7 +244,7 @@ module.exports = {
       if (project !== undefined) return project
       const code = strapi.plugin(PLUGIN).config('settings')
       project = null
-      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components) }
+      if (code) try { project = validateSettings(code, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), schemas(strapi)) }
       catch (error) { strapi.log?.warn(`[${PLUGIN}] "settings" config ignored: ${error.message}. Using the built-in defaults under the saved settings.`) }
       return project
     }
@@ -257,11 +289,11 @@ module.exports = {
       for (const note of notes) strapi.log?.warn(`[${PLUGIN}] starter kits: ${note}.`)
       return kits
     }
-    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
+    const get = async () => mergeSaved(layer(projectDefaults(), await readSettings(strapi)), componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), schemas(strapi))
     return {
       projectDefaults, get, fields: fieldTexts, schema: schemaMeta, variants: insertVariants, kits: starterKits,
       async set(value) {
-        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), strapi.components)
+        const next = validateSettings(value, componentUids(strapi), contentTypeUids(strapi), apiUids(strapi), schemas(strapi))
         for (const [uid, entry] of Object.entries(next.components)) {
           if (entry.mediaId && !(await findMedia(strapi, entry.mediaId).catch(() => null))) fail(`Media for "${uid}" does not exist`)
         }
@@ -299,7 +331,7 @@ module.exports = {
         const history = STRAPI5 && strapi.documents?.use && !base.disabled && settings.history.enabled ? { contentTypes: apiUids(strapi).filter(uid => covers(settings.history, uid)) } : null
         // Layout grids of the configured OPENs (a layout on any other component does nothing).
         const layouts = Object.fromEntries(Object.entries(settings.components).filter(([uid, entry]) => entry.layout && base.groups?.[uid]).map(([uid, entry]) => [uid, entry.layout]))
-        ctx.body = { ...base, layouts, kits: plugin.service('settings').kits(), palette: settings.palette, contentTypes: settings.contentTypes, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
+        ctx.body = { ...base, layouts, kits: plugin.service('settings').kits(), palette: settings.palette, contentTypes: settings.contentTypes, textTemplates: settings.textTemplates, hiddenAttribute: hidden, fields: plugin.service('settings').fields(), types, history,
           editor: { ...settings.editor, enabled: settings.editor.enabled && !base.disabled, ...(!hidden && { hiddenBlocks: 'off' }) } }
       },
     }),

@@ -14,6 +14,7 @@
     "dist",
     "strapi-admin.js",
     "strapi-server.js",
+    "text-template.js",
     "README.md",
     "LICENSE"
   ],
@@ -26,6 +27,10 @@
     "./strapi-server": {
       "require": "./strapi-server.js",
       "default": "./strapi-server.js"
+    },
+    "./text-template": {
+      "require": "./text-template.js",
+      "default": "./text-template.js"
     },
     "./package.json": "./package.json"
   },

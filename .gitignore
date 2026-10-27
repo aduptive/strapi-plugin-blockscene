@@ -2,6 +2,7 @@ node_modules/
 dist/
 .local/
 artifacts/
+packages/strapi*/text-template.js
 *.tgz
 .env*
 !.env.example

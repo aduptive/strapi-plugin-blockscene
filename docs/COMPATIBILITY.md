@@ -10,6 +10,14 @@ have runtime evidence (browser smoke: gallery, thumbnails, settings, accordion
 preferences, publish guard, page preview). Do not read them as a
 claim for every 4.x / 5.x minor.
 
+The text-template custom-field pilot in the current source also has focused
+Strapi 5.57.0 evidence: admin build, component-field rendering, hard limits,
+Enter policy, demo confirmation, configuration modal focus/escape, dynamic
+entry persistence, and server rejection on draft create/update and publish.
+That focused smoke does not expand the table's whole-plugin "Verified on"
+claim. Its shared Strapi 4 code compiles and is unit-tested, but has no Strapi 4
+browser evidence yet.
+
 The Strapi 4 page preview has run on 4.26.1 only. On 4.11.0 its edit view APIs
 were checked in the published source (`useCMEditViewDataManager` with
 `onChange`, `addComponentToDynamicZone(..., position)`, `onPublish`, the header
