@@ -32,6 +32,12 @@ test('new ids include preserved hidden values and IME composition is only reject
   const entry = { allowBreaks: true, maxChars: 3 }
   assert.deepEqual(applyTextChange(entry, 'abc', 'abcd', { composing: true, compositionStart: 'abc' }), { accepted: true, value: 'abcd' })
   assert.deepEqual(applyTextChange(entry, 'abcd', 'abcd', { composing: false, compositionStart: 'abc' }), { accepted: false, value: 'abc', code: 'maxChars' })
+  const legacy = { allowBreaks: true, maxChars: 80 }
+  assert.deepEqual(applyTextChange(legacy, 'x'.repeat(100), 'x'.repeat(99)), { accepted: true, value: 'x'.repeat(99) })
+  assert.deepEqual(applyTextChange(legacy, 'x'.repeat(99), 'x'.repeat(80)), { accepted: true, value: 'x'.repeat(80) })
+  assert.deepEqual(applyTextChange(legacy, 'x'.repeat(100), 'x'.repeat(101)), { accepted: false, value: 'x'.repeat(100), code: 'maxChars' })
+  assert.deepEqual(applyTextChange(legacy, 'x'.repeat(99), 'x'.repeat(98), { composing: false, compositionStart: 'x'.repeat(100) }), { accepted: true, value: 'x'.repeat(98) })
+  assert.deepEqual(applyTextChange(legacy, 'x'.repeat(101), 'x'.repeat(101), { composing: false, compositionStart: 'x'.repeat(100) }), { accepted: false, value: 'x'.repeat(100), code: 'maxChars' })
 })
 
 test('admin classes use only the validated token and modifiers', () => {

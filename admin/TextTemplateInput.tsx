@@ -43,6 +43,10 @@ const Dialog = styled.dialog`
   & header, & footer { display:flex; justify-content:space-between; align-items:center; gap:12px; }
   & footer { justify-content:flex-end; margin-top:18px; }
 `
+const DialogError = styled.div`
+  margin-top: 12px; padding: 10px 12px; color: ${({ theme }) => theme.colors.danger700};
+  background: ${({ theme }) => theme.colors.danger100}; border: 1px solid ${({ theme }) => theme.colors.danger600}; border-radius: 4px;
+`
 const Config = styled.div`
   display:grid; gap:12px; margin-top:16px;
   & > section { display:grid; gap:10px; padding:12px; border:1px solid ${({ theme }) => theme.colors.neutral200}; border-radius:4px; }
@@ -69,7 +73,12 @@ function TextPart({ entry, index, name, text, disabled, update, messages }: any)
     const node = textarea.current
     setOverSoftLines(Boolean(entry.softLines && node && node.scrollHeight > node.clientHeight + 1))
   }, [entry.softLines])
-  React.useLayoutEffect(() => { measure(); window.addEventListener('resize', measure); return () => window.removeEventListener('resize', measure) }, [measure, text])
+  React.useLayoutEffect(() => {
+    measure(); window.addEventListener('resize', measure)
+    const observer = typeof ResizeObserver === 'undefined' || !textarea.current ? null : new ResizeObserver(measure)
+    if (observer && textarea.current) observer.observe(textarea.current)
+    return () => { window.removeEventListener('resize', measure); observer?.disconnect() }
+  }, [measure, text])
   const count = codePoints(text), missing = entry.required && !text.trim()
   return <Part className={textTemplateClassName(entry)} data-uppercase={entry.modifiers.includes('uppercase')} data-lowercase={entry.modifiers.includes('lowercase')} data-underline={entry.modifiers.includes('underline')}>
     <label htmlFor={`${name}-${index}`}>{entry.label}{entry.required ? ' *' : ''}</label>
@@ -91,6 +100,7 @@ export function TextTemplateInput({ name, label, hint, error, required, disabled
   const [template, setTemplate] = React.useState<any[]>([])
   const [draft, setDraft] = React.useState<any[]>([])
   const [feedback, setFeedback] = React.useState('')
+  const [dialogFeedback, setDialogFeedback] = React.useState('')
   const [saving, setSaving] = React.useState(false)
   const dialog = React.useRef<HTMLDialogElement>(null)
   const pencil = React.useRef<HTMLButtonElement>(null)
@@ -112,7 +122,7 @@ export function TextTemplateInput({ name, label, hint, error, required, disabled
     if (Object.values(current.values).some(text => String(text).trim()) && !window.confirm(m.textTemplateReplaceDemo)) return
     change(demoValue(template).values); setFeedback(m.textTemplateDemoApplied)
   }
-  const open = () => { setDraft(structuredClone(template)); dialog.current?.showModal() }
+  const open = () => { setDraft(structuredClone(template)); setDialogFeedback(''); dialog.current?.showModal() }
   const close = () => { dialog.current?.close(); pencil.current?.focus() }
   const edit = (index: number, patch: any) => setDraft(list => list.map((entry, i) => i === index ? { ...entry, ...patch } : entry))
   const role = (index: number, nextRole: string) => setDraft(list => list.map((entry, i) => i !== index ? entry : { ...entry, role: nextRole,
@@ -124,13 +134,14 @@ export function TextTemplateInput({ name, label, hint, error, required, disabled
   }))
   const add = () => setDraft(list => [...list, { id: createEntryId(list, current.values, globalThis.crypto?.randomUUID?.()), label: m.textTemplateNewPart, role: 'body', tag: 'p', token: '', modifiers: [], required: false, allowBreaks: true, demo: roleDemos.body }])
   const save = async () => {
-    try { validateTemplate(draft) } catch { setFeedback(m.textTemplateInvalid); return }
+    try { validateTemplate(draft) } catch { setDialogFeedback(m.textTemplateInvalid); return }
+    setDialogFeedback('')
     setSaving(true)
     try {
       const { data } = await get('/blockscene/settings')
       const next = { ...data.settings, textTemplates: { ...(data.settings.textTemplates || {}), [key]: draft } }
       await put('/blockscene/settings', next); setTemplate(structuredClone(draft)); setFeedback(m.textTemplateUpdated); close()
-    } catch { setFeedback(m.textTemplateSaveFailed) }
+    } catch { setDialogFeedback(m.textTemplateSaveFailed) }
     finally { setSaving(false) }
   }
   return <Field>
@@ -142,9 +153,10 @@ export function TextTemplateInput({ name, label, hint, error, required, disabled
       <Actions><NativeButton type="button" disabled={disabled || !template.length} onClick={generate}>{m.textTemplateDemo}</NativeButton></Actions>
     </Editor>
     {hint && <div data-help>{hint}</div>}{(error || feedback) && <div data-error role="alert">{error?.defaultMessage || error || feedback}</div>}
-    <Dialog ref={dialog} onCancel={event => { event.preventDefault(); close() }} onClose={() => pencil.current?.focus()} aria-labelledby={`${name}-template-title`}>
+    <Dialog ref={dialog} onCancel={event => { event.preventDefault(); close() }} onClose={() => pencil.current?.focus()} aria-labelledby={`${name}-template-title`} aria-describedby={dialogFeedback ? `${name}-template-feedback` : undefined}>
       <header><h2 id={`${name}-template-title`}>{m.textTemplateTitle}</h2><NativeButton type="button" onClick={close} aria-label={m.close}><Icon name="close" /></NativeButton></header>
       <p>{m.textTemplateScope} <code>{key}</code>. {m.textTemplatePreserved}</p>
+      {dialogFeedback && <DialogError id={`${name}-template-feedback`} role="alert" aria-live="assertive">{dialogFeedback}</DialogError>}
       <Config>{draft.map((entry, index) => <section key={entry.id}>
         <Actions><strong>{entry.label || entry.id}</strong><Spacer /><NativeButton type="button" disabled={index === 0} onClick={() => setDraft(list => { const next = [...list]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next })}>{m.moveUp}</NativeButton><NativeButton type="button" disabled={index === draft.length - 1} onClick={() => setDraft(list => { const next = [...list]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next })}>{m.moveDown}</NativeButton><NativeButton type="button" onClick={() => setDraft(list => list.filter((_, i) => i !== index))}>{m.textTemplateRemove}</NativeButton></Actions>
         <div data-grid>

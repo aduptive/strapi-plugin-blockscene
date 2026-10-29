@@ -113,7 +113,10 @@ function createEntryId(entries, values, nonce) {
 }
 function applyTextChange(entry, current, next, { composing = false, compositionStart = current } = {}) {
   const value = entry.allowBreaks ? cleanLineBreaks(next) : String(next || '').replace(/[\r\n]+/g, ' ')
-  if (entry.maxChars && codePoints(value) > entry.maxChars && !composing) return { accepted: false, value: compositionStart, code: 'maxChars' }
+  const previous = String(compositionStart ?? current ?? '')
+  const exceeds = entry.maxChars && codePoints(value) > entry.maxChars
+  const recoverable = codePoints(previous) > entry.maxChars && codePoints(value) <= codePoints(previous)
+  if (exceeds && !composing && !recoverable) return { accepted: false, value: previous, code: 'maxChars' }
   return { accepted: true, value }
 }
 function mergePartialDocument(stored, patch) { return { ...(plain(stored) ? stored : {}), ...(plain(patch) ? patch : {}) } }

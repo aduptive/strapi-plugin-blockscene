@@ -870,6 +870,8 @@ Entries are ordered and dynamic. Allowed tags are `h1`–`h6` and `p`; roles are
 `lowercase` and `underline`. `softLines` is guidance only and warns when the
 rendered textarea actually overflows the recommended visual height. `maxChars`
 is a hard Unicode character limit, including after an IME composition finishes.
+An existing over-limit value remains editable while its character count does not
+increase, so editors can correct legacy content incrementally.
 Enter can be allowed per entry. Demo/reset is a manual editor action in this
 pilot (there is no content-creation preset lifecycle) and asks before replacing
 non-empty content. Removing an entry from the template hides it but does not

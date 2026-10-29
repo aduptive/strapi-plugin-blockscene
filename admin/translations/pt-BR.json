@@ -496,7 +496,7 @@
  "textTemplateDemoTitle": "Um título configurável",
  "textTemplateDemoDescription": "Uma descrição curta que ajuda a entender esta seção.",
  "textTemplateDemoBody": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
- "textRole.eyebrow": "Chamada",
+ "textRole.eyebrow": "Eyebrow (chamada)",
  "textRole.title": "Título",
  "textRole.description": "Descrição",
  "textRole.body": "Corpo",
