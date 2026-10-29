@@ -55,7 +55,7 @@ Credentials are in `.local/strapi4/lab-access.json` and
 | Host | Admin URL | Database |
 | --- | --- | --- |
 | Strapi 4.26.1, Node 20.11.0 | http://127.0.0.1:1444/admin | `.local/strapi4/.tmp/data.db` |
-| Strapi 5.52.1, Node 22.22.1 | http://127.0.0.1:1445/admin | `.local/strapi5/.tmp/data.db` |
+| Strapi 5.57.0, Node 22.22.1 | http://127.0.0.1:1445/admin | `.local/strapi5/.tmp/data.db` |
 
 Hosts bind to loopback. Stop their terminals before reinstalling a package.
 Do not substitute environment files or database configuration from a client.
@@ -132,15 +132,18 @@ Receipts/screenshots are in each repository's ignored `artifacts/`. Failed
 browser runs preserve a screenshot and text summary. They never save login
 tokens, browser storage or passwords in public artifacts.
 
-## Verified matrix — 2026-09-21
+## Verified matrix — 2026-10-29
 
-| Check | Strapi 4.26.1 | Strapi 5.52.1 |
+| Check | Strapi 4.26.1 | Strapi 5.57.0 |
 | --- | --- | --- |
 | Install both tarballs with normal peer resolution | Passed | Passed |
 | Build complete admin | Passed | Passed |
 | Gallery, search, nested defaults, save/reload | Passed | Passed |
 | Settings UI load/save | Passed | Passed |
 | HTTP image/settings suite | Passed | Passed |
+
+The Strapi 5 browser suite also passes with the default Media Library and with
+`useLegacyMediaLibrary: true` in `config/features.js`.
 
 Strapi 5's loose transitive ranges initially installed admin 5.54.0 beside
 5.52.1, leaving Content Manager loading indefinitely. The fixture pins

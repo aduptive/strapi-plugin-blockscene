@@ -1,5 +1,7 @@
 'use strict'
 
+const { validateTemplate, isTextTemplateBinding, textTemplateBindings } = require('./text-template')
+
 const PLUGIN = 'blockscene'
 // 'none' shows a plain "no preview" placeholder instead of a wireframe (blocks that have no faithful image).
 const TEMPLATES = ['generic', 'banner', 'cards', 'imageText', 'faq', 'none']
@@ -26,6 +28,8 @@ const DEFAULTS = {
   // Per content type (only the ones with a Dynamic Zone): { enabled: false } turns the plugin off there;
   // previewMode overrides editor.previewMode as the mode the edit view opens in. Absent means the global behaviour.
   contentTypes: {},
+  // Developer-owned templates for plugin::blockscene.text-template fields, keyed by "schema.uid.attribute".
+  textTemplates: {},
   // Version history (Strapi 5, see README "Version history"): off until turned on. contentTypes: 'all' (every api:: type)
   // or a list of uids. Snapshots are kept retentionDays and at most maxSnapshots per document; events eventDays; deleted
   // documents stay in the trash trashDays (fixed per document when it is deleted).
@@ -231,6 +235,13 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
     }
     if (Object.keys(entry).length) out.contentTypes[uid] = { ...structuredClone(entry), ...(entry.previewDevices && { previewDevices: cleanDevices(entry.previewDevices) }) }
   }
+  const textTemplates = input.textTemplates || {}
+  if (!plain(textTemplates) || Object.keys(textTemplates).length > 200) fail('textTemplates must be an object with at most 200 field bindings')
+  const bindings = schemas ? textTemplateBindings(schemas) : null
+  for (const [key, entries] of Object.entries(textTemplates)) {
+    if (!isTextTemplateBinding(key) || (bindings && !bindings.has(key))) fail(`Unknown text template field "${key}"`)
+    try { out.textTemplates[key] = validateTemplate(entries) } catch (error) { fail(`${key}: ${error.message}`) }
+  }
   const history = input.history || {}
   if (typeof history !== 'object' || Array.isArray(history)) fail('history must be an object')
   for (const [key, value] of Object.entries(history)) {
@@ -246,6 +257,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
 // Lenient read: saved values that no longer apply (deleted component) are dropped.
 function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = null, schemas = null) {
   const types = typeMap(contentTypeUids)
+  const templateBindings = schemas ? textTemplateBindings(schemas) : null
   const out = structuredClone(DEFAULTS)
   if (!saved || typeof saved !== 'object') return out
   for (const key of Object.keys(DEFAULTS.palette)) if (COLOR.test(String(saved.palette?.[key]))) out.palette[key] = saved.palette[key]
@@ -279,6 +291,14 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
     const clean = Object.fromEntries(Object.entries(entry).map(([key, value]) => [key, fix(key, value)]).filter(([key, value]) => TYPE_KEYS[key]?.(value, types[uid])))
     if (Object.keys(clean).length) out.contentTypes[uid] = clean
   }
+  for (const [key, entries] of Object.entries(saved.textTemplates || {})) {
+    if (!isTextTemplateBinding(key) || (templateBindings && !templateBindings.has(key))) continue
+    try { out.textTemplates[key] = validateTemplate(entries) }
+    catch (error) {
+      // Saved settings are read leniently, but programming/runtime failures must still surface.
+      if (error?.name !== 'ValidationError') throw error
+    }
+  }
   for (const key of Object.keys(HISTORY_KEYS)) {
     let value = saved.history?.[key]
     // A list naming a removed content type keeps the others.
@@ -291,7 +311,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
 
 // Project baseline (plugin config `settings`, validated) under the saved document: palette and editor key by key,
 // components and contentTypes per uid entry (a saved entry replaces the code entry for that uid).
-const ENTRY_KEYS = ['components', 'contentTypes']
+const ENTRY_KEYS = ['components', 'contentTypes', 'textTemplates']
 // Optional URLs where '' means "not set": an empty saved value never hides the project's code value (a Settings page
 // saved before the code default existed would otherwise keep the preview off). Clearing the field restores the code one.
 const UNSET_WHEN_EMPTY = ['previewUrl', 'blockPreviewUrl']

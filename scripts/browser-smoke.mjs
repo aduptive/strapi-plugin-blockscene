@@ -735,15 +735,17 @@ try {
     await page.locator('[data-bp-fields="modal"] input[name="title"]').waitFor({ state: 'visible' })
     await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
     await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
-    // Reset from the page: no code defaults in the lab, so the built-in ones.
+    // Reset from the page: editor values return to built-ins while the lab's
+    // text-template project defaults remain active.
     await page.goto(settingsPath('general'))
     // Strapi 5 can briefly reuse a denied RBAC result while changing between sibling Settings routes.
     // A reload must resolve it; a real denied role still stays denied and the reset locator below fails.
     if (await page.getByText('Access denied.', { exact: true }).isVisible().catch(() => false)) await page.reload()
-    await page.getByTestId('restore-blockscene-settings').getByText('Reset to defaults').click()
+    await page.getByTestId('restore-blockscene-settings').click()
     await page.getByText('Defaults restored.', { exact: true }).waitFor()
     const after = (await api('GET', '/blockscene/settings')).data
-    assert.deepEqual(after.settings.contentTypes, {}); assert.equal(after.projectDefaults, null)
+    assert.deepEqual(after.settings.contentTypes, {})
+    assert.equal(after.projectDefaults.textTemplates['blocks.text.copy'].length, 3)
   })
   await step('pane toolbar: Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
     const previewUrl = `${baseURL}/block-preview/index.html`
@@ -1125,12 +1127,17 @@ try {
       await expect(start, 'moved back up as a whole')
     }
     // The same with the mouse: Strapi moves the dragged row on every hover; the group is settled on drop.
+    // Keep both endpoints visible: scrolling only the target first leaves the source above the viewport, so no native
+    // drag starts. Strapi 5 also needs the real pointer path across intermediate rows, not one synthetic target hover.
+    if (major === 5) await page.setViewportSize({ width: 1440, height: 1800 })
     const handle = row(1).locator('[data-handler-id]').first(); await handle.scrollIntoViewIfNeeded()
     const target = row(7)
     if (major === 5) {
-      await target.scrollIntoViewIfNeeded()
-      const targetBox = await target.boundingBox()
-      await handle.dragTo(target, { targetPosition: { x: targetBox.width / 2, y: targetBox.height * 0.8 } })
+      const from = await handle.boundingBox(), to = await target.boundingBox()
+      const x = from.x + from.width / 2, y = from.y + from.height / 2
+      await page.mouse.move(x, y); await page.mouse.down()
+      for (let i = 1; i <= 40; i++) await page.mouse.move(x, y + (to.y + to.height * 0.8 - y) * i / 40, { steps: 2 })
+      await page.mouse.up(); await page.waitForTimeout(1200)
     } else {
       // React DnD's older Strapi 4 backend needs the real pointer path rather than Playwright's synthetic drag events.
       const from = await handle.boundingBox(), to = await target.boundingBox()
@@ -1145,6 +1152,7 @@ try {
     if (major === 5) {
       await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
       await expect(start, 'one undo reverts the whole drag')
+      await page.setViewportSize({ width: 1440, height: 1000 })
     } else {
       await move(2, ['ArrowUp'])
       await expect(start, 'moved back up as a whole')

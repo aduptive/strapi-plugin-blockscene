@@ -374,6 +374,13 @@ const SettingsPage = ({ section }: any) => (
 );
 export default {
   register(app: any) {
+    app.customFields.register({
+      name: 'text-template', pluginId: 'blockscene', type: 'json',
+      intlLabel: { id: 'blockscene.textTemplate', defaultMessage: 'Template text' },
+      intlDescription: { id: 'blockscene.textTemplateDescription', defaultMessage: 'Structured text whose template is managed by Blockscene.' },
+      icon: () => <Icon name="text" />,
+      components: { Input: () => import('./TextTemplateInput4').then(module => ({ default: module.default })) },
+    });
     register(app, SettingsPage, "/settings/blockscene");
     // Public admin API (README "Custom sidebar panels"), as on Strapi 5.
     app.registerPlugin({ id: "blockscene", name: "Blockscene", apis: { registerPanel: (panel: any) => registerPanel(panel, ICON_NAMES) } });

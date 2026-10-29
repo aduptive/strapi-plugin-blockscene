@@ -830,6 +830,87 @@ grid") or in the code `settings`:
 
 Strapi 5 and 4 (the block dialog is shared by both since the page preview core).
 
+## Text template custom field (pilot)
+
+After Blockscene is installed and the admin is rebuilt, a component or content
+type can declare a structured text field backed by JSON. Give component fields
+an explicit binding: the Content Manager only supplies a path such as
+`blocks.0.copy` to a nested custom input, not the component uid.
+Direct content-type fields fall back to `<content-type uid>.<attribute>` (including
+camelCase attribute names); an explicit binding remains supported there too.
+
+```jsonc
+"copy": {
+  "type": "customField",
+  "customField": "plugin::blockscene.text-template",
+  "options": { "blockscene": { "textTemplate": "blocks.text.copy" } }
+}
+```
+
+Configure that binding separately from the content. Project defaults can stay
+in `config/plugins.js`; a user with both Blockscene settings read and update
+permissions also gets the pencil button beside the compact editor and can save
+an override from there.
+
+```js
+blockscene: { enabled: true, config: { settings: { textTemplates: {
+  'blocks.text.copy': [
+    { id: 'eyebrow', label: 'Eyebrow', role: 'eyebrow', tag: 'p', token: 'label',
+      modifiers: ['uppercase'], required: false, allowBreaks: false,
+      maxChars: 24, demo: 'Example' },
+    { id: 'title', label: 'Title', role: 'title', tag: 'h2', token: 'title',
+      modifiers: [], required: true, allowBreaks: true, softLines: 2,
+      maxChars: 80, demo: 'A configurable title' },
+  ],
+} } } }
+```
+
+Entries are ordered and dynamic. Allowed tags are `h1`–`h6` and `p`; roles are
+`eyebrow`, `title`, `description` and `body`; modifiers are `uppercase`,
+`lowercase` and `underline`. `softLines` is guidance only and warns when the
+rendered textarea actually overflows the recommended visual height. `maxChars`
+is a hard Unicode character limit, including after an IME composition finishes.
+An existing over-limit value remains editable while its character count does not
+increase, so editors can correct legacy content incrementally.
+Enter can be allowed per entry. Demo/reset is a manual editor action in this
+pilot (there is no content-creation preset lifecycle) and asks before replacing
+non-empty content. Removing an entry from the template hides it but does not
+discard its saved text; newly added entries receive non-reused ids so that old
+hidden text cannot reappear under a different part.
+
+The stored value is deliberately small and frontend-neutral:
+
+```json
+{ "version": 1, "values": { "eyebrow": "Example", "title": "A title" } }
+```
+
+Direct document-service and Content Manager writes use the same validation on
+draft create, draft update and publish, including every draft locale selected by
+an all-locales publish and Strapi 4 bulk updates. Only roots that can contain a configured
+text-template field are populated for validation. Frontends can share the
+allowlisted, SSR-safe projection without importing admin code:
+
+```js
+const React = require('react')
+const { renderTextTemplate, renderTextTemplateElement } = require('@aduptive/strapi-blockscene/text-template')
+const parts = renderTextTemplate(template, entry.copy)
+// [{ id, tag, text, lines, className }]
+
+// React SSR: one semantic heading/paragraph, with safe text nodes and <br>.
+parts.map(part => renderTextTemplateElement(part, React.createElement))
+```
+
+`renderTextTemplateElement` passes the validated string to the element factory
+as text children, never as HTML. `lines` is also available to other frameworks;
+render it as text nodes and do not pass `text` or `lines` to raw-HTML APIs.
+
+Current pilot evidence: unit/build/pack on both distributions, plus the full
+field interaction and server write guards in the Strapi 5.57 local lab. Strapi
+4 compiles and shares the validation/input core, but this custom field has not
+yet received a Strapi 4 browser smoke. The lab has not yet exercised a separate
+restricted admin role; the pencil is permission-gated and the settings endpoint
+remains the authoritative permission boundary.
+
 ## Field labels
 
 The Content Manager shows each field under its "Configure the view" label, which
@@ -1250,7 +1331,7 @@ the configured static base.
 
 ## Guarantees and limits
 
-Tested versions: Strapi 4.11.0 and 4.26.1 (Node 20), 5.0.0 and 5.52.1
+Tested versions: Strapi 4.11.0 and 4.26.1 (Node 20), 5.0.0, 5.52.1 and 5.57.0
 (Node 22) in the local labs of this repository, and 5.23.5 and 5.31.0 in two
 real site projects. The peer ranges (`>=5.0.0 <6`, `>=4.11.0 <5`) express what
 installs without overrides, not a promise for every minor in between. Strapi

@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 const major = Number(process.argv[2])
 if (![4, 5].includes(major)) throw new Error('Usage: node scripts/setup-lab.mjs 4|5')
-const version = major === 4 ? '4.26.1' : '5.52.1'
+const version = major === 4 ? '4.26.1' : '5.57.0'
 // LAB_DIR: generate somewhere else (e.g. a throwaway directory to check this script) instead of .local.
 const root = resolve(process.env.LAB_DIR || '.local', `strapi${major}`)
 if (existsSync(root)) throw new Error('Lab already exists; refusing to overwrite its database or credentials')
@@ -24,6 +24,11 @@ write('config/middlewares.js', `module.exports = ['strapi::logger', 'strapi::err
 write('config/plugins.js', `// Lab switch: BLOCK_PICKER_GROUPS unset/1 = generic group pair configured; 0 = no config (every block ordinary); bad = malformed config (ignored with a warning).
 const groups = process.env.BLOCK_PICKER_GROUPS === '0' ? null : process.env.BLOCK_PICKER_GROUPS === 'bad' ? { 'group.section': 'group.section' } : { 'group.section': 'group.end' }
 module.exports = { 'blockscene': { enabled: true, config: { groups,
+  settings: { textTemplates: { 'blocks.text.copy': [
+    { id: 'eyebrow', label: 'Eyebrow', role: 'eyebrow', tag: 'p', token: 'eyebrow', modifiers: ['uppercase'], required: false, allowBreaks: false, maxChars: 24, demo: 'Blockscene demo' },
+    { id: 'title', label: 'Title', role: 'title', tag: 'h2', token: 'title', modifiers: [], required: true, allowBreaks: true, softLines: 2, maxChars: 80, demo: 'A configurable title' },
+    { id: 'description', label: 'Description', role: 'description', tag: 'p', token: 'description', modifiers: [], required: false, allowBreaks: true, softLines: 3, maxChars: 220, demo: 'Text editors fill only the entries the template exposes.' }
+  ] } },
   kits: { 'api::page.page': [{ id: 'landing', label: 'Landing page', zones: { blocks: [{ __component: 'blocks.hero', title: 'Starter headline' }] } }] },
   components: { 'blocks.hero': { label: 'Hero example', description: 'A heading with nested defaults.', category: 'Editorial', keywords: 'banner', image: '/block-previews/hero.svg' } }
 } }, 'image-pipeline': { enabled: true } }
@@ -38,7 +43,7 @@ export default {
 json('src/components/shared/item.json', { collectionName: 'components_shared_items', info: { displayName: 'Item' }, attributes: { label: { type: 'string', default: 'Nested default' } } })
 json('src/components/blocks/hero.json', { collectionName: 'components_blocks_heroes', info: { displayName: 'Hero' }, attributes: { title: { type: 'string', default: 'Hello from Strapi', required: true }, visible: { type: 'boolean', default: false }, items: { type: 'component', component: 'shared.item', repeatable: true, required: true, min: 2 }, image: { type: 'media', multiple: false, allowedTypes: ['images'] } } })
 // Strapi 5: a relation in a block, so duplicate and copy/paste are checked to keep relations.
-json('src/components/blocks/text.json', { collectionName: 'components_blocks_texts', info: { displayName: 'Text' }, attributes: { body: { type: 'text' }, ...(major === 5 && { pages: { type: 'relation', relation: 'oneToMany', target: 'api::page.page' } }) } })
+json('src/components/blocks/text.json', { collectionName: 'components_blocks_texts', info: { displayName: 'Text' }, attributes: { body: { type: 'text' }, copy: { type: 'customField', customField: 'plugin::blockscene.text-template', options: { blockscene: { textTemplate: 'blocks.text.copy' } } }, ...(major === 5 && { pages: { type: 'relation', relation: 'oneToMany', target: 'api::page.page' } }) } })
 // Layout group pair (plugin config `groups`).
 json('src/components/group/section.json', { collectionName: 'components_group_sections', info: { displayName: 'Section (group open)', description: 'Lab group: opens a section that ends at Section end.' }, options: {}, attributes: { note: { type: 'string' } } })
 json('src/components/group/end.json', { collectionName: 'components_group_ends', info: { displayName: 'Section end (group close)', description: '' }, options: {}, attributes: {} })
