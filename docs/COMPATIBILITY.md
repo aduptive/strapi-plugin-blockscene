@@ -2,8 +2,8 @@
 
 | Distribution | Plugin version | dist-tag | Strapi peer range | Verified on | Admin runtime |
 | --- | --- | --- | --- | --- | --- |
-| `packages/strapi4` | `1.0.0-alpha.12` | `strapi4` | `>=4.11.0 <5` | 4.11.0 and 4.26.1 / Node 20 (local labs) | Design System 1, React 18, styled-components 5 |
-| `packages/strapi5` | `2.0.0-alpha.14` | `latest` | `>=5.0.0 <6` | 5.0.0 and 5.52.1 / Node 22 (local labs), 5.54.0 + MySQL 8.4 + i18n (futurebrand-site-global lab), 5.23.5 and 5.31.0 (real site projects) | Design System 2, React 18, styled-components 6 |
+| `packages/strapi4` | `1.0.0-alpha.13` | `strapi4` | `>=4.11.0 <5` | 4.11.0 and 4.26.1 / Node 20 (local labs) | Design System 1, React 18, styled-components 5 |
+| `packages/strapi5` | `2.0.0-alpha.15` | `latest` | `>=5.0.0 <6` | 5.0.0, 5.52.1 and 5.57.0 / Node 22 (local labs), 5.54.0 + MySQL 8.4 + i18n (futurebrand-site-global lab), 5.23.5 and 5.31.0 (real site projects) | Design System 2, React 18, styled-components 6 |
 
 The peer ranges say what installs without overrides; only the listed versions
 have runtime evidence (browser smoke: gallery, thumbnails, settings, accordion
@@ -16,9 +16,10 @@ Enter policy, demo confirmation, configuration modal focus/escape, dynamic
 entry persistence, direct content-type fallback binding, safe style modifiers,
 localized role demos, and server rejection on draft create/update and
 all-locales publish.
-That focused smoke does not expand the table's whole-plugin "Verified on"
-claim. Its shared Strapi 4 code compiles and is unit-tested, but has no Strapi 4
-browser evidence yet.
+The whole-plugin Strapi 5.57.0 smoke also passes with both the default Media
+Library and `useLegacyMediaLibrary: true`. Its shared Strapi 4 code compiles and
+is unit-tested; the whole-plugin Strapi 4.26.1 smoke passes, while the custom
+field itself has no separate Strapi 4 browser script.
 
 The Strapi 4 page preview has run on 4.26.1 only. On 4.11.0 its edit view APIs
 were checked in the published source (`useCMEditViewDataManager` with

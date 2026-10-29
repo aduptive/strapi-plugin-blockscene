@@ -735,15 +735,17 @@ try {
     await page.locator('[data-bp-fields="modal"] input[name="title"]').waitFor({ state: 'visible' })
     await page.getByTestId('fields-panel-done').click(); await page.getByTestId('fields-panel-bar').waitFor({ state: 'detached' })
     await page.getByTestId('page-preview-pane').getByRole('button', { name: 'Fields only', exact: true }).click()
-    // Reset from the page: no code defaults in the lab, so the built-in ones.
+    // Reset from the page: editor values return to built-ins while the lab's
+    // text-template project defaults remain active.
     await page.goto(settingsPath('general'))
     // Strapi 5 can briefly reuse a denied RBAC result while changing between sibling Settings routes.
     // A reload must resolve it; a real denied role still stays denied and the reset locator below fails.
     if (await page.getByText('Access denied.', { exact: true }).isVisible().catch(() => false)) await page.reload()
-    await page.getByTestId('restore-blockscene-settings').getByText('Reset to defaults').click()
+    await page.getByTestId('restore-blockscene-settings').click()
     await page.getByText('Defaults restored.', { exact: true }).waitFor()
     const after = (await api('GET', '/blockscene/settings')).data
-    assert.deepEqual(after.settings.contentTypes, {}); assert.equal(after.projectDefaults, null)
+    assert.deepEqual(after.settings.contentTypes, {})
+    assert.equal(after.projectDefaults.textTemplates['blocks.text.copy'].length, 3)
   })
   await step('pane toolbar: Settings checklist saves an ordered subset; reduced bar, custom width, per type override', async () => {
     const previewUrl = `${baseURL}/block-preview/index.html`

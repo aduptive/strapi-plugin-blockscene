@@ -1331,7 +1331,7 @@ the configured static base.
 
 ## Guarantees and limits
 
-Tested versions: Strapi 4.11.0 and 4.26.1 (Node 20), 5.0.0 and 5.52.1
+Tested versions: Strapi 4.11.0 and 4.26.1 (Node 20), 5.0.0, 5.52.1 and 5.57.0
 (Node 22) in the local labs of this repository, and 5.23.5 and 5.31.0 in two
 real site projects. The peer ranges (`>=5.0.0 <6`, `>=4.11.0 <5`) express what
 installs without overrides, not a promise for every minor in between. Strapi

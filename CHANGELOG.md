@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.0-alpha.15 (Strapi 5) and 1.0.0-alpha.13 (Strapi 4) — 2026-10-29
+
+- Added a template-driven text custom field for compact block copy editing.
+  Projects define ordered semantic entries with tags, roles, visual tokens,
+  modifiers, required state, line-break policy and character guidance.
+- The editor supports localized configuration, accessible template controls,
+  manual demo content, Unicode-aware limits and safe incremental correction
+  when an existing value exceeds a newly lowered limit.
+- Create, update, bulk update and publish validation use the same template
+  contract on both Strapi majors, including nested components and all locales.
+  Frontends can import the packaged renderer helpers to preserve semantic tags
+  and intentional line breaks.
+- Strapi 5.57 group dragging now settles after the native drop handler, keeping
+  wrappers and their children together in one undoable move. The full browser
+  suite passes with both the new and legacy Media Library.
+
 ## 2.0.0-alpha.14 (Strapi 5) and 1.0.0-alpha.12 (Strapi 4) — 2026-10-05
 
 - History cards use the active Strapi theme foreground color, keeping actor
