@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
-const { CUSTOM_FIELD, codePoints, validateTemplate, validateValue, demoValue, renderTextTemplate, resolveBinding, validateDocument, textTemplatePopulate } = require('../server/text-template')
+const { CUSTOM_FIELD, codePoints, validateTemplate, validateValue, demoValue, renderTextTemplate, renderTextTemplateElement, resolveBinding, createEntryId, applyTextChange, mergePartialDocument, validateDocument, textTemplatePopulate } = require('../server/text-template')
 const { validateSettings, mergeSaved } = require('../server/settings')
 
 const entries = [
@@ -21,8 +21,17 @@ test('template entries are dynamic, ordered and strictly allowlisted; empty temp
 
 test('admin binding prefers explicit component metadata and only falls back with a real content type uid', () => {
   assert.equal(resolveBinding({ options: { blockscene: { textTemplate: 'blocks.text.copy' } } }, undefined, 'blocks.0.copy'), 'blocks.text.copy')
+  assert.equal(resolveBinding({ options: { blockscene: { textTemplate: 'api::article.article.headline' } } }, undefined, 'headline'), 'api::article.article.headline')
   assert.equal(resolveBinding({}, 'api::page.page', 'copy'), 'api::page.page.copy')
   assert.equal(resolveBinding({}, undefined, 'blocks.0.copy'), '')
+})
+
+test('new ids include preserved hidden values and IME composition is only rejected after it finishes', () => {
+  assert.equal(createEntryId([], { 'text-fixed': 'old hidden copy' }, 'fixed'), 'text-fixed-2')
+  assert.equal(createEntryId([{ id: 'text-fixed' }], {}, 'fixed'), 'text-fixed-2')
+  const entry = { allowBreaks: true, maxChars: 3 }
+  assert.deepEqual(applyTextChange(entry, 'abc', 'abcd', { composing: true, compositionStart: 'abc' }), { accepted: true, value: 'abcd' })
+  assert.deepEqual(applyTextChange(entry, 'abcd', 'abcd', { composing: false, compositionStart: 'abc' }), { accepted: false, value: 'abc', code: 'maxChars' })
 })
 
 test('content validation distinguishes required, manual breaks and Unicode character limits without truncating', () => {
@@ -39,10 +48,13 @@ test('demo/reset and frontend projection share the active template and preserve 
   assert.equal(demo.values.title, 'First line\nSecond line')
   const value = { version: 1, values: { ...demo.values, removed: 'preserved', description: '' } }
   assert.deepEqual(renderTextTemplate(entries, value), [
-    { id: 'eyebrow', tag: 'p', text: 'Example', className: 'label uppercase' },
-    { id: 'title', tag: 'h2', text: 'First line\nSecond line', className: 'title-l' },
+    { id: 'eyebrow', tag: 'p', text: 'Example', lines: ['Example'], className: 'label uppercase' },
+    { id: 'title', tag: 'h2', text: 'First line\nSecond line', lines: ['First line', 'Second line'], className: 'title-l' },
   ])
   assert.equal(value.values.removed, 'preserved')
+  const element = renderTextTemplateElement(renderTextTemplate(entries, value)[1], (tag, props, ...children) => ({ tag, props, children }))
+  assert.equal(element.tag, 'h2', 'line breaks stay inside one semantic heading')
+  assert.deepEqual(element.children, ['First line', { tag: 'br', props: { key: 'title-break-1' }, children: [] }, 'Second line'])
 })
 
 test('recursive document validation finds custom fields in Dynamic Zone components', () => {
@@ -54,8 +66,22 @@ test('recursive document validation finds custom fields in Dynamic Zone componen
   const errors = validateDocument(schemas, 'api::page.page', { blocks: [{ __component: 'blocks.text', copy: { version: 1, values: { eyebrow: '', title: 'ok' } } }] }, templates)
   assert.deepEqual(errors[0].path, ['blocks', 0, 'copy', 'eyebrow'])
   assert.deepEqual(validateDocument(schemas, 'api::page.page', { blocks: [{ __component: 'blocks.text' }] }, templates).map(error => error.code), ['required', 'required'])
-  assert.deepEqual(textTemplatePopulate(schemas, 'api::page.page', templates), { blocks: true })
+  assert.deepEqual(textTemplatePopulate(schemas, 'api::page.page', templates), { blocks: { on: { 'blocks.text': {} } } })
   assert.equal(textTemplatePopulate(schemas, 'api::page.page', {}), null, 'unconfigured fields add no read/populate cost')
+})
+
+test('populate follows configured fields through nested components and partial updates retain stored content', () => {
+  const schemas = {
+    'api::page.page': { attributes: { blocks: { type: 'dynamiczone', components: ['blocks.text', 'blocks.other'] } } },
+    'blocks.text': { attributes: { content: { type: 'component', component: 'shared.copy' } } },
+    'blocks.other': { attributes: { title: { type: 'string' } } },
+    'shared.copy': { attributes: { copy: { type: 'customField', customField: CUSTOM_FIELD, options: { blockscene: { textTemplate: 'shared.copy.copy' } } } } },
+  }
+  assert.deepEqual(textTemplatePopulate(schemas, 'api::page.page', { 'shared.copy.copy': entries }), {
+    blocks: { on: { 'blocks.text': { populate: { content: true } } } },
+  })
+  const stored = { title: 'Stored', copy: { version: 1, values: { title: 'Kept' } } }
+  assert.deepEqual(mergePartialDocument(stored, { title: 'Changed' }), { title: 'Changed', copy: stored.copy })
 })
 
 test('settings persist templates separately and reject bindings that are not Blockscene text fields', () => {
@@ -64,4 +90,11 @@ test('settings persist templates separately and reject bindings that are not Blo
   assert.equal(ok.textTemplates['blocks.text.copy'][1].tag, 'h2')
   assert.throws(() => validateSettings({ textTemplates: { 'blocks.text.other': entries } }, ['blocks.text'], [], null, schemas), /Unknown text template field/)
   assert.deepEqual(mergeSaved({ textTemplates: { 'blocks.text.gone': entries } }, ['blocks.text'], [], null, schemas).textTemplates, {})
+})
+
+test('an explicit content-type binding is the single key used by settings and server validation', () => {
+  const schemas = { 'api::article.article': { attributes: { headline: { type: 'json', customField: CUSTOM_FIELD, options: { blockscene: { textTemplate: 'api::article.article.headline-template' } } } } } }
+  const templates = { 'api::article.article.headline-template': entries }
+  assert.equal(validateSettings({ textTemplates: templates }, [], ['api::article.article'], null, schemas).textTemplates['api::article.article.headline-template'][0].id, 'eyebrow')
+  assert.equal(validateDocument(schemas, 'api::article.article', { headline: { version: 1, values: { eyebrow: '', title: 'ok' } } }, templates)[0].path.join('.'), 'headline.eyebrow')
 })

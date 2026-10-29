@@ -1,10 +1,10 @@
 import * as React from 'react'
 import styled from 'styled-components'
 import { Icon } from './icons'
+import { useMessages } from './messages'
 import contract from '../server/text-template.js'
 
-const { TAGS, ROLES, MODIFIERS, codePoints, normalizeValue, validateTemplate, demoValue, resolveBinding } = contract as any
-const DEMOS: Record<string, string> = { eyebrow: 'Lorem ipsum', title: 'Lorem ipsum dolor sit amet.', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.', body: 'Lorem ipsum dolor sit amet.' }
+const { TAGS, ROLES, MODIFIERS, codePoints, normalizeValue, validateTemplate, demoValue, resolveBinding, createEntryId, applyTextChange } = contract as any
 
 const Field = styled.div`
   position: relative; color: ${({ theme }) => theme.colors.neutral800};
@@ -53,10 +53,39 @@ const Config = styled.div`
 `
 
 const fieldName = (name: string) => name.split('.').pop() || name
-const nextId = (entries: any[]) => { let n = entries.length + 1; while (entries.some(entry => entry.id === `text-${n}`)) n++; return `text-${n}` }
-const safeValue = (value: any) => { try { return normalizeValue(value) } catch { return { version: 1, values: {} } } }
+const safeValue = (value: any) => {
+  try { return normalizeValue(value) }
+  catch (error: any) {
+    if (error?.name !== 'ValidationError') throw error
+    return { version: 1, values: {} }
+  }
+}
+
+function TextPart({ entry, index, name, text, disabled, update, messages }: any) {
+  const textarea = React.useRef<HTMLTextAreaElement>(null)
+  const compositionStart = React.useRef(text)
+  const [overSoftLines, setOverSoftLines] = React.useState(false)
+  const measure = React.useCallback(() => {
+    const node = textarea.current
+    setOverSoftLines(Boolean(entry.softLines && node && node.scrollHeight > node.clientHeight + 1))
+  }, [entry.softLines])
+  React.useLayoutEffect(() => { measure(); window.addEventListener('resize', measure); return () => window.removeEventListener('resize', measure) }, [measure, text])
+  const count = codePoints(text), missing = entry.required && !text.trim()
+  return <Part data-uppercase={entry.modifiers.includes('uppercase')} data-lowercase={entry.modifiers.includes('lowercase')} data-underline={entry.modifiers.includes('underline')}>
+    <label htmlFor={`${name}-${index}`}>{entry.label}{entry.required ? ' *' : ''}</label>
+    <textarea ref={textarea} id={`${name}-${index}`} value={text} disabled={disabled} rows={entry.softLines || 2} aria-invalid={missing || undefined} aria-required={entry.required}
+      placeholder={entry.required ? messages.f('textTemplateRequiredPlaceholder', { label: entry.label }) : entry.label}
+      onKeyDown={event => { if (!entry.allowBreaks && event.key === 'Enter' && !event.nativeEvent.isComposing) event.preventDefault() }}
+      onCompositionStart={() => { compositionStart.current = text }}
+      onCompositionEnd={event => update(entry, event.currentTarget.value, false, compositionStart.current)}
+      onChange={event => update(entry, event.target.value, event.nativeEvent.isComposing, event.nativeEvent.isComposing ? compositionStart.current : text)} />
+    <div data-meta><span data-warning={overSoftLines || undefined}>{overSoftLines ? messages.f('textTemplateSoftLinesExceeded', { count: entry.softLines }) : entry.softLines ? messages.f('textTemplateSoftLines', { count: entry.softLines }) : entry.allowBreaks ? messages.textTemplateEnter : messages.textTemplateNoBreaks}</span>
+      <span data-warning={entry.maxChars && count > entry.maxChars * .9 || undefined}>{entry.maxChars ? messages.f('textTemplateCountLimit', { count, limit: entry.maxChars }) : messages.f('textTemplateCount', { count })}</span></div>
+  </Part>
+}
 
 export function TextTemplateInput({ name, label, hint, error, required, disabled, value, onChange, contentTypeUID, attribute, get, put, canConfigure }: any) {
+  const m = useMessages()
   const key = resolveBinding(attribute, contentTypeUID, fieldName(name))
   const [template, setTemplate] = React.useState<any[]>([])
   const [draft, setDraft] = React.useState<any[]>([])
@@ -65,68 +94,65 @@ export function TextTemplateInput({ name, label, hint, error, required, disabled
   const dialog = React.useRef<HTMLDialogElement>(null)
   const pencil = React.useRef<HTMLButtonElement>(null)
   const current = safeValue(value)
-  React.useEffect(() => { if (!key) return; let active = true; get('/blockscene/catalog').then(({ data }: any) => { if (active) setTemplate(data?.textTemplates?.[key] || []) }).catch(() => {}); return () => { active = false } }, [get, key])
+  React.useEffect(() => {
+    if (!key) return
+    let active = true
+    get('/blockscene/catalog').then(({ data }: any) => { if (active) setTemplate(data?.textTemplates?.[key] || []) })
+      .catch(() => { if (active) setFeedback(m.textTemplateLoadFailed) })
+    return () => { active = false }
+  }, [get, key, m.textTemplateLoadFailed])
   const change = (values: Record<string, string>) => onChange({ target: { name, type: 'json', value: { version: 1, values } } })
-  const update = (entry: any, text: string) => {
-    const cleaned = entry.allowBreaks ? text.replace(/\r\n?/g, '\n') : text.replace(/[\r\n]+/g, ' ')
-    if (entry.maxChars && codePoints(cleaned) > entry.maxChars) { setFeedback(`${entry.label}: limite de ${entry.maxChars} caracteres.`); return }
-    setFeedback(''); change({ ...current.values, [entry.id]: cleaned })
+  const update = (entry: any, text: string, composing = false, started = current.values[entry.id] || '') => {
+    const result = applyTextChange(entry, current.values[entry.id] || '', text, { composing, compositionStart: started })
+    if (!result.accepted) { setFeedback(m.f('textTemplateLimit', { label: entry.label, count: entry.maxChars })); change({ ...current.values, [entry.id]: result.value }); return }
+    setFeedback(''); change({ ...current.values, [entry.id]: result.value })
   }
   const generate = () => {
-    if (Object.values(current.values).some(text => String(text).trim()) && !window.confirm('Substituir todos os textos, inclusive trechos ocultos, pelo conteúdo de demonstração?')) return
-    change(demoValue(template).values); setFeedback('Texto de demonstração aplicado.')
+    if (Object.values(current.values).some(text => String(text).trim()) && !window.confirm(m.textTemplateReplaceDemo)) return
+    change(demoValue(template).values); setFeedback(m.textTemplateDemoApplied)
   }
   const open = () => { setDraft(structuredClone(template)); dialog.current?.showModal() }
   const close = () => { dialog.current?.close(); pencil.current?.focus() }
   const edit = (index: number, patch: any) => setDraft(list => list.map((entry, i) => i === index ? { ...entry, ...patch } : entry))
-  const add = () => setDraft(list => [...list, { id: nextId(list), label: 'Texto', role: 'body', tag: 'p', token: '', modifiers: [], required: false, allowBreaks: true, demo: DEMOS.body }])
+  const add = () => setDraft(list => [...list, { id: createEntryId(list, current.values, globalThis.crypto?.randomUUID?.()), label: m.textTemplateNewPart, role: 'body', tag: 'p', token: '', modifiers: [], required: false, allowBreaks: true, demo: m.textTemplateNewDemo }])
   const save = async () => {
     try { validateTemplate(draft) } catch (caught: any) { setFeedback(caught.message); return }
     setSaving(true)
     try {
       const { data } = await get('/blockscene/settings')
       const next = { ...data.settings, textTemplates: { ...(data.settings.textTemplates || {}), [key]: draft } }
-      await put('/blockscene/settings', next); setTemplate(structuredClone(draft)); setFeedback('Template atualizado.'); close()
-    } catch { setFeedback('Não foi possível atualizar o template.') }
+      await put('/blockscene/settings', next); setTemplate(structuredClone(draft)); setFeedback(m.textTemplateUpdated); close()
+    } catch { setFeedback(m.textTemplateSaveFailed) }
     finally { setSaving(false) }
   }
   return <Field>
     <label htmlFor={`${name}-0`}>{label}{required ? ' *' : ''}</label>
     <Editor aria-disabled={Boolean(disabled)}>
-      {canConfigure && key && <div data-tools><NativeButton ref={pencil} type="button" aria-label="Editar template de texto" title="Editar template de texto" onClick={open}><Icon name="edit" /></NativeButton></div>}
-      {!template.length && <div data-empty>Nenhum trecho configurado para este campo.</div>}
-      {template.map((entry, index) => {
-        const text = current.values[entry.id] || '', count = codePoints(text), missing = entry.required && !text.trim()
-        return <Part key={entry.id} data-uppercase={entry.modifiers.includes('uppercase')} data-lowercase={entry.modifiers.includes('lowercase')} data-underline={entry.modifiers.includes('underline')}>
-          <label htmlFor={`${name}-${index}`}>{entry.label}{entry.required ? ' *' : ''}</label>
-          <textarea id={`${name}-${index}`} value={text} disabled={disabled} rows={entry.softLines || 2} aria-invalid={missing || undefined} aria-required={entry.required}
-            placeholder={entry.required ? `${entry.label} obrigatório` : entry.label} onKeyDown={event => { if (!entry.allowBreaks && event.key === 'Enter') event.preventDefault() }} onChange={event => update(entry, event.target.value)} />
-          <div data-meta><span>{entry.softLines ? `Orientação: cerca de ${entry.softLines} linhas visuais; depende da largura.` : entry.allowBreaks ? 'Enter cria uma quebra de linha.' : 'Quebras manuais desativadas.'}</span>
-            <span data-warning={entry.maxChars && count > entry.maxChars * .9 || undefined}>{entry.maxChars ? `${count}/${entry.maxChars} caracteres` : `${count} caracteres`}</span></div>
-        </Part>
-      })}
-      <Actions><NativeButton type="button" disabled={disabled || !template.length} onClick={generate}>Gerar texto de demo</NativeButton></Actions>
+      {canConfigure && key && <div data-tools><NativeButton ref={pencil} type="button" aria-label={m.textTemplateEdit} title={m.textTemplateEdit} onClick={open}><Icon name="edit" /></NativeButton></div>}
+      {!template.length && <div data-empty>{m.textTemplateEmpty}</div>}
+      {template.map((entry, index) => <TextPart key={entry.id} entry={entry} index={index} name={name} text={current.values[entry.id] || ''} disabled={disabled} update={update} messages={m} />)}
+      <Actions><NativeButton type="button" disabled={disabled || !template.length} onClick={generate}>{m.textTemplateDemo}</NativeButton></Actions>
     </Editor>
     {hint && <div data-help>{hint}</div>}{(error || feedback) && <div data-error role="alert">{error?.defaultMessage || error || feedback}</div>}
     <Dialog ref={dialog} onCancel={event => { event.preventDefault(); close() }} onClose={() => pencil.current?.focus()} aria-labelledby={`${name}-template-title`}>
-      <header><h2 id={`${name}-template-title`}>Template de texto</h2><NativeButton type="button" onClick={close} aria-label="Fechar"><Icon name="close" /></NativeButton></header>
-      <p>Esta configuração afeta todas as instâncias ligadas a <code>{key}</code>. Textos de trechos removidos permanecem guardados no conteúdo.</p>
+      <header><h2 id={`${name}-template-title`}>{m.textTemplateTitle}</h2><NativeButton type="button" onClick={close} aria-label={m.close}><Icon name="close" /></NativeButton></header>
+      <p>{m.textTemplateScope} <code>{key}</code>. {m.textTemplatePreserved}</p>
       <Config>{draft.map((entry, index) => <section key={entry.id}>
-        <Actions><strong>{entry.label || entry.id}</strong><Spacer /><NativeButton type="button" disabled={index === 0} onClick={() => setDraft(list => { const next = [...list]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next })}>Subir</NativeButton><NativeButton type="button" disabled={index === draft.length - 1} onClick={() => setDraft(list => { const next = [...list]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next })}>Descer</NativeButton><NativeButton type="button" onClick={() => setDraft(list => list.filter((_, i) => i !== index))}>Remover</NativeButton></Actions>
+        <Actions><strong>{entry.label || entry.id}</strong><Spacer /><NativeButton type="button" disabled={index === 0} onClick={() => setDraft(list => { const next = [...list]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next })}>{m.moveUp}</NativeButton><NativeButton type="button" disabled={index === draft.length - 1} onClick={() => setDraft(list => { const next = [...list]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next })}>{m.moveDown}</NativeButton><NativeButton type="button" onClick={() => setDraft(list => list.filter((_, i) => i !== index))}>{m.textTemplateRemove}</NativeButton></Actions>
         <div data-grid>
-          <label>Identificador<input value={entry.id} disabled /></label><label>Label<input value={entry.label} onChange={event => edit(index, { label: event.target.value })} /></label>
-          <label>Função<select value={entry.role} onChange={event => edit(index, { role: event.target.value })}>{ROLES.map((role: string) => <option key={role}>{role}</option>)}</select></label>
-          <label>Tag HTML<select value={entry.tag} onChange={event => edit(index, { tag: event.target.value })}>{TAGS.map((tag: string) => <option key={tag}>{tag}</option>)}</select></label>
-          <label>Token/classe<input value={entry.token} onChange={event => edit(index, { token: event.target.value })} /></label>
-          <label>Linhas recomendadas<input type="number" min="1" max="20" value={entry.softLines || ''} onChange={event => edit(index, { softLines: event.target.value ? Number(event.target.value) : undefined })} /></label>
-          <label>Limite real de caracteres<input type="number" min="1" max="50000" value={entry.maxChars || ''} onChange={event => edit(index, { maxChars: event.target.value ? Number(event.target.value) : undefined })} /></label>
+          <label>{m.textTemplateId}<input value={entry.id} disabled /></label><label>{m.textTemplateFieldLabel}<input value={entry.label} onChange={event => edit(index, { label: event.target.value })} /></label>
+          <label>{m.textTemplateRole}<select value={entry.role} onChange={event => edit(index, { role: event.target.value })}>{ROLES.map((role: string) => <option key={role}>{role}</option>)}</select></label>
+          <label>{m.textTemplateTag}<select value={entry.tag} onChange={event => edit(index, { tag: event.target.value })}>{TAGS.map((tag: string) => <option key={tag}>{tag}</option>)}</select></label>
+          <label>{m.textTemplateToken}<input value={entry.token} onChange={event => edit(index, { token: event.target.value })} /></label>
+          <label>{m.textTemplateRecommendedLines}<input type="number" min="1" max="20" value={entry.softLines || ''} onChange={event => edit(index, { softLines: event.target.value ? Number(event.target.value) : undefined })} /></label>
+          <label>{m.textTemplateCharacterLimit}<input type="number" min="1" max="50000" value={entry.maxChars || ''} onChange={event => edit(index, { maxChars: event.target.value ? Number(event.target.value) : undefined })} /></label>
         </div>
-        <Actions><label data-check><input type="checkbox" checked={entry.required} onChange={event => edit(index, { required: event.target.checked })} />Obrigatório</label><label data-check><input type="checkbox" checked={entry.allowBreaks} onChange={event => edit(index, { allowBreaks: event.target.checked })} />Permitir Enter</label>
+        <Actions><label data-check><input type="checkbox" checked={entry.required} onChange={event => edit(index, { required: event.target.checked })} />{m.textTemplateRequired}</label><label data-check><input type="checkbox" checked={entry.allowBreaks} onChange={event => edit(index, { allowBreaks: event.target.checked })} />{m.textTemplateAllowEnter}</label>
           {MODIFIERS.map((modifier: string) => <label data-check key={modifier}><input type="checkbox" checked={entry.modifiers.includes(modifier)} onChange={event => { const modifiers = event.target.checked ? [...entry.modifiers.filter((item: string) => !(modifier === 'uppercase' && item === 'lowercase') && !(modifier === 'lowercase' && item === 'uppercase')), modifier] : entry.modifiers.filter((item: string) => item !== modifier); edit(index, { modifiers }) }} />{modifier}</label>)}</Actions>
-        <label>Texto de demo<textarea value={entry.demo} onChange={event => edit(index, { demo: event.target.value })} /></label>
+        <label>{m.textTemplateDemoText}<textarea value={entry.demo} onChange={event => edit(index, { demo: event.target.value })} /></label>
       </section>)}</Config>
-      <Actions><NativeButton type="button" onClick={add}>Adicionar trecho</NativeButton></Actions>
-      <footer><NativeButton type="button" onClick={close}>Cancelar</NativeButton><NativeButton type="button" disabled={saving} onClick={save}>Salvar template</NativeButton></footer>
+      <Actions><NativeButton type="button" onClick={add}>{m.textTemplateAddPart}</NativeButton></Actions>
+      <footer><NativeButton type="button" onClick={close}>{m.cancel}</NativeButton><NativeButton type="button" disabled={saving} onClick={save}>{m.textTemplateSave}</NativeButton></footer>
     </Dialog>
   </Field>
 }

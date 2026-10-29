@@ -8,6 +8,7 @@ const ID = /^[a-z][a-z0-9_-]{0,47}$/
 const TOKEN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
 const MAX_ENTRIES = 24
 const MAX_TEXT = 50000
+const BINDING = /^[a-z][a-z0-9_-]*(?:::[a-z][a-z0-9_-]*)?(?:\.[a-z][a-z0-9_-]*)+$/
 
 const plain = value => value && typeof value === 'object' && !Array.isArray(value)
 const codePoints = value => [...String(value || '')].length
@@ -79,19 +80,52 @@ function renderTextTemplate(template, value) {
   return entries.flatMap(entry => {
     const text = normalized.values[entry.id] || ''
     if (!text.trim()) return []
-    return [{ id: entry.id, tag: entry.tag, text, className: [entry.token, ...entry.modifiers].filter(Boolean).join(' ') }]
+    return [{ id: entry.id, tag: entry.tag, text, lines: text.split('\n'), className: [entry.token, ...entry.modifiers].filter(Boolean).join(' ') }]
   })
 }
 
+function renderTextTemplateElement(part, createElement) {
+  if (!plain(part) || !TAGS.includes(part.tag) || typeof part.text !== 'string' || typeof createElement !== 'function') templateError('Invalid projected text template part')
+  const children = part.text.split('\n').flatMap((line, index) => index ? [createElement('br', { key: `${part.id}-break-${index}` }), line] : [line])
+  return createElement(part.tag, { key: part.id, className: part.className || undefined }, ...children)
+}
+
 function binding(uid, name) { return `${uid}.${name}` }
+function isTextTemplateBinding(value) { return typeof value === 'string' && BINDING.test(value) }
 function resolveBinding(attribute, contentTypeUID, name) {
   const explicit = attribute?.options?.blockscene?.textTemplate || attribute?.pluginOptions?.blockscene?.textTemplate
-  if (typeof explicit === 'string' && /^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$/.test(explicit)) return explicit
+  if (isTextTemplateBinding(explicit)) return explicit
   return typeof contentTypeUID === 'string' && contentTypeUID ? binding(contentTypeUID, String(name || '').split('.').pop()) : ''
 }
+function createEntryId(entries, values, nonce) {
+  const used = new Set([...entries.map(entry => entry.id), ...Object.keys(values || {})])
+  const safe = String(nonce || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32)
+  const base = `text-${safe || Date.now().toString(36)}`
+  let id = base, suffix = 2
+  while (used.has(id)) id = `${base}-${suffix++}`
+  return id
+}
+function applyTextChange(entry, current, next, { composing = false, compositionStart = current } = {}) {
+  const value = entry.allowBreaks ? cleanLineBreaks(next) : String(next || '').replace(/[\r\n]+/g, ' ')
+  if (entry.maxChars && codePoints(value) > entry.maxChars && !composing) return { accepted: false, value: compositionStart, code: 'maxChars' }
+  return { accepted: true, value }
+}
+function mergePartialDocument(stored, patch) { return { ...(plain(stored) ? stored : {}), ...(plain(patch) ? patch : {}) } }
 // Schema files use `type: customField`; Strapi's runtime model exposes the registered underlying JSON type.
 // The namespaced customField id is the stable discriminator in both representations.
 function isTextTemplate(attr) { return attr?.customField === CUSTOM_FIELD }
+
+function textTemplateBindings(schemas) {
+  const bindings = new Set()
+  for (const [uid, schema] of Object.entries(schemas || {})) {
+    for (const [name, attribute] of Object.entries(schema?.attributes || {})) {
+      if (!isTextTemplate(attribute)) continue
+      const key = resolveBinding(attribute, uid, name)
+      if (key) bindings.add(key)
+    }
+  }
+  return bindings
+}
 
 function validateDocument(schemas, uid, data, templates, path = []) {
   if (!plain(data)) return []
@@ -101,7 +135,7 @@ function validateDocument(schemas, uid, data, templates, path = []) {
   for (const [name, attr] of Object.entries(schema.attributes || {})) {
     const here = [...path, name]
     if (isTextTemplate(attr)) {
-      const template = templates?.[binding(uid, name)]
+      const template = templates?.[resolveBinding(attr, uid, name)]
       if (!template) continue
       let result
       try { result = validateValue(template, data[name]) }
@@ -120,22 +154,29 @@ function validateDocument(schemas, uid, data, templates, path = []) {
 
 function textTemplatePopulate(schemas, uid, templates) {
   const active = new Set(Object.keys(templates || {}))
-  const has = (schemaUid, seen = new Set()) => {
-    if (seen.has(schemaUid)) return false
+  const walk = (schemaUid, seen = new Set()) => {
+    if (seen.has(schemaUid)) return { configured: false, populate: {} }
     const next = new Set(seen).add(schemaUid)
-    return Object.entries(schemas?.[schemaUid]?.attributes || {}).some(([name, attr]) =>
-      (isTextTemplate(attr) && active.has(binding(schemaUid, name))) ||
-      (attr?.type === 'component' && has(attr.component, next)) ||
-      (attr?.type === 'dynamiczone' && (attr.components || []).some(component => has(component, next))))
+    let configured = false
+    const populate = {}
+    for (const [name, attr] of Object.entries(schemas?.[schemaUid]?.attributes || {})) {
+      if (isTextTemplate(attr) && active.has(resolveBinding(attr, schemaUid, name))) configured = true
+      else if (attr?.type === 'component') {
+        const child = walk(attr.component, next)
+        if (child.configured) { populate[name] = Object.keys(child.populate).length ? { populate: child.populate } : true; configured = true }
+      } else if (attr?.type === 'dynamiczone') {
+        const children = (attr.components || []).map(component => [component, walk(component, next)]).filter(([, child]) => child.configured)
+        if (children.length) {
+          populate[name] = { on: Object.fromEntries(children.map(([component, child]) => [component,
+            Object.keys(child.populate).length ? { populate: child.populate } : {}])) }
+          configured = true
+        }
+      }
+    }
+    return { configured, populate }
   }
-  const populate = {}
-  let configured = false
-  for (const [name, attr] of Object.entries(schemas?.[uid]?.attributes || {})) {
-    if (isTextTemplate(attr) && active.has(binding(uid, name))) configured = true
-    else if (attr?.type === 'component' && has(attr.component)) { populate[name] = true; configured = true }
-    else if (attr?.type === 'dynamiczone' && (attr.components || []).some(component => has(component))) { populate[name] = true; configured = true }
-  }
-  return configured ? populate : null
+  const result = walk(uid)
+  return result.configured ? result.populate : null
 }
 
-module.exports = { CUSTOM_FIELD, TAGS, ROLES, MODIFIERS, MAX_ENTRIES, codePoints, validateTemplate, normalizeValue, validateValue, demoValue, renderTextTemplate, binding, resolveBinding, isTextTemplate, validateDocument, textTemplatePopulate }
+module.exports = { CUSTOM_FIELD, TAGS, ROLES, MODIFIERS, MAX_ENTRIES, codePoints, validateTemplate, normalizeValue, validateValue, demoValue, renderTextTemplate, renderTextTemplateElement, binding, isTextTemplateBinding, resolveBinding, createEntryId, applyTextChange, mergePartialDocument, isTextTemplate, textTemplateBindings, validateDocument, textTemplatePopulate }

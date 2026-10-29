@@ -1,6 +1,6 @@
 'use strict'
 
-const { validateTemplate, isTextTemplate } = require('./text-template')
+const { validateTemplate, isTextTemplateBinding, textTemplateBindings } = require('./text-template')
 
 const PLUGIN = 'blockscene'
 // 'none' shows a plain "no preview" placeholder instead of a wireframe (blocks that have no faithful image).
@@ -237,9 +237,9 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
   }
   const textTemplates = input.textTemplates || {}
   if (!plain(textTemplates) || Object.keys(textTemplates).length > 200) fail('textTemplates must be an object with at most 200 field bindings')
+  const bindings = schemas ? textTemplateBindings(schemas) : null
   for (const [key, entries] of Object.entries(textTemplates)) {
-    const dot = key.lastIndexOf('.'), uid = key.slice(0, dot), name = key.slice(dot + 1)
-    if (dot < 1 || !/^[A-Za-z][\w-]*$/.test(name) || (schemas && (!isTextTemplate(schemas[uid]?.attributes?.[name])))) fail(`Unknown text template field "${key}"`)
+    if (!isTextTemplateBinding(key) || (bindings && !bindings.has(key))) fail(`Unknown text template field "${key}"`)
     try { out.textTemplates[key] = validateTemplate(entries) } catch (error) { fail(`${key}: ${error.message}`) }
   }
   const history = input.history || {}
@@ -257,6 +257,7 @@ function validateSettings(input, componentUids, contentTypeUids = [], historyTyp
 // Lenient read: saved values that no longer apply (deleted component) are dropped.
 function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = null, schemas = null) {
   const types = typeMap(contentTypeUids)
+  const templateBindings = schemas ? textTemplateBindings(schemas) : null
   const out = structuredClone(DEFAULTS)
   if (!saved || typeof saved !== 'object') return out
   for (const key of Object.keys(DEFAULTS.palette)) if (COLOR.test(String(saved.palette?.[key]))) out.palette[key] = saved.palette[key]
@@ -291,8 +292,7 @@ function mergeSaved(saved, componentUids, contentTypeUids = [], historyTypes = n
     if (Object.keys(clean).length) out.contentTypes[uid] = clean
   }
   for (const [key, entries] of Object.entries(saved.textTemplates || {})) {
-    const dot = key.lastIndexOf('.'), uid = key.slice(0, dot), name = key.slice(dot + 1)
-    if (dot < 1 || (schemas && !isTextTemplate(schemas[uid]?.attributes?.[name]))) continue
+    if (!isTextTemplateBinding(key) || (templateBindings && !templateBindings.has(key))) continue
     try { out.textTemplates[key] = validateTemplate(entries) }
     catch (error) {
       // Saved settings are read leniently, but programming/runtime failures must still surface.

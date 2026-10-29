@@ -865,10 +865,14 @@ blockscene: { enabled: true, config: { settings: { textTemplates: {
 
 Entries are ordered and dynamic. Allowed tags are `h1`–`h6` and `p`; roles are
 `eyebrow`, `title`, `description` and `body`; modifiers are `uppercase`,
-`lowercase` and `underline`. `softLines` is guidance only. `maxChars` is a hard
-Unicode character limit. Enter can be allowed per entry. Demo/reset asks before
-replacing non-empty content. Removing an entry from the template hides it but
-does not discard its saved text.
+`lowercase` and `underline`. `softLines` is guidance only and warns when the
+rendered textarea actually overflows the recommended visual height. `maxChars`
+is a hard Unicode character limit, including after an IME composition finishes.
+Enter can be allowed per entry. Demo/reset is a manual editor action in this
+pilot (there is no content-creation preset lifecycle) and asks before replacing
+non-empty content. Removing an entry from the template hides it but does not
+discard its saved text; newly added entries receive non-reused ids so that old
+hidden text cannot reappear under a different part.
 
 The stored value is deliberately small and frontend-neutral:
 
@@ -882,10 +886,18 @@ text-template field are populated for validation. Frontends can share the
 allowlisted, SSR-safe projection without importing admin code:
 
 ```js
-const { renderTextTemplate } = require('@aduptive/strapi-blockscene/text-template')
+const React = require('react')
+const { renderTextTemplate, renderTextTemplateElement } = require('@aduptive/strapi-blockscene/text-template')
 const parts = renderTextTemplate(template, entry.copy)
-// [{ id, tag, text, className }]; choose the matching component/tag in your renderer.
+// [{ id, tag, text, lines, className }]
+
+// React SSR: one semantic heading/paragraph, with safe text nodes and <br>.
+parts.map(part => renderTextTemplateElement(part, React.createElement))
 ```
+
+`renderTextTemplateElement` passes the validated string to the element factory
+as text children, never as HTML. `lines` is also available to other frameworks;
+render it as text nodes and do not pass `text` or `lines` to raw-HTML APIs.
 
 Current pilot evidence: unit/build/pack on both distributions, plus the full
 field interaction and server write guards in the Strapi 5.57 local lab. Strapi

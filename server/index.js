@@ -5,7 +5,7 @@ const { safeGroups, validateGroups, invalidComponents, layoutFields } = require(
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
 const { trashContentType, trashService, trashController } = require('./trash')
-const { validateDocument, textTemplatePopulate } = require('./text-template')
+const { validateDocument, textTemplatePopulate, mergePartialDocument } = require('./text-template')
 // Set at build time for the Strapi 4 package; from source (tests) it is Strapi 5. Version history is Strapi 5 only.
 const STRAPI5 = process.env.BLOCKSCENE_STRAPI_MAJOR !== '4'
 
@@ -169,10 +169,16 @@ function registerTextTemplateGuard(strapi) {
     })
     return
   }
-  // Strapi 4 component writes validate their own custom fields; publish reuses those already validated rows.
+  // Strapi 4 updates can contain only the changed attributes, so validate the merged stored document.
   strapi.db.lifecycles.subscribe({
     beforeCreate: async event => { const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates; check(event.model.uid, event.params?.data || {}, templates) },
-    beforeUpdate: async event => { const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates; check(event.model.uid, event.params?.data || {}, templates) },
+    beforeUpdate: async event => {
+      const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates
+      const populate = textTemplatePopulate(schemas(strapi), event.model.uid, templates)
+      if (!populate) return
+      const stored = await strapi.db.query(event.model.uid).findOne({ where: event.params?.where || {}, ...(Object.keys(populate).length && { populate }) })
+      check(event.model.uid, mergePartialDocument(stored, event.params?.data), templates)
+    },
   })
 }
 
