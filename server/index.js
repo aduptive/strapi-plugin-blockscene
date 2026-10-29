@@ -5,7 +5,7 @@ const { safeGroups, validateGroups, invalidComponents, layoutFields } = require(
 const { hiddenName, injectHidden, hideFromBuilder, registerHiddenStrip } = require('./hidden')
 const { CRON, covers, eventContentType, historyService, historyController, registerHistory, registerPurge } = require('./history')
 const { trashContentType, trashService, trashController } = require('./trash')
-const { validateDocument, textTemplatePopulate, mergePartialDocument } = require('./text-template')
+const { validateDocument, textTemplatePopulate, mergePartialDocument, draftReadPlan, validateBulkUpdates } = require('./text-template')
 // Set at build time for the Strapi 4 package; from source (tests) it is Strapi 5. Version history is Strapi 5 only.
 const STRAPI5 = process.env.BLOCKSCENE_STRAPI_MAJOR !== '4'
 
@@ -156,6 +156,7 @@ function registerTextTemplateGuard(strapi) {
     if (errors.length) fail('Text template content is invalid.', { plugin: PLUGIN, errors: errors.map(error => ({ ...error, name: 'ValidationError' })) })
   }
   if (strapi.documents?.use) {
+    const defaultLocale = async () => { try { return await strapi.plugin('i18n')?.service('locales')?.getDefaultLocale?.() } catch { return undefined } }
     strapi.documents.use(async (ctx, next) => {
       const { action, params = {} } = ctx
       if (!ctx.uid || !['create', 'update', 'publish'].includes(action)) return next()
@@ -163,8 +164,10 @@ function registerTextTemplateGuard(strapi) {
       const populate = textTemplatePopulate(schemas(strapi), ctx.uid, templates)
       if (!populate) return next()
       if (action === 'create') { check(ctx.uid, params.data || {}, templates); return next() }
-      const stored = await strapi.documents(ctx.uid).findOne({ documentId: params.documentId, locale: params.locale, status: 'draft', ...(Object.keys(populate).length && { populate }) })
-      check(ctx.uid, action === 'update' ? { ...(stored || {}), ...(params.data || {}) } : stored || {}, templates)
+      const localized = Boolean(strapi.getModel(ctx.uid)?.pluginOptions?.i18n?.localized)
+      const plan = draftReadPlan(localized, params, populate, await defaultLocale())
+      const stored = plan.many ? await strapi.documents(ctx.uid).findMany(plan.query) : [await strapi.documents(ctx.uid).findOne(plan.query)]
+      for (const entry of stored) check(ctx.uid, action === 'update' ? mergePartialDocument(entry, params.data) : entry || {}, templates)
       return next()
     })
     return
@@ -178,6 +181,13 @@ function registerTextTemplateGuard(strapi) {
       if (!populate) return
       const stored = await strapi.db.query(event.model.uid).findOne({ where: event.params?.where || {}, ...(Object.keys(populate).length && { populate }) })
       check(event.model.uid, mergePartialDocument(stored, event.params?.data), templates)
+    },
+    beforeUpdateMany: async event => {
+      const templates = (await strapi.plugin(PLUGIN).service('settings').get()).textTemplates
+      const populate = textTemplatePopulate(schemas(strapi), event.model.uid, templates)
+      if (!populate) return
+      await validateBulkUpdates(strapi.db.query(event.model.uid), event.params?.where, populate, event.params?.data,
+        entry => check(event.model.uid, entry, templates))
     },
   })
 }

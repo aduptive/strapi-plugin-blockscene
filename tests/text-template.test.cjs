@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
-const { CUSTOM_FIELD, codePoints, validateTemplate, validateValue, demoValue, renderTextTemplate, renderTextTemplateElement, resolveBinding, createEntryId, applyTextChange, mergePartialDocument, validateDocument, textTemplatePopulate } = require('../server/text-template')
+const { CUSTOM_FIELD, codePoints, validateTemplate, validateValue, demoValue, renderTextTemplate, renderTextTemplateElement, textTemplateClassName, resolveBinding, createEntryId, applyTextChange, mergePartialDocument, draftReadPlan, validateBulkUpdates, validateDocument, textTemplatePopulate } = require('../server/text-template')
 const { validateSettings, mergeSaved } = require('../server/settings')
 
 const entries = [
@@ -32,6 +32,12 @@ test('new ids include preserved hidden values and IME composition is only reject
   const entry = { allowBreaks: true, maxChars: 3 }
   assert.deepEqual(applyTextChange(entry, 'abc', 'abcd', { composing: true, compositionStart: 'abc' }), { accepted: true, value: 'abcd' })
   assert.deepEqual(applyTextChange(entry, 'abcd', 'abcd', { composing: false, compositionStart: 'abc' }), { accepted: false, value: 'abc', code: 'maxChars' })
+})
+
+test('admin classes use only the validated token and modifiers', () => {
+  assert.equal(textTemplateClassName(entries[0]), 'label uppercase')
+  assert.equal(textTemplateClassName({ token: 'unsafe class', modifiers: ['underline'] }), '')
+  assert.equal(textTemplateClassName({ token: 'safe-token', modifiers: ['script'] }), '')
 })
 
 test('content validation distinguishes required, manual breaks and Unicode character limits without truncating', () => {
@@ -84,6 +90,32 @@ test('populate follows configured fields through nested components and partial u
   assert.deepEqual(mergePartialDocument(stored, { title: 'Changed' }), { title: 'Changed', copy: stored.copy })
 })
 
+test('draft read plans expand every locale and keep ordinary publish reads scoped', () => {
+  const populate = { blocks: { on: { 'blocks.text': {} } } }
+  assert.deepEqual(draftReadPlan(true, { documentId: 'doc', locale: '*' }, populate, 'en'), {
+    many: true, query: { filters: { documentId: 'doc' }, locale: '*', status: 'draft', populate },
+  })
+  assert.deepEqual(draftReadPlan(true, { documentId: 'doc' }, populate, 'en'), {
+    many: false, query: { documentId: 'doc', locale: 'en', status: 'draft', populate },
+  })
+  assert.deepEqual(draftReadPlan(false, { documentId: 'doc', locale: '*' }, {}, 'en'), {
+    many: false, query: { documentId: 'doc', status: 'draft' },
+  })
+})
+
+test('Strapi 4 bulk updates validate every stored row after applying the partial patch', async () => {
+  const seen = []
+  const query = { findMany: async options => {
+    assert.deepEqual(options, { where: { publishedAt: null }, populate: { blocks: true } })
+    return [{ id: 1, title: 'One', copy: 'kept' }, { id: 2, title: 'Two', copy: 'kept too' }]
+  } }
+  assert.equal(await validateBulkUpdates(query, { publishedAt: null }, { blocks: true }, { publishedAt: 'now' }, entry => seen.push(entry)), 2)
+  assert.deepEqual(seen, [
+    { id: 1, title: 'One', copy: 'kept', publishedAt: 'now' },
+    { id: 2, title: 'Two', copy: 'kept too', publishedAt: 'now' },
+  ])
+})
+
 test('settings persist templates separately and reject bindings that are not Blockscene text fields', () => {
   const schemas = { 'blocks.text': { attributes: { copy: { type: 'json', customField: CUSTOM_FIELD }, other: { type: 'json' } } } }
   const ok = validateSettings({ textTemplates: { 'blocks.text.copy': entries } }, ['blocks.text'], [], null, schemas)
@@ -97,4 +129,11 @@ test('an explicit content-type binding is the single key used by settings and se
   const templates = { 'api::article.article.headline-template': entries }
   assert.equal(validateSettings({ textTemplates: templates }, [], ['api::article.article'], null, schemas).textTemplates['api::article.article.headline-template'][0].id, 'eyebrow')
   assert.equal(validateDocument(schemas, 'api::article.article', { headline: { version: 1, values: { eyebrow: '', title: 'ok' } } }, templates)[0].path.join('.'), 'headline.eyebrow')
+})
+
+test('fallback bindings accept Strapi camelCase attribute names', () => {
+  const schemas = { 'api::page.page': { attributes: { fallbackCopy: { type: 'json', customField: CUSTOM_FIELD } } } }
+  const template = [{ id: 'title', label: 'Title', role: 'title', tag: 'h2', token: '', modifiers: [], required: true, allowBreaks: true, demo: 'Demo' }]
+  assert.equal(resolveBinding(schemas['api::page.page'].attributes.fallbackCopy, 'api::page.page', 'fallbackCopy'), 'api::page.page.fallbackCopy')
+  assert.doesNotThrow(() => validateSettings({ textTemplates: { 'api::page.page.fallbackCopy': template } }, [], [], null, schemas))
 })

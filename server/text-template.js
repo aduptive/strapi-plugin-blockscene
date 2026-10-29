@@ -8,7 +8,8 @@ const ID = /^[a-z][a-z0-9_-]{0,47}$/
 const TOKEN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
 const MAX_ENTRIES = 24
 const MAX_TEXT = 50000
-const BINDING = /^[a-z][a-z0-9_-]*(?:::[a-z][a-z0-9_-]*)?(?:\.[a-z][a-z0-9_-]*)+$/
+// Schema UIDs are lowercase, while Strapi attribute names commonly use camelCase.
+const BINDING = /^[a-z][a-z0-9_-]*(?:::[a-z][a-z0-9_-]*)?(?:\.[A-Za-z_][A-Za-z0-9_-]*)+$/
 
 const plain = value => value && typeof value === 'object' && !Array.isArray(value)
 const codePoints = value => [...String(value || '')].length
@@ -80,8 +81,13 @@ function renderTextTemplate(template, value) {
   return entries.flatMap(entry => {
     const text = normalized.values[entry.id] || ''
     if (!text.trim()) return []
-    return [{ id: entry.id, tag: entry.tag, text, lines: text.split('\n'), className: [entry.token, ...entry.modifiers].filter(Boolean).join(' ') }]
+    return [{ id: entry.id, tag: entry.tag, text, lines: text.split('\n'), className: textTemplateClassName(entry) }]
   })
+}
+
+function textTemplateClassName(entry) {
+  if (!plain(entry) || (entry.token && !TOKEN.test(entry.token)) || !Array.isArray(entry.modifiers) || entry.modifiers.some(item => !MODIFIERS.includes(item))) return ''
+  return [entry.token, ...entry.modifiers].filter(Boolean).join(' ')
 }
 
 function renderTextTemplateElement(part, createElement) {
@@ -111,6 +117,16 @@ function applyTextChange(entry, current, next, { composing = false, compositionS
   return { accepted: true, value }
 }
 function mergePartialDocument(stored, patch) { return { ...(plain(stored) ? stored : {}), ...(plain(patch) ? patch : {}) } }
+function draftReadPlan(localized, { documentId, locale } = {}, populate = {}, defaultLocale) {
+  const common = { status: 'draft', ...(Object.keys(populate).length && { populate }) }
+  if (localized && locale === '*') return { many: true, query: { filters: { documentId }, locale: '*', ...common } }
+  return { many: false, query: { documentId, ...(localized && { locale: locale || defaultLocale }), ...common } }
+}
+async function validateBulkUpdates(query, where, populate, patch, validate) {
+  const entries = await query.findMany({ where: where || {}, ...(Object.keys(populate || {}).length && { populate }) })
+  for (const entry of entries) validate(mergePartialDocument(entry, patch))
+  return entries.length
+}
 // Schema files use `type: customField`; Strapi's runtime model exposes the registered underlying JSON type.
 // The namespaced customField id is the stable discriminator in both representations.
 function isTextTemplate(attr) { return attr?.customField === CUSTOM_FIELD }
@@ -179,4 +195,4 @@ function textTemplatePopulate(schemas, uid, templates) {
   return result.configured ? result.populate : null
 }
 
-module.exports = { CUSTOM_FIELD, TAGS, ROLES, MODIFIERS, MAX_ENTRIES, codePoints, validateTemplate, normalizeValue, validateValue, demoValue, renderTextTemplate, renderTextTemplateElement, binding, isTextTemplateBinding, resolveBinding, createEntryId, applyTextChange, mergePartialDocument, isTextTemplate, textTemplateBindings, validateDocument, textTemplatePopulate }
+module.exports = { CUSTOM_FIELD, TAGS, ROLES, MODIFIERS, MAX_ENTRIES, codePoints, validateTemplate, normalizeValue, validateValue, demoValue, renderTextTemplate, renderTextTemplateElement, textTemplateClassName, binding, isTextTemplateBinding, resolveBinding, createEntryId, applyTextChange, mergePartialDocument, draftReadPlan, validateBulkUpdates, isTextTemplate, textTemplateBindings, validateDocument, textTemplatePopulate }

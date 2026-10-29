@@ -836,6 +836,8 @@ After Blockscene is installed and the admin is rebuilt, a component or content
 type can declare a structured text field backed by JSON. Give component fields
 an explicit binding: the Content Manager only supplies a path such as
 `blocks.0.copy` to a nested custom input, not the component uid.
+Direct content-type fields fall back to `<content-type uid>.<attribute>` (including
+camelCase attribute names); an explicit binding remains supported there too.
 
 ```jsonc
 "copy": {
@@ -881,7 +883,8 @@ The stored value is deliberately small and frontend-neutral:
 ```
 
 Direct document-service and Content Manager writes use the same validation on
-draft create, draft update and publish. Only roots that can contain a configured
+draft create, draft update and publish, including every draft locale selected by
+an all-locales publish and Strapi 4 bulk updates. Only roots that can contain a configured
 text-template field are populated for validation. Frontends can share the
 allowlisted, SSR-safe projection without importing admin code:
 

@@ -13,7 +13,9 @@ claim for every 4.x / 5.x minor.
 The text-template custom-field pilot in the current source also has focused
 Strapi 5.57.0 evidence: admin build, component-field rendering, hard limits,
 Enter policy, demo confirmation, configuration modal focus/escape, dynamic
-entry persistence, and server rejection on draft create/update and publish.
+entry persistence, direct content-type fallback binding, safe style modifiers,
+localized role demos, and server rejection on draft create/update and
+all-locales publish.
 That focused smoke does not expand the table's whole-plugin "Verified on"
 claim. Its shared Strapi 4 code compiles and is unit-tested, but has no Strapi 4
 browser evidence yet.
