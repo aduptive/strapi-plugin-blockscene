@@ -71,11 +71,19 @@ export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null
   const landed = React.useRef<{ zone: string; key: string | null } | null>(null);
   const dragging = React.useRef(false);
   const previewed = React.useRef(false);
+  const finishFrame = React.useRef<number | null>(null);
   const end = React.useRef(() => {
-    if (!dragging.current) return;
-    dragging.current = previewed.current = false;
-    endDrag();
-    settle();
+    if (!dragging.current || finishFrame.current != null) return;
+    // Capture listeners run before Strapi's drop handler. Keep the pre-drag
+    // snapshot frozen until that handler has committed its final row order, then
+    // reconcile the complete group once instead of an intermediate hover order.
+    finishFrame.current = window.requestAnimationFrame(() => {
+      finishFrame.current = null;
+      if (!dragging.current) return;
+      dragging.current = previewed.current = false;
+      endDrag();
+      settle();
+    });
   }).current;
   const latest = React.useRef({ zones, form, docKey, labelOf, layouts });
   latest.current = { zones, form, docKey, labelOf, layouts };
@@ -129,6 +137,8 @@ export function GroupRows({ zones, form, groups, docKey, labelOf, layouts = null
     document.addEventListener("dragstart", start, true);
     for (const type of ends) window.addEventListener(type, end, true);
     return () => {
+      if (finishFrame.current != null) window.cancelAnimationFrame(finishFrame.current);
+      finishFrame.current = null;
       document.removeEventListener("pointerdown", act, true);
       document.removeEventListener("keydown", act, true);
       document.removeEventListener("dragstart", start, true);

@@ -1125,12 +1125,17 @@ try {
       await expect(start, 'moved back up as a whole')
     }
     // The same with the mouse: Strapi moves the dragged row on every hover; the group is settled on drop.
+    // Keep both endpoints visible: scrolling only the target first leaves the source above the viewport, so no native
+    // drag starts. Strapi 5 also needs the real pointer path across intermediate rows, not one synthetic target hover.
+    if (major === 5) await page.setViewportSize({ width: 1440, height: 1800 })
     const handle = row(1).locator('[data-handler-id]').first(); await handle.scrollIntoViewIfNeeded()
     const target = row(7)
     if (major === 5) {
-      await target.scrollIntoViewIfNeeded()
-      const targetBox = await target.boundingBox()
-      await handle.dragTo(target, { targetPosition: { x: targetBox.width / 2, y: targetBox.height * 0.8 } })
+      const from = await handle.boundingBox(), to = await target.boundingBox()
+      const x = from.x + from.width / 2, y = from.y + from.height / 2
+      await page.mouse.move(x, y); await page.mouse.down()
+      for (let i = 1; i <= 40; i++) await page.mouse.move(x, y + (to.y + to.height * 0.8 - y) * i / 40, { steps: 2 })
+      await page.mouse.up(); await page.waitForTimeout(1200)
     } else {
       // React DnD's older Strapi 4 backend needs the real pointer path rather than Playwright's synthetic drag events.
       const from = await handle.boundingBox(), to = await target.boundingBox()
@@ -1145,6 +1150,7 @@ try {
     if (major === 5) {
       await page.getByTestId('blockscene-history').first().getByRole('button', { name: 'Undo' }).click()
       await expect(start, 'one undo reverts the whole drag')
+      await page.setViewportSize({ width: 1440, height: 1000 })
     } else {
       await move(2, ['ArrowUp'])
       await expect(start, 'moved back up as a whole')
